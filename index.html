@@ -28,7 +28,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Calendar, ToggleLeft, ToggleRight, UserX, UserCheck, Archive } from 'lucide-react';
+        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Calendar, ToggleLeft, ToggleRight, UserX, UserCheck, Archive, Pencil, XCircle } from 'lucide-react';
         import { initializeApp, getApps, getApp } from 'firebase/app';
         import { getFirestore, collection, addDoc, updateDoc, doc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
 
@@ -127,7 +127,7 @@
             selectedService, setSelectedService, 
             selectedWashers, setSelectedWashers, 
             vehicleDesc, setVehicleDesc,
-            createTicket 
+            createTicket, isEditing, cancelEdit
         }) => {
             // Filter only active employees
             const activeEmployees = employees.filter(e => e.active);
@@ -141,7 +141,13 @@
             };
 
             return (
-                <div className="flex flex-col h-full">
+                <div className="flex flex-col h-full relative">
+                {isEditing && (
+                    <div className="bg-yellow-100 border-b border-yellow-300 p-2 text-center text-yellow-800 font-bold flex justify-between items-center px-4">
+                        <span>✏️ EDITANDO TICKET EXISTENTE</span>
+                        <button onClick={cancelEdit} className="text-sm underline text-yellow-900">Cancelar Edición</button>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full overflow-auto p-4">
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                     <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center"><Car className="w-5 h-5 mr-2"/> 1. Tamaño</h3>
@@ -207,9 +213,16 @@
                                 <span>{formatCurrency(COMMISSIONS[selectedService.id][selectedSize.id] / selectedWashers.length)}</span>
                             </div>
                         )}
-                        <button onClick={createTicket} disabled={!selectedSize || !selectedService || selectedWashers.length === 0} className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center ${!selectedSize || !selectedService || selectedWashers.length === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                            <Printer className="w-5 h-5 mr-2"/> CREAR ORDEN
-                        </button>
+                        <div className="flex gap-2">
+                            {isEditing && (
+                                <button onClick={cancelEdit} className="px-4 py-4 rounded-xl border border-red-300 text-red-600 hover:bg-red-50">
+                                    <XCircle className="w-6 h-6"/>
+                                </button>
+                            )}
+                            <button onClick={createTicket} disabled={!selectedSize || !selectedService || selectedWashers.length === 0} className={`flex-1 py-4 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center ${!selectedSize || !selectedService || selectedWashers.length === 0 ? 'bg-gray-300 cursor-not-allowed' : (isEditing ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-blue-600 hover:bg-blue-700')}`}>
+                                {isEditing ? <><Pencil className="w-5 h-5 mr-2"/> ACTUALIZAR ORDEN</> : <><Printer className="w-5 h-5 mr-2"/> CREAR ORDEN</>}
+                            </button>
+                        </div>
                     </div>
                     </div>
                 </div>
@@ -221,7 +234,7 @@
             tickets, activeTicketId, setActiveTicketId, 
             paymentMxn, setPaymentMxn, 
             paymentUsd, setPaymentUsd, 
-            exchangeRate, processPayment, deleteTicket
+            exchangeRate, processPayment, deleteTicket, startEdit
         }) => {
             const selectedTicket = tickets.find(t => t.id === activeTicketId);
             return (
@@ -268,6 +281,14 @@
                             title="Cancelar Ticket"
                          >
                             <Trash2 className="w-5 h-5"/>
+                         </button>
+                         <button
+                            type="button"
+                            onClick={() => startEdit(selectedTicket)}
+                            className="p-4 rounded-xl border border-yellow-200 text-yellow-600 hover:bg-yellow-50"
+                            title="Editar Ticket"
+                         >
+                            <Pencil className="w-5 h-5"/>
                          </button>
                          <button 
                             type="button"
@@ -737,13 +758,14 @@
 
         function App() {
           const [view, setView] = useState('GREETER');
-          const [exchangeRate, setExchangeRate] = useState(18);
+          const [exchangeRate, setExchangeRate] = useState(17.80);
+          const [editingTicketId, setEditingTicketId] = useState(null);
           
           const [employees, setEmployees] = useState([
-              { name: 'Aldo', active: true },
-              { name: 'Pedro', active: true },
+              { name: 'Omar', active: true },
+              { name: 'Rodrigo', active: true },
               { name: 'Juan', active: true },
-              { name: 'Maria', active: true }
+              { name: 'Rodrigo', active: true }
           ]);
           
           const [tickets, setTickets] = useState([]);
@@ -800,6 +822,23 @@
           const [activeTicketId, setActiveTicketId] = useState(null);
           const [paymentMxn, setPaymentMxn] = useState('');
           const [paymentUsd, setPaymentUsd] = useState('');
+
+          const startEdit = (ticket) => {
+            setSelectedSize(ticket.size);
+            setSelectedService(ticket.service);
+            setSelectedWashers(ticket.washers || (ticket.washer ? [ticket.washer] : []));
+            setVehicleDesc(ticket.vehicleDesc || '');
+            setEditingTicketId(ticket.id);
+            setView('GREETER');
+          };
+
+          const cancelEdit = () => {
+            setEditingTicketId(null);
+            setSelectedSize(null);
+            setSelectedService(null);
+            setSelectedWashers([]);
+            setVehicleDesc('');
+          };
 
           const openPrintWindow = (content) => {
             const printWindow = window.open('', '', 'height=600,width=400');
@@ -900,15 +939,15 @@
             openPrintWindow(html);
           };
 
-          const createTicket = async () => {
+          const saveTicket = async () => {
             if (!selectedSize || !selectedService || selectedWashers.length === 0) return;
             if (!db) return alert("Firebase no configurado o sin conexión");
 
             const price = PRICES[selectedService.id][selectedSize.id];
             const commission = COMMISSIONS[selectedService.id][selectedSize.id];
 
-            const newTicket = {
-              timestamp: serverTimestamp(),
+            const ticketData = {
+              timestamp: serverTimestamp(), // Update timestamp? Maybe only on create. For edit, maybe updatedAt
               size: selectedSize,
               service: selectedService,
               washers: selectedWashers, // Store array
@@ -919,17 +958,27 @@
             };
 
             try {
-                const docRef = await addDoc(collection(db, "tickets"), newTicket);
-                const shortId = docRef.id.slice(-4).toUpperCase();
-                printJobTicket(newTicket, shortId);
+                if (editingTicketId) {
+                    // Update existing
+                    const ticketRef = doc(db, "tickets", editingTicketId);
+                    await updateDoc(ticketRef, ticketData);
+                    alert("Ticket actualizado correctamente");
+                    setEditingTicketId(null);
+                } else {
+                    // Create new
+                    const docRef = await addDoc(collection(db, "tickets"), ticketData);
+                    const shortId = docRef.id.slice(-4).toUpperCase();
+                    printJobTicket(ticketData, shortId);
+                    alert("Orden enviada a Caja");
+                }
 
+                // Reset form
                 setSelectedSize(null);
                 setSelectedService(null);
-                setSelectedWashers([]); // Clear array
-                setVehicleDesc(''); // Clear description
-                alert("Orden enviada a Caja");
+                setSelectedWashers([]); 
+                setVehicleDesc(''); 
             } catch (e) {
-                console.error("Error adding document: ", e);
+                console.error("Error saving document: ", e);
                 alert("Error al guardar. Revisa internet.");
             }
           };
@@ -1020,7 +1069,9 @@
                     selectedService={selectedService} setSelectedService={setSelectedService}
                     selectedWashers={selectedWashers} setSelectedWashers={setSelectedWashers} // Pass Array
                     vehicleDesc={vehicleDesc} setVehicleDesc={setVehicleDesc}
-                    createTicket={createTicket}
+                    createTicket={saveTicket} // Changed from createTicket to saveTicket
+                    isEditing={!!editingTicketId}
+                    cancelEdit={cancelEdit}
                   />
                 }
                 {view === 'CASHIER' && 
@@ -1032,6 +1083,7 @@
                     exchangeRate={exchangeRate} 
                     processPayment={processPayment} 
                     deleteTicket={deleteTicket}
+                    startEdit={startEdit}
                   />
                 }
                 {view === 'PAYROLL' && <PayrollView employees={employees} history={history} db={db} />}
