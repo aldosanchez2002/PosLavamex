@@ -28,7 +28,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator } from 'lucide-react';
+        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer } from 'lucide-react';
 
         // --- CONFIGURATION & DATA ---
 
@@ -98,6 +98,105 @@
             const [paymentMxn, setPaymentMxn] = useState('');
             const [paymentUsd, setPaymentUsd] = useState('');
 
+            // --- PRINTING LOGIC ---
+            const openPrintWindow = (content) => {
+                const printWindow = window.open('', '', 'height=600,width=400');
+                printWindow.document.write('<html><head><title>Print</title>');
+                printWindow.document.write('<style>');
+                // CSS optimized for 58mm Thermal Printers
+                printWindow.document.write(`
+                @page { margin: 0; }
+                body { 
+                    font-family: 'Courier New', monospace; 
+                    width: 58mm; 
+                    margin: 0; 
+                    padding: 5px; 
+                    font-size: 12px; 
+                    color: black;
+                }
+                .header { text-align: center; font-weight: bold; margin-bottom: 10px; }
+                .title { font-size: 16px; font-weight: bold; display: block; margin-bottom: 5px;}
+                .big-text { font-size: 18px; font-weight: bold; display: block; margin: 5px 0;}
+                .divider { border-top: 1px dashed black; margin: 10px 0; }
+                .item { display: flex; justify-content: space-between; margin-bottom: 3px; }
+                .footer { text-align: center; margin-top: 15px; font-size: 10px; }
+                .center { text-align: center; }
+            `);
+                printWindow.document.write('</style></head><body>');
+                printWindow.document.write(content);
+                printWindow.document.write('</body></html>');
+                printWindow.document.close();
+                printWindow.focus();
+                // Small timeout to ensure styles load
+                setTimeout(() => {
+                    printWindow.print();
+                    printWindow.close();
+                }, 500);
+            };
+
+            const printJobTicket = (ticket) => {
+                const html = `
+                <div class="header">
+                    <span class="title">LAVAMEX</span>
+                    <span>ORDEN DE SERVICIO</span>
+                </div>
+                <div class="divider"></div>
+                <div class="item"><span>TICKET:</span> <strong>#${ticket.id}</strong></div>
+                <div class="item"><span>HORA:</span> <span>${new Date(ticket.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
+                <div class="divider"></div>
+                <div class="center">
+                    <span>LAVADOR ASIGNADO:</span>
+                    <span class="big-text">${ticket.washer}</span>
+                </div>
+                <div class="divider"></div>
+                <div class="center">
+                    <span class="big-text">${ticket.size.label}</span>
+                    <span class="big-text">${ticket.service.label}</span>
+                </div>
+                <div class="divider"></div>
+                <div class="footer">.. COLOCAR EN TABLERO ..</div>
+            `;
+                openPrintWindow(html);
+            };
+
+            const printReceipt = (ticket, payment) => {
+                const html = `
+                <div class="header">
+                    <span class="title">LAVAMEX</span>
+                    <span>COMPROBANTE DE PAGO</span>
+                </div>
+                <div class="divider"></div>
+                <div class="item"><span>FECHA:</span> <span>${new Date().toLocaleDateString()}</span></div>
+                <div class="item"><span>HORA:</span> <span>${new Date().toLocaleTimeString()}</span></div>
+                <div class="item"><span>TICKET:</span> <span>#${ticket.id}</span></div>
+                <div class="divider"></div>
+                
+                <div class="item">
+                    <span>${ticket.service.label}</span>
+                </div>
+                 <div class="item">
+                    <span>(${ticket.size.label})</span>
+                    <span>${formatCurrency(ticket.price)}</span>
+                </div>
+
+                <div class="divider"></div>
+                <div class="item" style="font-weight:bold;"><span>TOTAL:</span> <span>${formatCurrency(ticket.price)}</span></div>
+                <div class="divider"></div>
+                
+                <div class="item"><span>Efectivo MXN:</span> <span>${formatCurrency(payment.mxn)}</span></div>
+                <div class="item"><span>Efectivo USD:</span> <span>$${payment.usd.toFixed(2)}</span></div>
+                <div class="item" style="font-size:10px;"><span>(Rate: $${payment.rate})</span></div>
+                
+                <div class="item" style="margin-top:5px;"><span>CAMBIO:</span> <span>${formatCurrency(payment.change)}</span></div>
+                
+                <div class="footer">
+                    ¡GRACIAS POR SU PREFERENCIA!<br/>
+                    Atendido por: ${ticket.washer}
+                </div>
+            `;
+                openPrintWindow(html);
+            };
+
             const createTicket = () => {
                 if (!selectedSize || !selectedService || !selectedWasher) return;
 
@@ -116,10 +215,13 @@
                 };
 
                 setTickets([...tickets, newTicket]);
+
+                // Print the Job Ticket
+                printJobTicket(newTicket);
+
                 setSelectedSize(null);
                 setSelectedService(null);
                 setSelectedWasher(null);
-                alert(`Ticket #${newTicket.id} Creado para ${newTicket.washer}`);
             };
 
             const processPayment = () => {
@@ -137,12 +239,17 @@
                     return;
                 }
 
+                const paymentDetails = { mxn: mxnVal, usd: usdVal, rate: exchangeRate, total: totalPaid, change: change };
+
                 const paidTicket = {
                     ...ticket,
                     status: 'PAID',
                     paidAt: new Date(),
-                    paymentDetails: { mxn: mxnVal, usd: usdVal, rate: exchangeRate, total: totalPaid, change: change }
+                    paymentDetails: paymentDetails
                 };
+
+                // Print Receipt
+                printReceipt(paidTicket, paymentDetails);
 
                 setHistory([...history, paidTicket]);
                 setTickets(tickets.filter(t => t.id !== activeTicketId));
@@ -214,7 +321,9 @@
                                     <span className="text-gray-500">Total a Pagar:</span>
                                     <span className="text-2xl font-bold text-gray-800">{selectedSize && selectedService ? formatCurrency(PRICES[selectedService.id][selectedSize.id]) : '$0.00'}</span>
                                 </div>
-                                <button onClick={createTicket} disabled={!selectedSize || !selectedService || !selectedWasher} className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 ${!selectedSize || !selectedService || !selectedWasher ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>IMPRIMIR TICKET</button>
+                                <button onClick={createTicket} disabled={!selectedSize || !selectedService || !selectedWasher} className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center ${!selectedSize || !selectedService || !selectedWasher ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                    <Printer className="w-5 h-5 mr-2" /> CREAR ORDEN
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -251,7 +360,9 @@
                                     </div>
                                     <div className="flex gap-3">
                                         <button onClick={() => deleteTicket(selectedTicket.id)} className="p-4 rounded-xl border border-red-200 text-red-500 hover:bg-red-50"><Trash2 className="w-5 h-5" /></button>
-                                        <button onClick={processPayment} disabled={((parseFloat(paymentMxn) || 0) + ((parseFloat(paymentUsd) || 0) * exchangeRate)) < selectedTicket.price} className="flex-1 py-4 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 shadow-lg">COBRAR</button>
+                                        <button onClick={processPayment} disabled={((parseFloat(paymentMxn) || 0) + ((parseFloat(paymentUsd) || 0) * exchangeRate)) < selectedTicket.price} className="flex-1 py-4 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 shadow-lg flex items-center justify-center">
+                                            <Printer className="w-5 h-5 mr-2" /> COBRAR Y TICKET
+                                        </button>
                                     </div>
                                 </div>
                             )}
