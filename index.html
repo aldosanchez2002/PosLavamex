@@ -142,11 +142,10 @@
             selectedService, setSelectedService, 
             selectedWashers, setSelectedWashers, 
             selectedExtras, setSelectedExtras,
-            snackCount, setSnackCount, // New Props
+            snackCount, setSnackCount,
             vehicleDesc, setVehicleDesc,
             createTicket, isEditing, cancelEdit
         }) => {
-            // Filter only active employees
             const activeEmployees = employees.filter(e => e.active);
 
             const toggleWasher = (name) => {
@@ -167,6 +166,7 @@
 
             const basePrice = (selectedSize && selectedService) ? PRICES[selectedService.id][selectedSize.id] : 0;
             const extrasPrice = selectedExtras.reduce((sum, e) => sum + e.price, 0);
+            // Snacks no longer added here
             const totalPrice = basePrice + extrasPrice;
 
             return (
@@ -254,7 +254,7 @@
                             </div>
                             
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-gray-800 font-bold text-lg">Total a Pagar (Base + Extras):</span>
+                                <span className="text-gray-800 font-bold text-lg">Total (Sin Snacks):</span>
                                 <span className="text-3xl font-bold text-gray-900">{formatCurrency(totalPrice)}</span>
                             </div>
                             
@@ -530,7 +530,6 @@
                 return itemDate >= start && itemDate <= end;
             });
 
-            // Filter Deductions
             const filteredDeductions = deductions.filter(item => {
                 const itemDate = item.timestamp instanceof Date ? item.timestamp : new Date(item.timestamp);
                 return itemDate >= start && itemDate <= end;
@@ -544,9 +543,8 @@
                     return washers.includes(emp);
                 });
                 
-                // Get employee specific deductions
                 const empDeductions = filteredDeductions.filter(d => d.employee === emp);
-                
+
                 if (empWork.length === 0 && empDeductions.length === 0) return;
 
                 const workByDay = {};
@@ -617,7 +615,6 @@
                     `);
                 });
 
-                // Add Deductions Rows
                 if (empDeductions.length > 0) {
                     printWindow.document.write(`
                         <tr class="day-header" style="background-color: #ffebee; color: #c62828;"><td colspan="4">Descuentos / Snacks</td></tr>
@@ -704,22 +701,31 @@
                 
                 // Get tickets from current history state
                 const paidTickets = history.filter(t => t.status === 'PAID');
+                // Get pending deductions to archive
+                const pendingDeductions = deductions.filter(d => d.status === 'PENDING');
                 
-                if (paidTickets.length === 0) return alert("No hay tickets pendientes de corte para archivar.");
+                if (paidTickets.length === 0 && pendingDeductions.length === 0) return alert("No hay datos pendientes para archivar.");
+
+                // Combine operations
+                const allOps = [
+                    ...paidTickets.map(t => ({ id: t.id, type: 'ticket' })),
+                    ...pendingDeductions.map(d => ({ id: d.id, type: 'deduction' }))
+                ];
 
                 // Chunk into batches of 400 (safety limit is 500)
                 const batchSize = 400; 
                 const chunks = [];
-                for (let i = 0; i < paidTickets.length; i += batchSize) {
-                    chunks.push(paidTickets.slice(i, i + batchSize));
+                for (let i = 0; i < allOps.length; i += batchSize) {
+                    chunks.push(allOps.slice(i, i + batchSize));
                 }
 
                 try {
                     // Execute batches sequentially
                     for (const chunk of chunks) {
                         const batch = writeBatch(db);
-                        chunk.forEach(ticket => {
-                            const ref = doc(db, "tickets", ticket.id);
+                        chunk.forEach(op => {
+                            const collectionName = op.type === 'ticket' ? 'tickets' : 'deductions';
+                            const ref = doc(db, collectionName, op.id);
                             batch.update(ref, { status: 'ARCHIVED' });
                         });
                         await batch.commit();
@@ -916,14 +922,14 @@
 
         function App() {
           const [view, setView] = useState('GREETER');
-          const [exchangeRate, setExchangeRate] = useState(17.80);
+          const [exchangeRate, setExchangeRate] = useState(20.50);
           const [editingTicketId, setEditingTicketId] = useState(null);
           
           const [employees, setEmployees] = useState([
               { name: 'Aldo', active: true },
               { name: 'Pedro', active: true },
               { name: 'Juan', active: true },
-              { name: 'Rodrigo', active: true }
+              { name: 'Maria', active: true }
           ]);
           
           const [tickets, setTickets] = useState([]);
