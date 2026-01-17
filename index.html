@@ -28,9 +28,9 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Calendar, ToggleLeft, ToggleRight, UserX, UserCheck } from 'lucide-react';
-        import { initializeApp } from 'firebase/app';
-        import { getFirestore, collection, addDoc, updateDoc, doc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Calendar, ToggleLeft, ToggleRight, UserX, UserCheck, Archive } from 'lucide-react';
+        import { initializeApp, getApps, getApp } from 'firebase/app';
+        import { getFirestore, collection, addDoc, updateDoc, doc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
 
         // --- 1. FIREBASE CONFIGURATION ---
         const firebaseConfig = {
@@ -42,14 +42,14 @@
             appId: "1:883264129:web:39a352e2ade3888b4f1b80"
         };
 
-        // Initialize Firebase
-        let db;
-        try {
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-        } catch (e) {
-            console.error("Firebase initialization error:", e);
+        // Initialize Firebase (Robust Pattern)
+        let app;
+        if (!getApps().length) {
+            app = initializeApp(firebaseConfig);
+        } else {
+            app = getApp();
         }
+        const db = getFirestore(app);
 
         // --- CONFIGURATION & DATA ---
 
@@ -97,31 +97,48 @@
             });
 
             history.forEach(item => {
-              // Only add if employee exists in list (or create new key if legacy data)
-              if (!payroll[item.washer]) {
-                 payroll[item.washer] = { count: 0, total: 0, details: [] }; 
-              }
+              // Normalize washers list (handle legacy single washer data)
+              const washersList = item.washers || (item.washer ? [item.washer] : []);
               
-              if (payroll[item.washer]) {
-                payroll[item.washer].count += 1;
-                payroll[item.washer].total += item.commission;
-                payroll[item.washer].details.push(item);
-              }
+              if (washersList.length === 0) return;
+
+              const splitCommission = item.commission / washersList.length;
+
+              washersList.forEach(washerName => {
+                  // Only add if employee exists in list (or create new key if legacy data)
+                  if (!payroll[washerName]) {
+                     payroll[washerName] = { count: 0, total: 0, details: [] }; 
+                  }
+                  
+                  if (payroll[washerName]) {
+                    payroll[washerName].count += 1;
+                    payroll[washerName].total += splitCommission;
+                    payroll[washerName].details.push(item);
+                  }
+              });
             });
             return payroll;
         };
 
-        // --- SUB-COMPONENTS (Defined OUTSIDE App to fix focus bug) ---
+        // --- SUB-COMPONENTS ---
 
         const GreeterView = ({ 
             employees, selectedSize, setSelectedSize, 
             selectedService, setSelectedService, 
-            selectedWasher, setSelectedWasher, 
+            selectedWashers, setSelectedWashers, 
             vehicleDesc, setVehicleDesc,
             createTicket 
         }) => {
             // Filter only active employees
             const activeEmployees = employees.filter(e => e.active);
+
+            const toggleWasher = (name) => {
+                if (selectedWashers.includes(name)) {
+                    setSelectedWashers(selectedWashers.filter(w => w !== name));
+                } else {
+                    setSelectedWashers([...selectedWashers, name]);
+                }
+            };
 
             return (
                 <div className="flex flex-col h-full">
@@ -149,12 +166,21 @@
                     </div>
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center"><User className="w-5 h-5 mr-2"/> 3. Lavador</h3>
+                    <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center"><User className="w-5 h-5 mr-2"/> 3. Lavadores ({selectedWashers.length})</h3>
                     <div className="grid grid-cols-2 gap-2 mb-6">
                         {activeEmployees.length === 0 && <div className="col-span-2 text-center text-gray-400 p-4">No hay empleados activos. Ve a Configuración.</div>}
-                        {activeEmployees.map(emp => (
-                        <button key={emp.name} onClick={() => setSelectedWasher(emp.name)} className={`p-3 text-center rounded-lg border-2 transition-all ${selectedWasher === emp.name ? 'border-green-600 bg-green-50 text-green-700 font-bold' : 'border-gray-200 hover:border-gray-300'}`}>{emp.name}</button>
-                        ))}
+                        {activeEmployees.map(emp => {
+                            const isSelected = selectedWashers.includes(emp.name);
+                            return (
+                                <button 
+                                    key={emp.name} 
+                                    onClick={() => toggleWasher(emp.name)} 
+                                    className={`p-3 text-center rounded-lg border-2 transition-all ${isSelected ? 'border-green-600 bg-green-50 text-green-700 font-bold shadow-inner' : 'border-gray-200 hover:border-gray-300'}`}
+                                >
+                                    {emp.name} {isSelected && '✓'}
+                                </button>
+                            );
+                        })}
                     </div>
                     <div className="mt-auto bg-gray-50 p-4 rounded-xl border border-gray-200">
                         <div className="mb-4">
@@ -171,7 +197,17 @@
                         <span className="text-gray-500">Total a Pagar:</span>
                         <span className="text-2xl font-bold text-gray-800">{selectedSize && selectedService ? formatCurrency(PRICES[selectedService.id][selectedSize.id]) : '$0.00'}</span>
                         </div>
-                        <button onClick={createTicket} disabled={!selectedSize || !selectedService || !selectedWasher} className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center ${!selectedSize || !selectedService || !selectedWasher ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                        <div className="flex justify-between items-center mb-2 text-sm text-green-600">
+                            <span>Comisión Total:</span>
+                            <span className="font-bold">{selectedSize && selectedService ? formatCurrency(COMMISSIONS[selectedService.id][selectedSize.id]) : '$0.00'}</span>
+                        </div>
+                        {selectedWashers.length > 1 && selectedSize && selectedService && (
+                            <div className="flex justify-between items-center mb-4 text-xs text-gray-500">
+                                <span>Por Lavador ({selectedWashers.length}):</span>
+                                <span>{formatCurrency(COMMISSIONS[selectedService.id][selectedSize.id] / selectedWashers.length)}</span>
+                            </div>
+                        )}
+                        <button onClick={createTicket} disabled={!selectedSize || !selectedService || selectedWashers.length === 0} className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center ${!selectedSize || !selectedService || selectedWashers.length === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
                             <Printer className="w-5 h-5 mr-2"/> CREAR ORDEN
                         </button>
                     </div>
@@ -185,7 +221,7 @@
             tickets, activeTicketId, setActiveTicketId, 
             paymentMxn, setPaymentMxn, 
             paymentUsd, setPaymentUsd, 
-            exchangeRate, processPayment, deleteTicket 
+            exchangeRate, processPayment, deleteTicket
         }) => {
             const selectedTicket = tickets.find(t => t.id === activeTicketId);
             return (
@@ -194,16 +230,19 @@
                   <div className="p-4 border-b bg-gray-50 font-bold text-gray-700">Tickets ({tickets.length})</div>
                   <div className="overflow-auto flex-1 p-2 space-y-2">
                     {tickets.length === 0 && <div className="text-center text-gray-400 mt-10">Vacío</div>}
-                    {tickets.map(ticket => (
-                      <div key={ticket.id} onClick={() => setActiveTicketId(ticket.id)} className={`p-3 rounded-lg border cursor-pointer hover:shadow-md transition-all ${activeTicketId === ticket.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 bg-white'}`}>
-                        <div className="flex justify-between items-start mb-1"><span className="font-bold text-gray-800">#{ticket.id.slice(-4).toUpperCase()}</span><span className="text-xs font-semibold bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">{ticket.size.label}</span></div>
-                        <div className="text-sm text-gray-600">
-                            {ticket.service.label}
-                            {ticket.vehicleDesc && <span className="block text-xs text-gray-500 italic mt-0.5">{ticket.vehicleDesc}</span>}
-                        </div>
-                        <div className="flex justify-between items-center mt-2"><span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Lav: {ticket.washer}</span><span className="font-bold text-blue-600">{formatCurrency(ticket.price)}</span></div>
-                      </div>
-                    ))}
+                    {tickets.map(ticket => {
+                        const washerNames = ticket.washers ? ticket.washers.join(', ') : (ticket.washer || '?');
+                        return (
+                          <div key={ticket.id} onClick={() => setActiveTicketId(ticket.id)} className={`p-3 rounded-lg border cursor-pointer hover:shadow-md transition-all ${activeTicketId === ticket.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 bg-white'}`}>
+                            <div className="flex justify-between items-start mb-1"><span className="font-bold text-gray-800">#{ticket.id.slice(-4).toUpperCase()}</span><span className="text-xs font-semibold bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">{ticket.size.label}</span></div>
+                            <div className="text-sm text-gray-600">
+                                {ticket.service.label}
+                                {ticket.vehicleDesc && <span className="block text-xs text-gray-500 italic mt-0.5">{ticket.vehicleDesc}</span>}
+                            </div>
+                            <div className="flex justify-between items-center mt-2"><span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded truncate max-w-[120px]">{washerNames}</span><span className="font-bold text-blue-600">{formatCurrency(ticket.price)}</span></div>
+                          </div>
+                        );
+                    })}
                   </div>
                 </div>
                 <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-8 flex flex-col justify-center items-center">
@@ -211,7 +250,7 @@
                     <div className="w-full max-w-md">
                       <div className="text-center mb-8">
                           <h2 className="text-3xl font-bold text-gray-800 mb-1">{formatCurrency(selectedTicket.price)} MXN</h2>
-                          <p className="text-gray-500">#{selectedTicket.id.slice(-4).toUpperCase()} • {selectedTicket.washer}</p>
+                          <p className="text-gray-500">#{selectedTicket.id.slice(-4).toUpperCase()} • {selectedTicket.washers ? selectedTicket.washers.join(', ') : selectedTicket.washer}</p>
                           {selectedTicket.vehicleDesc && <p className="text-lg font-bold text-blue-700 mt-2 bg-blue-50 py-1 px-3 rounded inline-block">{selectedTicket.vehicleDesc}</p>}
                       </div>
                       <div className="grid grid-cols-2 gap-4 mb-6">
@@ -222,8 +261,20 @@
                          <div className="flex justify-between font-bold text-lg"><span>Cambio:</span><span className={((parseFloat(paymentMxn)||0) + ((parseFloat(paymentUsd)||0)*exchangeRate) - selectedTicket.price) < 0 ? 'text-red-500' : 'text-green-600'}>{formatCurrency(((parseFloat(paymentMxn)||0) + ((parseFloat(paymentUsd)||0)*exchangeRate)) - selectedTicket.price)}</span></div>
                       </div>
                       <div className="flex gap-3">
-                         <button onClick={() => deleteTicket(selectedTicket.id)} className="p-4 rounded-xl border border-red-200 text-red-500 hover:bg-red-50"><Trash2 className="w-5 h-5"/></button>
-                         <button onClick={processPayment} disabled={((parseFloat(paymentMxn)||0) + ((parseFloat(paymentUsd)||0)*exchangeRate)) < selectedTicket.price} className="flex-1 py-4 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 shadow-lg flex items-center justify-center">
+                         <button 
+                            type="button"
+                            onClick={() => deleteTicket(selectedTicket.id)} 
+                            className="p-4 rounded-xl border border-red-200 text-red-500 hover:bg-red-50" 
+                            title="Cancelar Ticket"
+                         >
+                            <Trash2 className="w-5 h-5"/>
+                         </button>
+                         <button 
+                            type="button"
+                            onClick={processPayment} 
+                            disabled={((parseFloat(paymentMxn)||0) + ((parseFloat(paymentUsd)||0)*exchangeRate)) < selectedTicket.price} 
+                            className={`flex-1 py-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center ${((parseFloat(paymentMxn)||0) + ((parseFloat(paymentUsd)||0)*exchangeRate)) < selectedTicket.price ? 'bg-gray-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                         >
                              <Printer className="w-5 h-5 mr-2"/> COBRAR Y TICKET
                          </button>
                       </div>
@@ -234,12 +285,79 @@
             );
         };
 
-        // --- PAYROLL PRINTING LOGIC ---
+        const printAttendanceReport = (employees, history, selectedMonth) => {
+             const printWindow = window.open('', '', 'height=800,width=1000');
+             if(!printWindow) return alert("Habilita ventanas emergentes para imprimir.");
+             printWindow.document.write('<html><head><title>Reporte de Asistencia</title>');
+             printWindow.document.write('<style>');
+             printWindow.document.write(`
+                 @page { size: auto; margin: 10mm; }
+                 body { font-family: sans-serif; font-size: 11px; color: #333; }
+                 h1 { text-align: center; font-size: 18px; margin-bottom: 5px; }
+                 h2 { text-align: center; font-size: 14px; color: #666; margin-bottom: 20px; }
+                 table { width: 100%; border-collapse: collapse; }
+                 th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+                 th.emp-col { text-align: left; width: 150px; background-color: #f2f2f2; }
+                 th.day-col { width: 25px; font-size: 10px; }
+                 .present { color: green; font-weight: bold; }
+                 .absent { color: #ddd; }
+             `);
+             printWindow.document.write('</style></head><body>');
+             
+             const [year, month] = selectedMonth.split('-');
+             const daysInMonth = new Date(year, month, 0).getDate();
+             const monthName = new Date(year, month - 1, 1).toLocaleString('es-MX', { month: 'long', year: 'numeric' });
+
+             printWindow.document.write(`<h1>LAVAMEX - ASISTENCIA</h1>`);
+             printWindow.document.write(`<h2>${monthName.toUpperCase()}</h2>`);
+             
+             printWindow.document.write('<table><thead><tr><th class="emp-col">Empleado</th>');
+             for(let i=1; i<=daysInMonth; i++) {
+                 printWindow.document.write(`<th class="day-col">${i}</th>`);
+             }
+             printWindow.document.write('<th class="emp-col">Total Días</th></tr></thead><tbody>');
+
+             employees.forEach(empObj => {
+                 const emp = empObj.name;
+                 printWindow.document.write(`<tr><td class="emp-col">${emp}</td>`);
+                 
+                 let totalDays = 0;
+                 for(let i=1; i<=daysInMonth; i++) {
+                     const hasWork = history.some(item => {
+                        const itemDate = item.timestamp instanceof Date ? item.timestamp : new Date(item.timestamp);
+                        // Handle multiple washers
+                        const washers = item.washers || [item.washer];
+                        return washers.includes(emp) && 
+                               itemDate.getFullYear() == year && 
+                               itemDate.getMonth() + 1 == month && 
+                               itemDate.getDate() == i;
+                     });
+                     
+                     if(hasWork) {
+                         printWindow.document.write('<td class="present">✅</td>');
+                         totalDays++;
+                     } else {
+                         printWindow.document.write('<td class="absent">-</td>');
+                     }
+                 }
+                 printWindow.document.write(`<td style="font-weight:bold;">${totalDays}</td></tr>`);
+             });
+
+             printWindow.document.write('</tbody></table>');
+             printWindow.document.write('</body></html>');
+             printWindow.document.close();
+             printWindow.focus();
+             setTimeout(() => {
+                 printWindow.print();
+                 printWindow.close();
+             }, 500);
+        };
+
         const printPayrollReport = (employees, history, startDate, endDate) => {
             const printWindow = window.open('', '', 'height=800,width=1000');
+            if(!printWindow) return alert("Habilita ventanas emergentes para imprimir.");
             printWindow.document.write('<html><head><title>Reporte de Nómina</title>');
             printWindow.document.write('<style>');
-            // CSS for Standard Paper (Letter/A4)
             printWindow.document.write(`
                 @page { size: auto; margin: 20mm; }
                 body { font-family: sans-serif; font-size: 12px; color: #333; }
@@ -259,7 +377,6 @@
             `);
             printWindow.document.write('</style></head><body>');
 
-            // Filter history by date range
             const start = new Date(startDate + "T00:00:00");
             const end = new Date(endDate + "T23:59:59");
             
@@ -268,25 +385,31 @@
                 return itemDate >= start && itemDate <= end;
             });
 
-            // Group by Employee
             employees.forEach(empObj => {
-                const emp = empObj.name; // Access name from object
-                const empWork = filteredHistory.filter(h => h.washer === emp);
+                const emp = empObj.name;
+                // Filter jobs where employee participated
+                const empWork = filteredHistory.filter(h => {
+                    const washers = h.washers || [h.washer];
+                    return washers.includes(emp);
+                });
                 
-                if (empWork.length === 0) return; // Skip employee if no work found
+                if (empWork.length === 0) return;
 
-                // Group by Day
                 const workByDay = {};
+                let totalPay = 0;
+
                 empWork.forEach(item => {
                     const dateStr = item.timestamp instanceof Date ? item.timestamp.toLocaleDateString() : new Date(item.timestamp).toLocaleDateString();
                     if (!workByDay[dateStr]) workByDay[dateStr] = [];
-                    workByDay[dateStr].push(item);
+                    
+                    // Calculate split
+                    const washers = item.washers || [item.washer];
+                    const myShare = item.commission / washers.length;
+                    totalPay += myShare;
+
+                    workByDay[dateStr].push({ ...item, myShare });
                 });
 
-                // Calculate Total
-                const totalPay = empWork.reduce((sum, item) => sum + item.commission, 0);
-
-                // Build HTML for this employee
                 printWindow.document.write(`
                     <div class="payslip">
                         <div class="header">
@@ -310,27 +433,25 @@
                             <tbody>
                 `);
 
-                // Rows sorted by date
                 Object.keys(workByDay).sort().forEach(date => {
-                    // Day Header
                     printWindow.document.write(`
                         <tr class="day-header"><td colspan="4">${date}</td></tr>
                     `);
                     
                     let dayTotal = 0;
                     workByDay[date].forEach(job => {
-                        dayTotal += job.commission;
+                        dayTotal += job.myShare;
+                        const isSplit = (job.washers || []).length > 1;
                         printWindow.document.write(`
                             <tr>
                                 <td>${job.service.label}</td>
                                 <td>${job.size.label}</td>
-                                <td>${job.vehicleDesc || '-'}</td>
-                                <td class="text-right">${formatCurrency(job.commission)}</td>
+                                <td>${job.vehicleDesc || '-'} ${isSplit ? '(Compartido)' : ''}</td>
+                                <td class="text-right">${formatCurrency(job.myShare)}</td>
                             </tr>
                         `);
                     });
                     
-                    // Day Subtotal
                      printWindow.document.write(`
                         <tr>
                             <td colspan="3" class="text-right" style="font-size:10px;">Subtotal Día:</td>
@@ -368,13 +489,13 @@
             }, 500);
         };
 
-        const PayrollView = ({ employees, history }) => {
-            const payrollData = calculatePayroll(employees, history);
+        const PayrollView = ({ employees, history, db }) => {
+            const payrollData = calculatePayroll(employees, history.filter(t => t.status === 'PAID'));
+            
             const [showAuth, setShowAuth] = useState(false);
             const [password, setPassword] = useState('');
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             
-            // Date State for Report
             const [startDate, setStartDate] = useState(() => {
                 const d = new Date();
                 d.setDate(d.getDate() - 7);
@@ -383,7 +504,7 @@
             const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
             const handleLogin = () => {
-                if (password === '1234') { // Simple PIN
+                if (password === '1234') { 
                     setIsAuthenticated(true);
                     setPassword('');
                 } else {
@@ -394,6 +515,40 @@
             const handleLogout = () => {
                 setIsAuthenticated(false);
                 setShowAuth(false);
+            };
+
+            // MODIFIED: Added chunking support for large batches (>500 items)
+            const resetPayroll = async () => {
+                if(!db) return alert("Error de conexión");
+                if(!confirm("¿Estás seguro? Esto moverá todos los tickets pagados de la semana actual al archivo histórico y reiniciará los contadores de nómina a $0.")) return;
+                
+                // Get tickets from current history state
+                const paidTickets = history.filter(t => t.status === 'PAID');
+                
+                if (paidTickets.length === 0) return alert("No hay tickets pendientes de corte para archivar.");
+
+                // Chunk into batches of 400 (safety limit is 500)
+                const batchSize = 400; 
+                const chunks = [];
+                for (let i = 0; i < paidTickets.length; i += batchSize) {
+                    chunks.push(paidTickets.slice(i, i + batchSize));
+                }
+
+                try {
+                    // Execute batches sequentially
+                    for (const chunk of chunks) {
+                        const batch = writeBatch(db);
+                        chunk.forEach(ticket => {
+                            const ref = doc(db, "tickets", ticket.id);
+                            batch.update(ref, { status: 'ARCHIVED' });
+                        });
+                        await batch.commit();
+                    }
+                    alert("Semana cerrada exitosamente. Contadores reiniciados.");
+                } catch (e) {
+                    console.error(e);
+                    alert("Error al reiniciar: " + e.message);
+                }
             };
 
             return (
@@ -418,7 +573,6 @@
                     )}
                 </div>
 
-                {/* AUTH MODAL AREA */}
                 {showAuth && !isAuthenticated && (
                     <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 mb-6 max-w-md mx-auto">
                         <h3 className="font-bold text-lg mb-4">Ingresa PIN de Administrador</h3>
@@ -428,44 +582,58 @@
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="border p-2 rounded w-full"
-                                placeholder="PIN (Default: 1234)"
+                                placeholder="PIN"
                             />
                             <button onClick={handleLogin} className="bg-blue-600 text-white px-4 py-2 rounded font-bold">Entrar</button>
                         </div>
                     </div>
                 )}
 
-                {/* SECURE REPORT AREA */}
                 {isAuthenticated && (
-                     <div className="bg-green-50 p-6 rounded-xl shadow-inner border border-green-200 mb-8">
-                        <h3 className="font-bold text-green-800 text-lg mb-4 flex items-center"><Printer className="w-5 h-5 mr-2"/> Generar Recibos de Pago (PDF)</h3>
-                        <div className="flex flex-wrap gap-4 items-end">
-                            <div>
-                                <label className="block text-sm text-green-700 font-bold mb-1">Fecha Inicio</label>
-                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded"/>
+                    <div className="space-y-6 mb-8">
+                         <div className="bg-green-50 p-6 rounded-xl shadow-inner border border-green-200">
+                            <h3 className="font-bold text-green-800 text-lg mb-4 flex items-center"><Printer className="w-5 h-5 mr-2"/> Generar Recibos de Pago (PDF)</h3>
+                            <div className="flex flex-wrap gap-4 items-end">
+                                <div>
+                                    <label className="block text-sm text-green-700 font-bold mb-1">Fecha Inicio</label>
+                                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded"/>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-green-700 font-bold mb-1">Fecha Fin</label>
+                                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-2 border rounded"/>
+                                </div>
+                                <button 
+                                    onClick={() => printPayrollReport(employees, history, startDate, endDate)}
+                                    className="bg-green-600 text-white px-6 py-2.5 rounded-lg font-bold shadow hover:bg-green-700 flex items-center gap-2"
+                                >
+                                    <Printer className="w-4 h-4" /> Imprimir Nómina Semanal
+                                </button>
                             </div>
-                            <div>
-                                <label className="block text-sm text-green-700 font-bold mb-1">Fecha Fin</label>
-                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-2 border rounded"/>
-                            </div>
-                            <button 
-                                onClick={() => printPayrollReport(employees, history, startDate, endDate)}
-                                className="bg-green-600 text-white px-6 py-2.5 rounded-lg font-bold shadow hover:bg-green-700 flex items-center gap-2"
-                            >
-                                <Printer className="w-4 h-4" /> Imprimir Nómina Semanal
-                            </button>
-                        </div>
-                        <p className="text-xs text-green-600 mt-2">Genera una página por empleado con el desglose diario de comisiones.</p>
-                     </div>
+                            <p className="text-xs text-green-600 mt-2">Genera una página por empleado con el desglose diario de comisiones.</p>
+                         </div>
+
+                         <div className="bg-red-50 p-6 rounded-xl shadow-inner border border-red-200">
+                           <h3 className="font-bold text-red-800 mb-2 flex items-center"><Archive className="w-5 h-5 mr-2"/> Gestión de Cierre de Semana</h3>
+                           <p className="text-sm text-red-700 mb-4">
+                               <strong>¡IMPORTANTE!</strong> Una vez pagada la nómina e impresos los reportes, usa este botón. 
+                               Moverá todos los tickets de esta semana al archivo histórico y reiniciará los contadores a $0.
+                           </p>
+                           <button 
+                            onClick={resetPayroll}
+                            className="w-full bg-red-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-red-700 flex justify-center items-center gap-2"
+                           >
+                               <Archive className="w-4 h-4"/> CERRAR SEMANA Y ARCHIVAR
+                           </button>
+                       </div>
+                    </div>
                 )}
 
-                {/* STANDARD VIEW (Visible to all) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                    {Object.keys(payrollData).map(empName => (
                      <div key={empName} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                        <div className="text-sm text-gray-500 uppercase tracking-wider font-bold mb-1">{empName}</div>
                        <div className="text-3xl font-bold text-green-700">{formatCurrency(payrollData[empName].total)}</div>
-                       <div className="text-sm text-gray-400 mt-2">{payrollData[empName].count} Autos (Total Histórico)</div>
+                       <div className="text-sm text-gray-400 mt-2">{payrollData[empName].count} Autos (Esta Semana)</div>
                      </div>
                    ))}
                 </div>
@@ -474,8 +642,8 @@
                   <table className="w-full text-left">
                     <thead className="bg-gray-50 border-b"><tr><th className="p-4 text-gray-600">ID</th><th className="p-4 text-gray-600">Lavador</th><th className="p-4 text-gray-600">Servicio</th><th className="p-4 text-gray-600 text-right">Comisión</th></tr></thead>
                     <tbody className="divide-y">
-                      {history.slice(0, 20).map((item, idx) => ( // Only showing last 20 to keep UI clean
-                        <tr key={idx} className="hover:bg-gray-50"><td className="p-4 text-gray-500">#{item.id.slice(-4).toUpperCase()}</td><td className="p-4 font-medium">{item.washer}</td><td className="p-4">{item.service.label} <span className="text-xs text-gray-500">({item.size.label})</span></td><td className="p-4 text-right font-bold text-green-700">{formatCurrency(item.commission)}</td></tr>
+                      {history.slice(0, 20).map((item, idx) => ( 
+                        <tr key={idx} className="hover:bg-gray-50"><td className="p-4 text-gray-500">#{item.id.slice(-4).toUpperCase()}</td><td className="p-4 font-medium">{item.washers ? item.washers.join(', ') : item.washer}</td><td className="p-4">{item.service.label} <span className="text-xs text-gray-500">({item.size.label})</span></td><td className="p-4 text-right font-bold text-green-700">{formatCurrency(item.commission)}</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -484,7 +652,9 @@
             );
         };
 
-        const AdminView = ({ isOnline, db, exchangeRate, setExchangeRate, employees, setEmployees }) => {
+        const AdminView = ({ isOnline, db, exchangeRate, setExchangeRate, employees, setEmployees, history }) => {
+            const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
+
             const toggleEmployee = (index) => {
                 const updated = [...employees];
                 updated[index].active = !updated[index].active;
@@ -514,6 +684,28 @@
                  <h3 className="font-bold text-gray-700 mb-4">Tipo de Cambio</h3>
                  <input type="number" value={exchangeRate} onChange={(e) => setExchangeRate(parseFloat(e.target.value))} className="border rounded-lg p-3 w-32 text-lg"/>
                </div>
+
+               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
+                   <h3 className="font-bold text-gray-700 mb-4 flex items-center"><Calendar className="w-5 h-5 mr-2"/> Reporte de Asistencia</h3>
+                   <div className="flex gap-4 items-end">
+                       <div>
+                           <label className="block text-sm text-gray-600 mb-1">Mes</label>
+                           <input 
+                            type="month" 
+                            value={reportMonth} 
+                            onChange={(e) => setReportMonth(e.target.value)}
+                            className="border rounded-lg p-2"
+                           />
+                       </div>
+                       <button 
+                        onClick={() => printAttendanceReport(employees, history, reportMonth)}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700"
+                       >
+                           Imprimir Asistencia
+                       </button>
+                   </div>
+               </div>
+
                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                   <h3 className="font-bold text-gray-700 mb-4">Empleados y Asistencia</h3>
                   <div className="space-y-2">
@@ -547,7 +739,6 @@
           const [view, setView] = useState('GREETER');
           const [exchangeRate, setExchangeRate] = useState(18);
           
-          // Updated state to array of objects
           const [employees, setEmployees] = useState([
               { name: 'Aldo', active: true },
               { name: 'Pedro', active: true },
@@ -559,7 +750,6 @@
           const [history, setHistory] = useState([]);
           const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-          // Listen for Online/Offline status
           useEffect(() => {
             const handleStatusChange = () => setIsOnline(navigator.onLine);
             window.addEventListener('online', handleStatusChange);
@@ -570,7 +760,6 @@
             };
           }, []);
 
-          // --- REAL-TIME DATABASE LISTENER ---
           useEffect(() => {
             if (!db) return;
             
@@ -582,14 +771,14 @@
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     const item = { id: doc.id, ...data };
-                    // Handle Firestore Timestamp
+                    
                     if (item.timestamp && item.timestamp.toDate) {
                         item.timestamp = item.timestamp.toDate();
                     }
                     
                     if (item.status === 'PENDING') {
                         fetchedTickets.push(item);
-                    } else if (item.status === 'PAID') {
+                    } else if (item.status === 'PAID' || item.status === 'ARCHIVED') {
                         fetchedHistory.push(item);
                     }
                 });
@@ -603,20 +792,18 @@
             return () => unsubscribe();
           }, []);
 
-          // Greeter State
           const [selectedSize, setSelectedSize] = useState(null);
           const [selectedService, setSelectedService] = useState(null);
-          const [selectedWasher, setSelectedWasher] = useState(null);
+          const [selectedWashers, setSelectedWashers] = useState([]); // Changed to Array
           const [vehicleDesc, setVehicleDesc] = useState('');
 
-          // Cashier State
           const [activeTicketId, setActiveTicketId] = useState(null);
           const [paymentMxn, setPaymentMxn] = useState('');
           const [paymentUsd, setPaymentUsd] = useState('');
 
-          // --- PRINTING LOGIC ---
           const openPrintWindow = (content) => {
             const printWindow = window.open('', '', 'height=600,width=400');
+            if (!printWindow) return; // Prevent crash if blocked
             printWindow.document.write('<html><head><title>Print</title>');
             printWindow.document.write('<style>');
             printWindow.document.write(`
@@ -659,8 +846,8 @@
                 <div class="item"><span>HORA:</span> <span>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>
                 <div class="divider"></div>
                 <div class="center">
-                    <span>LAVADOR ASIGNADO:</span>
-                    <span class="big-text">${ticket.washer}</span>
+                    <span>LAVADORES ASIGNADOS:</span>
+                    <span class="big-text">${ticket.washers ? ticket.washers.join(', ') : ticket.washer}</span>
                 </div>
                 <div class="divider"></div>
                 <div class="center">
@@ -707,14 +894,14 @@
                 
                 <div class="footer">
                     ¡GRACIAS POR SU PREFERENCIA!<br/>
-                    Atendido por: ${ticket.washer}
+                    Atendido por: ${ticket.washers ? ticket.washers.join(', ') : ticket.washer}
                 </div>
             `;
             openPrintWindow(html);
           };
 
           const createTicket = async () => {
-            if (!selectedSize || !selectedService || !selectedWasher) return;
+            if (!selectedSize || !selectedService || selectedWashers.length === 0) return;
             if (!db) return alert("Firebase no configurado o sin conexión");
 
             const price = PRICES[selectedService.id][selectedSize.id];
@@ -724,7 +911,7 @@
               timestamp: serverTimestamp(),
               size: selectedSize,
               service: selectedService,
-              washer: selectedWasher,
+              washers: selectedWashers, // Store array
               price: price,
               commission: commission,
               vehicleDesc: vehicleDesc || '', // Store description
@@ -738,7 +925,7 @@
 
                 setSelectedSize(null);
                 setSelectedService(null);
-                setSelectedWasher(null);
+                setSelectedWashers([]); // Clear array
                 setVehicleDesc(''); // Clear description
                 alert("Orden enviada a Caja");
             } catch (e) {
@@ -748,8 +935,9 @@
           };
 
           const processPayment = async () => {
+            if (!db) return alert("Error: No hay conexión con la base de datos.");
             const ticket = tickets.find(t => t.id === activeTicketId);
-            if (!ticket || !db) return;
+            if (!ticket) return;
 
             const mxnVal = parseFloat(paymentMxn) || 0;
             const usdVal = parseFloat(paymentUsd) || 0;
@@ -773,7 +961,9 @@
                 });
 
                 const shortId = ticket.id.slice(-4).toUpperCase();
-                printReceipt(ticket, paymentDetails, shortId);
+                try {
+                    printReceipt(ticket, paymentDetails, shortId);
+                } catch(e) { console.error("Printing failed", e); }
 
                 setActiveTicketId(null);
                 setPaymentMxn('');
@@ -785,10 +975,23 @@
           };
 
           const deleteTicket = async (id) => {
-            if (!db) return;
-            if (confirm('¿Eliminar ticket permanentemente?')) {
-              await deleteDoc(doc(db, "tickets", id));
+            if (!db) return alert("Error: No hay conexión con la base de datos.");
+            if (confirm('¿Cancelar este ticket? Se guardará como CANCELADO en la base de datos.')) {
+              // OPTIMISTIC UPDATE: Remove from screen immediately
+              // We don't wait for the DB to respond to make it feel fast
+              setTickets(currentTickets => currentTickets.filter(t => t.id !== id));
               if(activeTicketId === id) setActiveTicketId(null);
+
+              try {
+                await updateDoc(doc(db, "tickets", id), {
+                    status: 'CANCELLED',
+                    cancelledAt: serverTimestamp()
+                });
+              } catch (e) {
+                console.error("Error cancelling ticket: ", e);
+                // If it fails, maybe alert the user, but we already removed it from UI
+                // so it will reappear on refresh if DB failed.
+              }
             }
           };
 
@@ -815,7 +1018,7 @@
                     employees={employees}
                     selectedSize={selectedSize} setSelectedSize={setSelectedSize}
                     selectedService={selectedService} setSelectedService={setSelectedService}
-                    selectedWasher={selectedWasher} setSelectedWasher={setSelectedWasher}
+                    selectedWashers={selectedWashers} setSelectedWashers={setSelectedWashers} // Pass Array
                     vehicleDesc={vehicleDesc} setVehicleDesc={setVehicleDesc}
                     createTicket={createTicket}
                   />
@@ -831,12 +1034,13 @@
                     deleteTicket={deleteTicket}
                   />
                 }
-                {view === 'PAYROLL' && <PayrollView employees={employees} history={history} />}
+                {view === 'PAYROLL' && <PayrollView employees={employees} history={history} db={db} />}
                 {view === 'ADMIN' && 
                   <AdminView 
                     isOnline={isOnline} db={db}
                     exchangeRate={exchangeRate} setExchangeRate={setExchangeRate}
                     employees={employees} setEmployees={setEmployees}
+                    history={history}
                   />
                 }
               </div>
