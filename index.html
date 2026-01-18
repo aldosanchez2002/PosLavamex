@@ -329,36 +329,75 @@
             );
         };
 
-        const HistoryView = ({ history }) => (
-            <div className="p-4 h-full overflow-auto">
-                <h2 className="font-bold text-xl mb-4">Historial de Transacciones</h2>
-                <div className="bg-white rounded-xl shadow overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 font-bold text-gray-700">
-                            <tr>
-                                <th className="p-3">ID</th>
-                                <th className="p-3">Fecha</th>
-                                <th className="p-3">Servicio</th>
-                                <th className="p-3">Total</th>
-                                <th className="p-3">Pago</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {history.map(t => (
-                                <tr key={t.id} className="border-t hover:bg-gray-50">
-                                    <td className="p-3">#{t.id.slice(-4).toUpperCase()}</td>
-                                    <td className="p-3">
-                                        {t.timestamp instanceof Date ? t.timestamp.toLocaleString('es-MX', {
-                                            month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-                                        }) : '...'}
-                                    </td>
-                                    <td className="p-3">{t.service.label}</td>
-                                    <td className="p-3 font-bold text-green-600">{formatCurrency(t.price)}</td>
-                                    <td className="p-3 text-xs">{t.paymentDetails ? `MXN:${t.paymentDetails.mxn} USD:${t.paymentDetails.usd}` : '-'}</td>
+        const HistoryView = ({ history, deductions }) => (
+            <div className="p-4 h-full overflow-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl shadow overflow-hidden h-fit">
+                    <div className="p-3 bg-gray-50 border-b font-bold text-gray-700">Tickets Pagados</div>
+                    <div className="overflow-auto max-h-[80vh]">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 font-bold text-gray-700">
+                                <tr>
+                                    <th className="p-3">ID</th>
+                                    <th className="p-3">Fecha</th>
+                                    <th className="p-3">Servicio</th>
+                                    <th className="p-3">Total</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {history.map(t => (
+                                    <tr key={t.id} className="border-t hover:bg-gray-50">
+                                        <td className="p-3">#{t.id.slice(-4).toUpperCase()}</td>
+                                        <td className="p-3">
+                                            {t.timestamp instanceof Date ? t.timestamp.toLocaleString('es-MX', {
+                                                month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+                                            }) : '...'}
+                                        </td>
+                                        <td className="p-3">
+                                            {t.service.label}
+                                            {t.snackCount > 0 && <span className="ml-1 text-xs text-orange-600 font-bold">(+{t.snackCount} Snacks)</span>}
+                                        </td>
+                                        <td className="p-3 font-bold text-green-600">{formatCurrency(t.price)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow overflow-hidden h-fit">
+                    <div className="p-3 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
+                        <span>Historial de Snacks (Empleados)</span>
+                        <Coffee className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <div className="overflow-auto max-h-[80vh]">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-orange-50 font-bold text-orange-800">
+                                <tr>
+                                    <th className="p-3">Fecha</th>
+                                    <th className="p-3">Empleado</th>
+                                    <th className="p-3">Descripción</th>
+                                    <th className="p-3">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {deductions.filter(d => d.amount > 0).map(d => (
+                                    <tr key={d.id} className="border-t hover:bg-orange-50">
+                                        <td className="p-3">
+                                            {d.timestamp instanceof Date ? d.timestamp.toLocaleString('es-MX', {
+                                                month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+                                            }) : '...'}
+                                        </td>
+                                        <td className="p-3 font-bold">{d.employee}</td>
+                                        <td className="p-3">{d.description}</td>
+                                        <td className="p-3 font-bold text-red-500">-{formatCurrency(d.amount)}</td>
+                                    </tr>
+                                ))}
+                                {deductions.filter(d => d.amount > 0).length === 0 && (
+                                    <tr><td colSpan="4" className="p-4 text-center text-gray-400">Sin registros recientes</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         );
@@ -383,9 +422,12 @@
                 return date >= start && date <= end;
             };
 
-            // Filter history and deductions for the selected range
-            const rangeHistory = history.filter(t => (t.status === 'PAID' || t.status === 'ARCHIVED') && filterRange(t.timestamp));
-            const rangeDeductions = deductions.filter(d => filterRange(d.timestamp));
+            // Filter logic MODIFIED for "Active" view:
+            // "Close Week" marks items as ARCHIVED. 
+            // The view below shows only PAID (active tickets) and PENDING (active debts).
+            // When user clicks "Close Week", status changes to ARCHIVED, so they drop from this view.
+            const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
+            const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
 
             // Calculate Snack Totals
             const clientSnackTotal = rangeHistory.reduce((acc, t) => acc + ((t.snackCount || 0) * SNACK_PRICE), 0);
@@ -733,7 +775,7 @@
                     <main className="flex-1 overflow-hidden relative">
                         {view === 'GREETER' && <GreeterView employees={employees} saveTicket={saveTicket} editingTicket={editingTicket} cancelEdit={cancelEdit} />}
                         {view === 'CASHIER' && <CashierView tickets={tickets} activeId={activeId} setActiveId={setActiveId} payment={payment} setPayment={setPayment} processPayment={processPayment} deleteTicket={async (id) => { if (confirm("Borrar?")) await updateDoc(doc(db, "tickets", id), { status: 'CANCELLED' }) }} updateSnacks={updateSnacks} addDebt={async (e, c) => addDoc(collection(db, "deductions"), { employee: e, amount: c * SNACK_PRICE, status: 'PENDING', timestamp: serverTimestamp() })} employees={employees} exRate={exRate} startEdit={startEdit} />}
-                        {view === 'HISTORY' && <HistoryView history={history.concat(tickets.filter(t => t.status === 'PAID'))} />}
+                        {view === 'HISTORY' && <HistoryView history={history.concat(tickets.filter(t => t.status === 'PAID'))} deductions={deductions} />}
                         {view === 'ADMIN' && <AdminPanel employees={employees} setEmployees={setEmployees} history={history} deductions={deductions} db={db} exRate={exRate} setExRate={setExRate} />}
                     </main>
                 </div>
