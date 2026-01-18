@@ -101,7 +101,8 @@
             });
 
             deductions.forEach(d => {
-                if (payroll[d.employee]) {
+                // Only count deductions that are PENDING (not yet archived/paid)
+                if (payroll[d.employee] && d.status === 'PENDING') {
                     payroll[d.employee].deductionTotal += d.amount;
                     payroll[d.employee].deductionDetails.push({
                         date: d.timestamp,
@@ -333,12 +334,24 @@
                 <h2 className="font-bold text-xl mb-4">Historial de Transacciones</h2>
                 <div className="bg-white rounded-xl shadow overflow-hidden">
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 font-bold text-gray-700"><tr><th className="p-3">ID</th><th className="p-3">Hora</th><th className="p-3">Servicio</th><th className="p-3">Total</th><th className="p-3">Pago</th></tr></thead>
+                        <thead className="bg-gray-50 font-bold text-gray-700">
+                            <tr>
+                                <th className="p-3">ID</th>
+                                <th className="p-3">Fecha</th>
+                                <th className="p-3">Servicio</th>
+                                <th className="p-3">Total</th>
+                                <th className="p-3">Pago</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {history.map(t => (
                                 <tr key={t.id} className="border-t hover:bg-gray-50">
                                     <td className="p-3">#{t.id.slice(-4).toUpperCase()}</td>
-                                    <td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString() : '...'}</td>
+                                    <td className="p-3">
+                                        {t.timestamp instanceof Date ? t.timestamp.toLocaleString('es-MX', {
+                                            month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+                                        }) : '...'}
+                                    </td>
                                     <td className="p-3">{t.service.label}</td>
                                     <td className="p-3 font-bold text-green-600">{formatCurrency(t.price)}</td>
                                     <td className="p-3 text-xs">{t.paymentDetails ? `MXN:${t.paymentDetails.mxn} USD:${t.paymentDetails.usd}` : '-'}</td>
