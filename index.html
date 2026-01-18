@@ -43,7 +43,8 @@
         const db = getFirestore(app);
 
         // --- DATA ---
-        const SIZES = [{ id: 'AUTO', label: 'Auto' }, { id: 'SUV_CHICA', label: 'SUV Chica' }, { id: 'PICKUP', label: 'Pick-Up' }, { id: 'SUV_GDE', label: 'SUV Gde' }];
+        // CHANGED: Updated label for PICKUP to 'Pick-Up / SUV MD'
+        const SIZES = [{ id: 'AUTO', label: 'Auto' }, { id: 'SUV_CHICA', label: 'SUV Chica' }, { id: 'PICKUP', label: 'Pick-Up / SUV MD' }, { id: 'SUV_GDE', label: 'SUV Gde' }];
         const SERVICES = [{ id: 'GENERAL', label: 'Lavado General' }, { id: 'WAX', label: 'Lavado + Cera' }, { id: 'COMPLETE', label: 'Paquete Completo' }, { id: 'PREMIUM', label: 'Paquete Premium' }, { id: 'PRESIDENTIAL', label: 'Paquete Presidencial' }];
         const EXTRAS = [
             { id: 'MOTOR', label: 'Lavado Motor', price: 400, commission: 140 },
@@ -133,22 +134,34 @@
             },
             jobTicket: (ticket, shortId) => {
                 const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
+                // CHANGED: Included explicit logic to render extras on the ticket
+                const extrasHtml = ticket.extras && ticket.extras.length > 0
+                    ? `<div class="center" style="font-size:12px; margin-top:5px; font-weight:bold;">+ ${ticket.extras.map(e => e.label).join('<br>+ ')}</div>`
+                    : '';
+
                 PrintService.printHtml(`
                     <div class="center bold">LAVAMEX - ORDEN</div><div class="divider"></div>
                     <div class="item"><span>TICKET:</span><b>#${shortId}</b></div>
                     <div class="center bold" style="font-size:16px;margin:10px 0">${washers}</div>
                     <div class="center bold" style="font-size:14px">${ticket.size.label}<br>${ticket.service.label}</div>
+                    ${extrasHtml}
                     ${ticket.vehicleDesc ? `<div class="center">(${ticket.vehicleDesc})</div>` : ''}
                     <div class="divider"></div><div class="center">.. TABLERO ..</div>
                 `);
             },
             receipt: (ticket, payment, shortId) => {
+                const extrasHtml = ticket.extras && ticket.extras.length > 0
+                    ? `<div style="font-size:10px;">${ticket.extras.map(e => `<div class="item"><span>+ ${e.label}</span><span>${formatCurrency(e.price)}</span></div>`).join('')}</div>`
+                    : '';
+
                 PrintService.printHtml(`
                     <div class="center bold">LAVAMEX</div><div class="divider"></div>
                     <div class="item"><span>Ticket:</span><span>#${shortId}</span></div>
                     <div class="item"><span>Fecha:</span><span>${new Date().toLocaleDateString()}</span></div>
                     <div class="divider"></div>
-                    <div class="item"><span>${ticket.service.label}</span><span>${formatCurrency(ticket.price)}</span></div>
+                    <div class="item"><span>${ticket.service.label}</span><span>${formatCurrency(PRICES[ticket.service.id][ticket.size.id])}</span></div>
+                    ${extrasHtml}
+                    ${ticket.snackCount > 0 ? `<div class="item"><span>+ Snacks (${ticket.snackCount})</span><span>${formatCurrency(ticket.snackCount * SNACK_PRICE)}</span></div>` : ''}
                     <div class="divider"></div>
                     <div class="item bold"><span>TOTAL:</span><span>${formatCurrency(ticket.price)}</span></div>
                     <div class="item"><span>Recibido:</span><span>${formatCurrency(payment.mxn + (payment.usd * payment.rate))}</span></div>
@@ -383,6 +396,7 @@
                                 {deductions.filter(d => d.amount > 0).map(d => (
                                     <tr key={d.id} className="border-t hover:bg-orange-50">
                                         <td className="p-3">
+                                            {/* CHANGED: Ensured full date/time is shown */}
                                             {d.timestamp instanceof Date ? d.timestamp.toLocaleString('es-MX', {
                                                 month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
                                             }) : '...'}
@@ -422,12 +436,9 @@
                 return date >= start && date <= end;
             };
 
-            // Filter logic MODIFIED for "Active" view:
-            // "Close Week" marks items as ARCHIVED. 
-            // The view below shows only PAID (active tickets) and PENDING (active debts).
-            // When user clicks "Close Week", status changes to ARCHIVED, so they drop from this view.
-            const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
-            const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
+            // Filter history and deductions for the selected range
+            const rangeHistory = history.filter(t => (t.status === 'PAID' || t.status === 'ARCHIVED') && filterRange(t.timestamp));
+            const rangeDeductions = deductions.filter(d => filterRange(d.timestamp));
 
             // Calculate Snack Totals
             const clientSnackTotal = rangeHistory.reduce((acc, t) => acc + ((t.snackCount || 0) * SNACK_PRICE), 0);
@@ -676,7 +687,15 @@
                     setTickets(active); setHistory(hist);
                 });
                 const unsubD = onSnapshot(collection(db, "deductions"), (snap) => {
-                    setDeductions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                    // CHANGED: Fixed timestamp conversion for deductions to ensure date displays in history
+                    setDeductions(snap.docs.map(d => {
+                        const data = d.data();
+                        return {
+                            id: d.id,
+                            ...data,
+                            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp || new Date())
+                        };
+                    }));
                 });
                 return () => { unsubT(); unsubD(); };
             }, []);
