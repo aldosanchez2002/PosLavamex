@@ -370,10 +370,16 @@
             const [newEmp, setNewEmp] = useState('');
 
             // -- FILTER LOGIC --
-            const start = new Date(startDate); start.setHours(0, 0, 0, 0);
-            const end = new Date(endDate); end.setHours(23, 59, 59, 999);
-            const filterRange = (d) => {
-                const date = d && d.toDate ? d.toDate() : new Date(d);
+            const parseDate = (str) => {
+                const [y, m, d] = str.split('-').map(Number);
+                return new Date(y, m - 1, d);
+            };
+            const start = parseDate(startDate); start.setHours(0, 0, 0, 0);
+            const end = parseDate(endDate); end.setHours(23, 59, 59, 999);
+
+            const filterRange = (ts) => {
+                if (!ts) return true; // Optimistic for pending writes
+                const date = ts.toDate ? ts.toDate() : new Date(ts);
                 return date >= start && date <= end;
             };
 
