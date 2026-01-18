@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Lavamex POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -18,6 +18,20 @@
       }
     }
     </script>
+    <style>
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            /* IE and Edge */
+            scrollbar-width: none;
+            /* Firefox */
+        }
+    </style>
 </head>
 
 <body class="bg-gray-100">
@@ -43,7 +57,6 @@
         const db = getFirestore(app);
 
         // --- DATA ---
-        // CHANGED: Updated label for PICKUP to 'Pick-Up / SUV MD'
         const SIZES = [{ id: 'AUTO', label: 'Auto' }, { id: 'SUV_CHICA', label: 'SUV Chica' }, { id: 'PICKUP', label: 'Pick-Up / SUV MD' }, { id: 'SUV_GDE', label: 'SUV Gde' }];
         const SERVICES = [{ id: 'GENERAL', label: 'Lavado General' }, { id: 'WAX', label: 'Lavado + Cera' }, { id: 'COMPLETE', label: 'Paquete Completo' }, { id: 'PREMIUM', label: 'Paquete Premium' }, { id: 'PRESIDENTIAL', label: 'Paquete Presidencial' }];
         const EXTRAS = [
@@ -82,7 +95,6 @@
                 const washersList = item.washers || (item.washer ? [item.washer] : []);
                 if (washersList.length === 0) return;
 
-                // Calculate pay per person
                 const splitCommission = item.commission / washersList.length;
 
                 washersList.forEach(washerName => {
@@ -91,7 +103,6 @@
                     payroll[washerName].count += 1;
                     payroll[washerName].total += splitCommission;
 
-                    // Add detailed breakdown for payslip
                     payroll[washerName].details.push({
                         date: item.timestamp,
                         service: `${item.service.label} (${item.size.label})`,
@@ -102,7 +113,6 @@
             });
 
             deductions.forEach(d => {
-                // Using passed deductions (caller handles filtering)
                 if (payroll[d.employee]) {
                     payroll[d.employee].deductionTotal += d.amount;
                     payroll[d.employee].deductionDetails.push({
@@ -115,7 +125,6 @@
 
             Object.keys(payroll).forEach(key => {
                 payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal;
-                // Sort details by date for the report
                 payroll[key].details.sort((a, b) => (a.date > b.date ? 1 : -1));
                 payroll[key].deductionDetails.sort((a, b) => (a.date > b.date ? 1 : -1));
             });
@@ -134,7 +143,6 @@
             },
             jobTicket: (ticket, shortId) => {
                 const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
-                // CHANGED: Included explicit logic to render extras on the ticket
                 const extrasHtml = ticket.extras && ticket.extras.length > 0
                     ? `<div class="center" style="font-size:12px; margin-top:5px; font-weight:bold;">+ ${ticket.extras.map(e => e.label).join('<br>+ ')}</div>`
                     : '';
@@ -198,16 +206,16 @@
             };
 
             return (
-                <div className="flex h-screen bg-gray-900 justify-center items-center">
-                    <div className="bg-white p-8 rounded-2xl shadow-2xl w-96 text-center">
+                <div className="flex h-screen bg-gray-900 justify-center items-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center">
                         <h1 className="text-3xl font-bold mb-6 text-gray-800">LAVAMEX POS</h1>
                         <div className="grid grid-cols-1 gap-4">
-                            <button onClick={() => handleLogin('GREETER')} className="p-4 bg-blue-100 text-blue-800 rounded-xl font-bold hover:bg-blue-200">ENTRADA (Sin Clave)</button>
+                            <button onClick={() => handleLogin('GREETER')} className="p-4 bg-blue-100 text-blue-800 rounded-xl font-bold hover:bg-blue-200 active:scale-95 transition-transform">ENTRADA (Sin Clave)</button>
                             <div className="border-t my-2"></div>
-                            <input type="password" value={pin} onChange={e => setPin(e.target.value)} placeholder="Ingrese PIN" className="w-full p-3 border rounded-lg text-center text-xl mb-2" />
-                            <div className="flex gap-2">
-                                <button onClick={() => handleLogin('CASHIER')} className="flex-1 p-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700">CAJA</button>
-                                <button onClick={() => handleLogin('ADMIN')} className="flex-1 p-3 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-900">ADMIN</button>
+                            <input type="number" pattern="[0-9]*" inputMode="numeric" value={pin} onChange={e => setPin(e.target.value)} placeholder="PIN" className="w-full p-4 border rounded-lg text-center text-2xl mb-2" />
+                            <div className="flex gap-3">
+                                <button onClick={() => handleLogin('CASHIER')} className="flex-1 p-4 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 active:scale-95 transition-transform">CAJA</button>
+                                <button onClick={() => handleLogin('ADMIN')} className="flex-1 p-4 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-900 active:scale-95 transition-transform">ADMIN</button>
                             </div>
                         </div>
                     </div>
@@ -250,31 +258,39 @@
             return (
                 <div className="flex flex-col h-full overflow-hidden">
                     {editingTicket && (
-                        <div className="bg-yellow-200 p-3 text-center font-bold text-yellow-900 flex justify-between items-center px-6 shadow-sm z-10">
-                            <span className="flex items-center gap-2"><Pencil className="w-4 h-4" /> EDITANDO TICKET #{editingTicket.id.slice(-4).toUpperCase()}</span>
-                            <button onClick={cancelEdit} className="bg-white px-3 py-1 rounded text-sm hover:bg-yellow-50 border border-yellow-300">Cancelar Edición</button>
+                        <div className="bg-yellow-200 p-3 text-center font-bold text-yellow-900 flex justify-between items-center px-4 shadow-sm z-10 shrink-0">
+                            <span className="flex items-center gap-2 text-sm"><Pencil className="w-4 h-4" /> EDITANDO #{editingTicket.id.slice(-4).toUpperCase()}</span>
+                            <button onClick={cancelEdit} className="bg-white px-3 py-1 rounded text-xs hover:bg-yellow-50 border border-yellow-300">Cancelar</button>
                         </div>
                     )}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 flex-1 overflow-auto">
-                        <div className="bg-white p-4 rounded-xl shadow border">
-                            <h3 className="font-bold mb-2">1. Tamaño</h3>
-                            {SIZES.map(s => <button key={s.id} onClick={() => setSize(s)} className={`w-full p-3 mb-2 rounded border-2 ${size?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold' : ''}`}>{s.label}</button>)}
-                        </div>
-                        <div className="bg-white p-4 rounded-xl shadow border">
-                            <h3 className="font-bold mb-2">2. Servicio</h3>
-                            {SERVICES.map(s => <button key={s.id} disabled={!size} onClick={() => setService(s)} className={`w-full p-3 mb-2 rounded border-2 flex justify-between ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold' : 'opacity-90'}`}><span>{s.label}</span>{size && <span>${PRICES[s.id][size.id]}</span>}</button>)}
-                            <h3 className="font-bold mt-4 mb-2">Extras</h3>
-                            {EXTRAS.map(e => <button key={e.id} onClick={() => toggle(extras, e, setExtras)} className={`w-full p-2 mb-1 rounded border text-sm flex justify-between ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600' : ''}`}><span>{e.label}</span><span>+${e.price}</span></button>)}
-                        </div>
-                        <div className="md:col-span-2 bg-white p-4 rounded-xl shadow border flex flex-col">
-                            <h3 className="font-bold mb-2">3. Lavadores ({washers.length})</h3>
-                            <div className="grid grid-cols-2 gap-2 mb-4">
-                                {employees.filter(e => e.active).map(e => <button key={e.name} onClick={() => toggle(washers, e.name, setWashers)} className={`p-3 rounded border ${washers.includes(e.name) ? 'bg-green-100 border-green-600 font-bold' : ''}`}>{e.name}</button>)}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 flex-1 overflow-y-auto">
+                        <div className="bg-white p-4 rounded-xl shadow border h-fit">
+                            <h3 className="font-bold mb-3 text-gray-700 flex items-center"><Car className="w-5 h-5 mr-2" /> 1. Tamaño</h3>
+                            <div className="space-y-2">
+                                {SIZES.map(s => <button key={s.id} onClick={() => setSize(s)} className={`w-full p-4 text-left rounded-lg border-2 transition-all ${size?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 hover:bg-gray-50'}`}>{s.label}</button>)}
                             </div>
-                            <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción (Opcional)" className="w-full p-2 border rounded mb-4" />
-                            <button onClick={handleSubmit} disabled={!size || !service || washers.length === 0} className={`mt-auto w-full py-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 ${!size || !service || washers.length === 0 ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                                {editingTicket ? <><Save className="w-5 h-5" /> GUARDAR CAMBIOS</> : <><Printer className="w-5 h-5" /> CREAR ORDEN</>}
-                            </button>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow border h-fit">
+                            <h3 className="font-bold mb-3 text-gray-700 flex items-center"><FileText className="w-5 h-5 mr-2" /> 2. Servicio</h3>
+                            <div className="space-y-2 mb-4">
+                                {SERVICES.map(s => <button key={s.id} disabled={!size} onClick={() => setService(s)} className={`w-full p-3 text-left rounded-lg border-2 flex justify-between items-center transition-all ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 opacity-90 hover:bg-gray-50'}`}><span>{s.label}</span>{size && <span className="bg-white px-2 py-1 rounded text-sm shadow-sm border">${PRICES[s.id][size.id]}</span>}</button>)}
+                            </div>
+                            <h3 className="font-bold mb-2 text-gray-700 text-sm">Extras</h3>
+                            <div className="grid grid-cols-1 gap-2">
+                                {EXTRAS.map(e => <button key={e.id} onClick={() => toggle(extras, e, setExtras)} className={`w-full p-3 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>)}
+                            </div>
+                        </div>
+                        <div className="md:col-span-2 bg-white p-4 rounded-xl shadow border flex flex-col h-full">
+                            <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 3. Lavadores ({washers.length})</h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                                {employees.filter(e => e.active).map(e => <button key={e.name} onClick={() => toggle(washers, e.name, setWashers)} className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>{e.name}</button>)}
+                            </div>
+                            <div className="mt-auto pt-4 border-t">
+                                <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción (Opcional)" className="w-full p-3 border rounded-lg mb-4 text-lg" />
+                                <button onClick={handleSubmit} disabled={!size || !service || washers.length === 0} className={`w-full py-5 rounded-xl font-bold text-white text-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform ${!size || !service || washers.length === 0 ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                    {editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR ORDEN</>}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -287,53 +303,76 @@
             const [snackEmp, setSnackEmp] = useState('');
 
             return (
-                <div className="flex h-full gap-4 p-4">
-                    <div className="w-1/3 bg-white rounded-xl shadow border overflow-hidden flex flex-col">
-                        <div className="p-3 bg-gray-50 font-bold border-b flex justify-between">
-                            <span>Tickets Activos</span>
-                            <button onClick={() => setShowSnack(true)} className="text-xs bg-orange-100 text-orange-700 px-2 rounded">Snack Empleado</button>
+                <div className="flex flex-col md:flex-row h-full gap-4 p-4 overflow-hidden">
+                    {/* Ticket List - Stacked on Mobile, Left on Tablet */}
+                    <div className="w-full md:w-1/3 bg-white rounded-xl shadow border overflow-hidden flex flex-col h-1/3 md:h-full shrink-0">
+                        <div className="p-3 bg-gray-50 font-bold border-b flex justify-between items-center shrink-0">
+                            <span className="text-gray-700">Tickets ({tickets.length})</span>
+                            <button onClick={() => setShowSnack(true)} className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full font-bold border border-orange-200 active:bg-orange-200">Snack Emp</button>
                         </div>
-                        <div className="overflow-auto flex-1 p-2 space-y-2">
+                        <div className="overflow-y-auto flex-1 p-2 space-y-2">
                             {tickets.map(ticket => (
-                                <div key={ticket.id} onClick={() => setActiveId(ticket.id)} className={`p-3 rounded border cursor-pointer ${activeId === ticket.id ? 'border-blue-500 bg-blue-50' : ''}`}>
-                                    <div className="flex justify-between font-bold"><span>#{ticket.id.slice(-4).toUpperCase()}</span><span>{formatCurrency(ticket.price)}</span></div>
-                                    <div className="text-xs text-gray-500">{ticket.service.label} ({ticket.size.label})</div>
+                                <div key={ticket.id} onClick={() => setActiveId(ticket.id)} className={`p-4 rounded-lg border cursor-pointer transition-all ${activeId === ticket.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                    <div className="flex justify-between font-bold text-gray-800"><span>#{ticket.id.slice(-4).toUpperCase()}</span><span>{formatCurrency(ticket.price)}</span></div>
+                                    <div className="text-sm text-gray-600 mt-1">{ticket.service.label} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size.label}</span></div>
+                                    {ticket.vehicleDesc && <div className="text-xs text-blue-600 italic mt-1">{ticket.vehicleDesc}</div>}
                                 </div>
                             ))}
                         </div>
                     </div>
-                    <div className="flex-1 bg-white rounded-xl shadow border p-6 flex flex-col items-center justify-center">
+
+                    {/* Detail View - Bottom on Mobile, Right on Tablet */}
+                    <div className="flex-1 bg-white rounded-xl shadow border p-4 md:p-6 flex flex-col items-center justify-center h-2/3 md:h-full overflow-y-auto">
                         {t ? (
                             <div className="w-full max-w-md">
-                                <h2 className="text-3xl font-bold text-center mb-2">{formatCurrency(t.price)}</h2>
-                                <p className="text-center text-gray-500 mb-4">{t.vehicleDesc} • {t.washers?.join(', ')}</p>
-                                <div className="flex justify-center items-center gap-2 mb-6 bg-orange-50 p-2 rounded">
-                                    <span className="font-bold text-sm text-orange-800">Snacks Cliente:</span>
-                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) - 1)} className="w-6 h-6 bg-white border font-bold">-</button>
-                                    <span>{t.snackCount || 0}</span>
-                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) + 1)} className="w-6 h-6 bg-white border font-bold">+</button>
+                                <h2 className="text-4xl font-bold text-center mb-2 text-gray-800">{formatCurrency(t.price)}</h2>
+                                <p className="text-center text-gray-500 mb-6 font-medium">{t.vehicleDesc} • {t.washers?.join(', ')}</p>
+
+                                <div className="flex justify-center items-center gap-3 mb-6 bg-orange-50 p-3 rounded-xl border border-orange-100">
+                                    <span className="font-bold text-sm text-orange-800 uppercase tracking-wide">Snacks Cliente</span>
+                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) - 1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-xl shadow-sm text-gray-600 active:bg-gray-100">-</button>
+                                    <span className="font-bold text-xl w-8 text-center">{t.snackCount || 0}</span>
+                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) + 1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-xl shadow-sm text-green-600 active:bg-gray-100">+</button>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <input type="number" value={payment.mxn} onChange={e => setPayment({ ...payment, mxn: e.target.value })} placeholder="MXN" className="p-2 border rounded" />
-                                    <input type="number" value={payment.usd} onChange={e => setPayment({ ...payment, usd: e.target.value })} placeholder="USD" className="p-2 border rounded" />
+
+                                <div className="grid grid-cols-2 gap-4 mb-6">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 mb-1 block">MXN</label>
+                                        <input type="number" inputMode="decimal" value={payment.mxn} onChange={e => setPayment({ ...payment, mxn: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 mb-1 block">USD (Rate: {exRate})</label>
+                                        <input type="number" inputMode="decimal" value={payment.usd} onChange={e => setPayment({ ...payment, usd: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" />
+                                    </div>
                                 </div>
-                                <div className="text-center font-bold mb-4 text-green-600">Cambio: {formatCurrency(((parseFloat(payment.mxn) || 0) + ((parseFloat(payment.usd) || 0) * exRate)) - t.price)}</div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => deleteTicket(t.id)} className="p-3 border border-red-200 text-red-500 rounded" title="Borrar"><Trash2 /></button>
-                                    <button onClick={() => startEdit(t)} className="p-3 border border-yellow-200 text-yellow-600 rounded bg-yellow-50" title="Editar"><Pencil /></button>
-                                    <button onClick={processPayment} className="flex-1 bg-green-600 text-white font-bold rounded hover:bg-green-700">COBRAR</button>
+
+                                <div className="text-center font-bold mb-6 text-xl bg-gray-50 p-3 rounded-lg border">
+                                    Cambio: <span className={((parseFloat(payment.mxn) || 0) + ((parseFloat(payment.usd) || 0) * exRate)) - t.price < 0 ? 'text-red-500' : 'text-green-600'}>
+                                        {formatCurrency(((parseFloat(payment.mxn) || 0) + ((parseFloat(payment.usd) || 0) * exRate)) - t.price)}
+                                    </span>
+                                </div>
+
+                                <div className="flex gap-3">
+                                    <button onClick={() => deleteTicket(t.id)} className="p-4 border border-red-200 text-red-500 rounded-xl hover:bg-red-50 active:bg-red-100" title="Borrar"><Trash2 className="w-6 h-6" /></button>
+                                    <button onClick={() => startEdit(t)} className="p-4 border border-yellow-200 text-yellow-600 rounded-xl bg-yellow-50 hover:bg-yellow-100 active:bg-yellow-200" title="Editar"><Pencil className="w-6 h-6" /></button>
+                                    <button onClick={processPayment} className="flex-1 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2"><Printer className="w-6 h-6" /> COBRAR</button>
                                 </div>
                             </div>
-                        ) : <div className="text-gray-400">Selecciona un ticket</div>}
+                        ) : <div className="text-gray-400 flex flex-col items-center"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
                     </div>
+
+                    {/* Modal */}
                     {showSnack && (
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                            <div className="bg-white p-6 rounded shadow-lg w-80">
-                                <h3 className="font-bold mb-4">Cobrar Snack a Empleado</h3>
-                                <select className="w-full border p-2 mb-4" onChange={e => setSnackEmp(e.target.value)}><option value="">Seleccionar...</option>{employees.map(e => <option key={e.name} value={e.name}>{e.name}</option>)}</select>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setShowSnack(false)} className="flex-1 border p-2">Cancelar</button>
-                                    <button onClick={() => { addDebt(snackEmp, 1); setShowSnack(false); }} className="flex-1 bg-orange-600 text-white p-2">Confirmar ($25)</button>
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm">
+                                <h3 className="font-bold mb-4 text-lg text-gray-800 flex items-center"><Coffee className="mr-2 text-orange-500" /> Snack Empleado</h3>
+                                <select className="w-full border p-3 rounded-lg mb-6 text-lg bg-white" onChange={e => setSnackEmp(e.target.value)} value={snackEmp}>
+                                    <option value="">Seleccionar Empleado...</option>
+                                    {employees.map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
+                                </select>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setShowSnack(false)} className="flex-1 border p-3 rounded-xl font-bold text-gray-600">Cancelar</button>
+                                    <button onClick={() => { if (snackEmp) { addDebt(snackEmp, 1); setShowSnack(false); setSnackEmp(''); } }} disabled={!snackEmp} className="flex-1 bg-orange-600 text-white p-3 rounded-xl font-bold shadow active:bg-orange-700 disabled:opacity-50">Confirmar ($25)</button>
                                 </div>
                             </div>
                         </div>
@@ -343,33 +382,33 @@
         };
 
         const HistoryView = ({ history, deductions }) => (
-            <div className="p-4 h-full overflow-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white rounded-xl shadow overflow-hidden h-fit">
-                    <div className="p-3 bg-gray-50 border-b font-bold text-gray-700">Tickets Pagados</div>
-                    <div className="overflow-auto max-h-[80vh]">
+            <div className="p-4 h-full overflow-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
+                    <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex items-center"><CheckCircle className="w-4 h-4 mr-2 text-green-600" /> Tickets Pagados</div>
+                    <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 font-bold text-gray-700">
+                            <thead className="bg-gray-50 font-bold text-gray-700 sticky top-0">
                                 <tr>
                                     <th className="p-3">ID</th>
-                                    <th className="p-3">Fecha</th>
+                                    <th className="p-3">Hora</th>
                                     <th className="p-3">Servicio</th>
-                                    <th className="p-3">Total</th>
+                                    <th className="p-3 text-right">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {history.map(t => (
                                     <tr key={t.id} className="border-t hover:bg-gray-50">
-                                        <td className="p-3">#{t.id.slice(-4).toUpperCase()}</td>
+                                        <td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td>
                                         <td className="p-3">
                                             {t.timestamp instanceof Date ? t.timestamp.toLocaleString('es-MX', {
                                                 month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
                                             }) : '...'}
                                         </td>
                                         <td className="p-3">
-                                            {t.service.label}
-                                            {t.snackCount > 0 && <span className="ml-1 text-xs text-orange-600 font-bold">(+{t.snackCount} Snacks)</span>}
+                                            <div className="font-medium">{t.service.label}</div>
+                                            {t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}
                                         </td>
-                                        <td className="p-3 font-bold text-green-600">{formatCurrency(t.price)}</td>
+                                        <td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -377,37 +416,34 @@
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow overflow-hidden h-fit">
-                    <div className="p-3 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
-                        <span>Historial de Snacks (Empleados)</span>
+                <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
+                    <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
+                        <span>Snacks Empleados</span>
                         <Coffee className="w-4 h-4 text-orange-500" />
                     </div>
-                    <div className="overflow-auto max-h-[80vh]">
+                    <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-orange-50 font-bold text-orange-800">
+                            <thead className="bg-orange-50 font-bold text-orange-800 sticky top-0">
                                 <tr>
                                     <th className="p-3">Fecha</th>
                                     <th className="p-3">Empleado</th>
-                                    <th className="p-3">Descripción</th>
-                                    <th className="p-3">Monto</th>
+                                    <th className="p-3 text-right">Monto</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {deductions.filter(d => d.amount > 0).map(d => (
                                     <tr key={d.id} className="border-t hover:bg-orange-50">
                                         <td className="p-3">
-                                            {/* CHANGED: Ensured full date/time is shown */}
                                             {d.timestamp instanceof Date ? d.timestamp.toLocaleString('es-MX', {
                                                 month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
                                             }) : '...'}
                                         </td>
                                         <td className="p-3 font-bold">{d.employee}</td>
-                                        <td className="p-3">{d.description}</td>
-                                        <td className="p-3 font-bold text-red-500">-{formatCurrency(d.amount)}</td>
+                                        <td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td>
                                     </tr>
                                 ))}
                                 {deductions.filter(d => d.amount > 0).length === 0 && (
-                                    <tr><td colSpan="4" className="p-4 text-center text-gray-400">Sin registros recientes</td></tr>
+                                    <tr><td colSpan="3" className="p-4 text-center text-gray-400 italic">Sin registros recientes</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -439,11 +475,9 @@
             const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
             const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
 
-            // Calculate Snack Totals
             const clientSnackTotal = rangeHistory.reduce((acc, t) => acc + ((t.snackCount || 0) * SNACK_PRICE), 0);
             const empSnackTotal = rangeDeductions.reduce((acc, d) => acc + d.amount, 0);
 
-            // Payroll Logic (using filtered data)
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions);
 
             const printNomina = () => {
@@ -468,7 +502,7 @@
 
                 Object.keys(payroll).forEach(name => {
                     const p = payroll[name];
-                    if (p.count === 0 && p.deductionTotal === 0) return; // Skip empty
+                    if (p.count === 0 && p.deductionTotal === 0) return;
 
                     html += `<div class="payslip">`;
                     html += `<div class="header">
@@ -477,7 +511,6 @@
                              </div>`;
                     html += `<div class="emp-name">Empleado: ${name}</div>`;
 
-                    // Services Table
                     html += `<div class="sub-header">Detalle de Servicios</div>`;
                     html += `<table>
                                 <thead>
@@ -503,7 +536,6 @@
                                 <td class="amount">${formatCurrency(p.total)}</td>
                              </tr>`;
 
-                    // Deductions Summary Row (No table)
                     if (p.deductionTotal > 0) {
                         html += `<tr class="total-row" style="color:red;">
                                     <td colspan="2" style="text-align:right">Total Deducciones (Snacks/Prestamos):</td>
@@ -525,7 +557,6 @@
             const closeWeek = async () => {
                 if (!confirm("¿Archivar semana? Esto limpiará la nómina actual.")) return;
                 const batch = writeBatch(db);
-                // For closing, we generally only archive pending/active paid items
                 const pendingHistory = history.filter(t => t.status === 'PAID');
                 pendingHistory.forEach(t => batch.update(doc(db, "tickets", t.id), { status: 'ARCHIVED' }));
                 deductions.filter(d => d.status === 'PENDING').forEach(d => batch.update(doc(db, "deductions", d.id), { status: 'ARCHIVED' }));
@@ -541,48 +572,50 @@
             };
 
             return (
-                <div className="p-6 h-full overflow-auto">
-                    <div className="flex gap-4 mb-6">
-                        <button onClick={() => setTab('NOMINA')} className={`px-4 py-2 rounded font-bold ${tab === 'NOMINA' ? 'bg-blue-600 text-white' : 'bg-white'}`}>Nómina</button>
-                        <button onClick={() => setTab('CONFIG')} className={`px-4 py-2 rounded font-bold ${tab === 'CONFIG' ? 'bg-blue-600 text-white' : 'bg-white'}`}>Configuración</button>
+                <div className="p-4 md:p-6 h-full overflow-y-auto">
+                    <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
+                        <button onClick={() => setTab('NOMINA')} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === 'NOMINA' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>Nómina</button>
+                        <button onClick={() => setTab('CONFIG')} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === 'CONFIG' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>Configuración</button>
                     </div>
 
                     {tab === 'NOMINA' && (
                         <div>
-                            <div className="flex justify-between items-center mb-4 bg-white p-4 rounded shadow">
-                                <div className="flex gap-2 items-end">
-                                    <div><label className="text-xs font-bold">Inicio</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-1 rounded block" /></div>
-                                    <div><label className="text-xs font-bold">Fin</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-1 rounded block" /></div>
-                                    <button onClick={printNomina} className="bg-green-600 text-white px-4 py-2 rounded font-bold h-10">Imprimir</button>
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
+                                <div className="flex flex-wrap gap-3 items-end">
+                                    <div><label className="text-xs font-bold text-gray-500 block mb-1">Inicio</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
+                                    <div><label className="text-xs font-bold text-gray-500 block mb-1">Fin</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
+                                    <button onClick={printNomina} className="bg-green-600 text-white px-5 py-2.5 rounded-lg font-bold shadow hover:bg-green-700 flex items-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
                                 </div>
-                                <button onClick={closeWeek} className="bg-red-600 text-white px-4 py-2 rounded font-bold flex items-center gap-2"><Archive className="w-4 h-4" /> CERRAR SEMANA</button>
+                                <button onClick={closeWeek} className="w-full md:w-auto bg-red-600 text-white px-5 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 shadow hover:bg-red-700"><Archive className="w-4 h-4" /> CERRAR SEMANA</button>
                             </div>
 
-                            {/* WEEKLY SUMMARY BOX */}
-                            <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl shadow-sm mb-6 flex gap-8 items-center">
-                                <h3 className="text-orange-900 font-bold flex items-center"><Coffee className="w-5 h-5 mr-2" /> Resumen de Snacks (Semanal)</h3>
-                                <div className="flex gap-6">
-                                    <div>
-                                        <div className="text-xs text-orange-700 font-bold uppercase">Snacks Clientes</div>
+                            <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl shadow-sm mb-6 flex flex-col md:flex-row gap-4 md:gap-8 items-start md:items-center">
+                                <h3 className="text-orange-900 font-bold flex items-center shrink-0"><Coffee className="w-5 h-5 mr-2" /> Resumen Snacks</h3>
+                                <div className="flex gap-4 md:gap-8 w-full">
+                                    <div className="flex-1 md:flex-none">
+                                        <div className="text-xs text-orange-700 font-bold uppercase">Clientes</div>
                                         <div className="text-xl font-bold text-orange-900">{formatCurrency(clientSnackTotal)}</div>
                                     </div>
-                                    <div>
-                                        <div className="text-xs text-orange-700 font-bold uppercase">Snacks Empleados</div>
+                                    <div className="flex-1 md:flex-none">
+                                        <div className="text-xs text-orange-700 font-bold uppercase">Empleados</div>
                                         <div className="text-xl font-bold text-orange-900">{formatCurrency(empSnackTotal)}</div>
                                     </div>
-                                    <div className="border-l border-orange-200 pl-6">
-                                        <div className="text-xs text-orange-700 font-bold uppercase">Total Venta Snacks</div>
+                                    <div className="border-l border-orange-200 pl-4 md:pl-8 flex-1 md:flex-none">
+                                        <div className="text-xs text-orange-700 font-bold uppercase">Total</div>
                                         <div className="text-xl font-bold text-orange-900">{formatCurrency(clientSnackTotal + empSnackTotal)}</div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {Object.keys(payroll).map(name => (
-                                    <div key={name} className="bg-white p-4 rounded shadow border-l-4 border-blue-500">
-                                        <div className="font-bold text-lg">{name}</div>
-                                        <div className="text-2xl font-bold text-green-700">{formatCurrency(payroll[name].netPay)}</div>
-                                        <div className="text-xs text-gray-500 mt-2">Com: {formatCurrency(payroll[name].total)} | Ded: {formatCurrency(payroll[name].deductionTotal)}</div>
+                                    <div key={name} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-blue-500">
+                                        <div className="font-bold text-xl text-gray-800 mb-1">{name}</div>
+                                        <div className="text-3xl font-bold text-green-700">{formatCurrency(payroll[name].netPay)}</div>
+                                        <div className="text-sm text-gray-500 mt-2 flex justify-between border-t pt-2">
+                                            <span>Com: {formatCurrency(payroll[name].total)}</span>
+                                            <span className="text-red-500 font-medium">Ded: {formatCurrency(payroll[name].deductionTotal)}</span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -590,45 +623,35 @@
                     )}
 
                     {tab === 'CONFIG' && (
-                        <div className="bg-white p-6 rounded shadow max-w-lg">
-                            <h3 className="font-bold mb-4">General</h3>
-                            <div className="mb-4"><label>Dólar (Rate)</label><input type="number" value={exRate} onChange={e => setExRate(parseFloat(e.target.value))} className="border p-2 rounded ml-2" /></div>
-                            <h3 className="font-bold mb-4 border-t pt-4">Empleados</h3>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
+                            <h3 className="font-bold mb-4 text-gray-800">General</h3>
+                            <div className="mb-6"><label className="block text-sm font-bold text-gray-600 mb-2">Dólar (Rate)</label><input type="number" value={exRate} onChange={e => setExRate(parseFloat(e.target.value))} className="border p-3 rounded-lg w-full text-lg" /></div>
+                            <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
                             <div className="flex gap-2 mb-4">
-                                <input
-                                    value={newEmp}
-                                    onChange={(e) => setNewEmp(e.target.value)}
-                                    placeholder="Nombre del lavador"
-                                    className="border p-2 rounded flex-1"
-                                />
-                                <button onClick={addEmployee} className="bg-blue-600 text-white px-4 py-2 rounded font-bold">
-                                    <PlusCircle className="w-5 h-5" />
-                                </button>
+                                <input value={newEmp} onChange={(e) => setNewEmp(e.target.value)} placeholder="Nombre del lavador" className="border p-3 rounded-lg flex-1" />
+                                <button onClick={addEmployee} className="bg-blue-600 text-white px-5 rounded-lg font-bold"><PlusCircle className="w-5 h-5" /></button>
                             </div>
-                            {employees.map((e, i) => (
-                                <div key={i} className="flex justify-between p-2 hover:bg-gray-50">
-                                    <span>{e.name} ({e.active ? 'Activo' : 'Inactivo'})</span>
-                                    <button onClick={() => { const n = [...employees]; n[i].active = !n[i].active; setEmployees(n) }}>{e.active ? <ToggleRight color="green" /> : <ToggleLeft color="gray" />}</button>
-                                </div>
-                            ))}
+                            <div className="space-y-2">
+                                {employees.map((e, i) => (
+                                    <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                        <span className="font-medium">{e.name} <span className="text-xs text-gray-400">({e.active ? 'Activo' : 'Inactivo'})</span></span>
+                                        <button onClick={() => { const n = [...employees]; n[i].active = !n[i].active; setEmployees(n) }} className="px-3 py-1 bg-white border rounded shadow-sm text-sm font-bold">{e.active ? <span className="text-green-600">ON</span> : <span className="text-gray-400">OFF</span>}</button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
             );
         };
 
-        const ToggleRight = ({ color }) => <div className={`text-${color}-600 font-bold`}>ON</div>;
-        const ToggleLeft = ({ color }) => <div className={`text-${color}-400 font-bold`}>OFF</div>;
-
         // --- MAIN APP ---
         function App() {
-            // -- SESSION PERSISTENCE --
             const [role, setRole] = useState(() => localStorage.getItem('lavamex_role') || null);
 
             const login = (r) => {
                 setRole(r);
                 localStorage.setItem('lavamex_role', r);
-                // Default view based on role
                 if (r === 'GREETER') setView('GREETER');
                 if (r === 'CASHIER') setView('CASHIER');
                 if (r === 'ADMIN') setView('ADMIN');
@@ -641,9 +664,8 @@
             };
 
             const [view, setView] = useState('GREETER');
-            const [editingTicket, setEditingTicket] = useState(null); // State for ticket being edited
+            const [editingTicket, setEditingTicket] = useState(null);
 
-            // Shared State
             const [employees, setEmployees] = useState([{ name: 'Aldo', active: true }, { name: 'Sergio', active: true }, { name: 'Juan', active: true }, { name: 'Rodrigo', active: true }]);
             const [exRate, setExRate] = useState(18.10);
             const [tickets, setTickets] = useState([]);
@@ -652,7 +674,6 @@
             const [payment, setPayment] = useState({ mxn: '', usd: '' });
             const [activeId, setActiveId] = useState(null);
 
-            // Listeners
             useEffect(() => {
                 const qT = query(collection(db, "tickets"), orderBy("timestamp", "desc"));
                 const unsubT = onSnapshot(qT, (snap) => {
@@ -665,27 +686,19 @@
                     setTickets(active); setHistory(hist);
                 });
                 const unsubD = onSnapshot(collection(db, "deductions"), (snap) => {
-                    // CHANGED: Fixed timestamp conversion for deductions to ensure date displays in history
                     setDeductions(snap.docs.map(d => {
                         const data = d.data();
-                        return {
-                            id: d.id,
-                            ...data,
-                            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp || new Date())
-                        };
+                        return { id: d.id, ...data, timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp || new Date()) };
                     }));
                 });
                 return () => { unsubT(); unsubD(); };
             }, []);
 
-            // Actions
             const saveTicket = async (data) => {
                 const base = PRICES[data.service.id][data.size.id];
                 const comm = COMMISSIONS[data.service.id][data.size.id];
                 const extrasPrice = data.extras.reduce((a, b) => a + b.price, 0);
                 const extrasComm = data.extras.reduce((a, b) => a + b.commission, 0);
-
-                // If editing, preserve existing snack count. If new, 0.
                 const snacks = editingTicket ? (editingTicket.snackCount || 0) : 0;
                 const snackCost = snacks * SNACK_PRICE;
                 const totalPrice = base + extrasPrice + snackCost;
@@ -696,47 +709,33 @@
                     commission: comm + extrasComm,
                     snackCount: snacks,
                     status: 'PENDING',
-                    timestamp: serverTimestamp() // Update timestamp to bring to top? Or keep original? Let's update.
+                    timestamp: serverTimestamp()
                 };
 
                 if (editingTicket) {
                     await updateDoc(doc(db, "tickets", editingTicket.id), ticketData);
-                    alert("Ticket Actualizado");
+                    alert("Actualizado");
                     setEditingTicket(null);
-                    if (role === 'CASHIER') setView('CASHIER'); // Return to cashier view if that's who asked
+                    if (role === 'CASHIER') setView('CASHIER');
                 } else {
                     const ref = await addDoc(collection(db, "tickets"), ticketData);
                     PrintService.jobTicket({ ...ticketData, timestamp: new Date() }, ref.id.slice(-4).toUpperCase());
-                    alert("Orden Creada");
+                    alert("Creada");
                 }
             };
 
-            // --- FIXED UPDATE SNACKS FUNCTION ---
             const updateSnacks = async (id, count) => {
                 const t = tickets.find(x => x.id === id);
                 if (!t) return;
                 const newCount = Math.max(0, count);
-
-                // Recalculate Total Price
                 const base = PRICES[t.service.id][t.size.id];
                 const extras = (t.extras || []).reduce((a, b) => a + b.price, 0);
                 const newPrice = base + extras + (newCount * SNACK_PRICE);
-
-                await updateDoc(doc(db, "tickets", id), {
-                    snackCount: newCount,
-                    price: newPrice
-                });
+                await updateDoc(doc(db, "tickets", id), { snackCount: newCount, price: newPrice });
             };
 
-            const startEdit = (ticket) => {
-                setEditingTicket(ticket);
-                setView('GREETER');
-            };
-
-            const cancelEdit = () => {
-                setEditingTicket(null);
-                if (role === 'CASHIER') setView('CASHIER');
-            }
+            const startEdit = (ticket) => { setEditingTicket(ticket); setView('GREETER'); };
+            const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
 
             const processPayment = async () => {
                 const t = tickets.find(x => x.id === activeId);
@@ -752,21 +751,24 @@
             if (!role) return <LoginScreen login={login} />;
 
             return (
-                <div className="h-screen flex flex-col bg-gray-100">
-                    <header className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md">
-                        <div className="flex items-center gap-2 font-bold text-xl"><Car className="text-blue-400" /> LAVAMEX <span className="text-xs bg-gray-700 px-2 rounded font-normal text-gray-300 ml-2">Rol: {role}</span></div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setView('GREETER')} className={`px-4 py-2 rounded flex gap-2 ${view === 'GREETER' ? 'bg-blue-600' : 'hover:bg-gray-800'}`}><CheckCircle size={18} /> Entrada</button>
+                <div className="h-screen flex flex-col bg-gray-100 font-sans">
+                    <header className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md shrink-0 z-50">
+                        <div className="flex items-center gap-2 font-bold text-lg md:text-xl truncate">
+                            <Car className="text-blue-400 shrink-0" /> <span>LAVAMEX</span>
+                            <span className="hidden sm:inline text-xs bg-gray-800 px-2 py-1 rounded font-normal text-gray-300 ml-2">{role}</span>
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                            <button onClick={() => setView('GREETER')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'GREETER' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><CheckCircle size={18} /> <span className="hidden sm:inline">Entrada</span></button>
                             {(role === 'CASHIER' || role === 'ADMIN') && (
                                 <>
-                                    <button onClick={() => setView('CASHIER')} className={`px-4 py-2 rounded flex gap-2 ${view === 'CASHIER' ? 'bg-blue-600' : 'hover:bg-gray-800'}`}><Calculator size={18} /> Caja</button>
-                                    <button onClick={() => setView('HISTORY')} className={`px-4 py-2 rounded flex gap-2 ${view === 'HISTORY' ? 'bg-blue-600' : 'hover:bg-gray-800'}`}><History size={18} /> Historial</button>
+                                    <button onClick={() => setView('CASHIER')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'CASHIER' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><Calculator size={18} /> <span className="hidden sm:inline">Caja</span></button>
+                                    <button onClick={() => setView('HISTORY')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'HISTORY' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><History size={18} /> <span className="hidden sm:inline">Historial</span></button>
                                 </>
                             )}
                             {role === 'ADMIN' && (
-                                <button onClick={() => setView('ADMIN')} className={`px-4 py-2 rounded flex gap-2 ${view === 'ADMIN' ? 'bg-blue-600' : 'hover:bg-gray-800'}`}><Settings size={18} /> Admin</button>
+                                <button onClick={() => setView('ADMIN')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'ADMIN' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><Settings size={18} /> <span className="hidden sm:inline">Admin</span></button>
                             )}
-                            <button onClick={logout} className="bg-red-900 px-3 rounded ml-4 hover:bg-red-700"><LogOut size={18} /></button>
+                            <button onClick={logout} className="bg-red-900/80 px-3 rounded ml-2 hover:bg-red-700 shrink-0"><LogOut size={18} /></button>
                         </div>
                     </header>
                     <main className="flex-1 overflow-hidden relative">
