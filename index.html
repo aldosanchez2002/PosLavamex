@@ -507,7 +507,6 @@
                 <div className="p-6 h-full overflow-auto">
                     <div className="flex gap-4 mb-6">
                         <button onClick={() => setTab('NOMINA')} className={`px-4 py-2 rounded font-bold ${tab === 'NOMINA' ? 'bg-blue-600 text-white' : 'bg-white'}`}>Nómina</button>
-                        <button onClick={() => setTab('HISTORIAL')} className={`px-4 py-2 rounded font-bold ${tab === 'HISTORIAL' ? 'bg-blue-600 text-white' : 'bg-white'}`}>Historial</button>
                         <button onClick={() => setTab('CONFIG')} className={`px-4 py-2 rounded font-bold ${tab === 'CONFIG' ? 'bg-blue-600 text-white' : 'bg-white'}`}>Configuración</button>
                     </div>
 
@@ -552,8 +551,6 @@
                             </div>
                         </div>
                     )}
-
-                    {tab === 'HISTORIAL' && <HistoryView history={history} />}
 
                     {tab === 'CONFIG' && (
                         <div className="bg-white p-6 rounded shadow max-w-lg">
