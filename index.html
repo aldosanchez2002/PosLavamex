@@ -101,8 +101,8 @@
             });
 
             deductions.forEach(d => {
-                // Only count deductions that are PENDING (not yet archived/paid)
-                if (payroll[d.employee] && d.status === 'PENDING') {
+                // Using passed deductions (caller handles filtering)
+                if (payroll[d.employee]) {
                     payroll[d.employee].deductionTotal += d.amount;
                     payroll[d.employee].deductionDetails.push({
                         date: d.timestamp,
@@ -369,9 +369,24 @@
             const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
             const [newEmp, setNewEmp] = useState('');
 
-            // Payroll Logic
-            const paidHistory = history.filter(t => t.status === 'PAID');
-            const payroll = calculatePayroll(employees, paidHistory, deductions);
+            // -- FILTER LOGIC --
+            const start = new Date(startDate); start.setHours(0, 0, 0, 0);
+            const end = new Date(endDate); end.setHours(23, 59, 59, 999);
+            const filterRange = (d) => {
+                const date = d && d.toDate ? d.toDate() : new Date(d);
+                return date >= start && date <= end;
+            };
+
+            // Filter history and deductions for the selected range
+            const rangeHistory = history.filter(t => (t.status === 'PAID' || t.status === 'ARCHIVED') && filterRange(t.timestamp));
+            const rangeDeductions = deductions.filter(d => filterRange(d.timestamp));
+
+            // Calculate Snack Totals
+            const clientSnackTotal = rangeHistory.reduce((acc, t) => acc + ((t.snackCount || 0) * SNACK_PRICE), 0);
+            const empSnackTotal = rangeDeductions.reduce((acc, d) => acc + d.amount, 0);
+
+            // Payroll Logic (using filtered data)
+            const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions);
 
             const printNomina = () => {
                 const styles = `
@@ -473,7 +488,9 @@
             const closeWeek = async () => {
                 if (!confirm("¿Archivar semana? Esto limpiará la nómina actual.")) return;
                 const batch = writeBatch(db);
-                paidHistory.forEach(t => batch.update(doc(db, "tickets", t.id), { status: 'ARCHIVED' }));
+                // For closing, we generally only archive pending/active paid items
+                const pendingHistory = history.filter(t => t.status === 'PAID');
+                pendingHistory.forEach(t => batch.update(doc(db, "tickets", t.id), { status: 'ARCHIVED' }));
                 deductions.filter(d => d.status === 'PENDING').forEach(d => batch.update(doc(db, "deductions", d.id), { status: 'ARCHIVED' }));
                 await batch.commit();
                 alert("Semana Cerrada");
@@ -504,6 +521,26 @@
                                 </div>
                                 <button onClick={closeWeek} className="bg-red-600 text-white px-4 py-2 rounded font-bold flex items-center gap-2"><Archive className="w-4 h-4" /> CERRAR SEMANA</button>
                             </div>
+
+                            {/* WEEKLY SUMMARY BOX */}
+                            <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl shadow-sm mb-6 flex gap-8 items-center">
+                                <h3 className="text-orange-900 font-bold flex items-center"><Coffee className="w-5 h-5 mr-2" /> Resumen de Snacks (Semanal)</h3>
+                                <div className="flex gap-6">
+                                    <div>
+                                        <div className="text-xs text-orange-700 font-bold uppercase">Snacks Clientes</div>
+                                        <div className="text-xl font-bold text-orange-900">{formatCurrency(clientSnackTotal)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-orange-700 font-bold uppercase">Snacks Empleados</div>
+                                        <div className="text-xl font-bold text-orange-900">{formatCurrency(empSnackTotal)}</div>
+                                    </div>
+                                    <div className="border-l border-orange-200 pl-6">
+                                        <div className="text-xs text-orange-700 font-bold uppercase">Total Venta Snacks</div>
+                                        <div className="text-xl font-bold text-orange-900">{formatCurrency(clientSnackTotal + empSnackTotal)}</div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {Object.keys(payroll).map(name => (
                                     <div key={name} className="bg-white p-4 rounded shadow border-l-4 border-blue-500">
@@ -632,6 +669,23 @@
                 }
             };
 
+            // --- FIXED UPDATE SNACKS FUNCTION ---
+            const updateSnacks = async (id, count) => {
+                const t = tickets.find(x => x.id === id);
+                if (!t) return;
+                const newCount = Math.max(0, count);
+
+                // Recalculate Total Price
+                const base = PRICES[t.service.id][t.size.id];
+                const extras = (t.extras || []).reduce((a, b) => a + b.price, 0);
+                const newPrice = base + extras + (newCount * SNACK_PRICE);
+
+                await updateDoc(doc(db, "tickets", id), {
+                    snackCount: newCount,
+                    price: newPrice
+                });
+            };
+
             const startEdit = (ticket) => {
                 setEditingTicket(ticket);
                 setView('GREETER');
@@ -675,7 +729,7 @@
                     </header>
                     <main className="flex-1 overflow-hidden relative">
                         {view === 'GREETER' && <GreeterView employees={employees} saveTicket={saveTicket} editingTicket={editingTicket} cancelEdit={cancelEdit} />}
-                        {view === 'CASHIER' && <CashierView tickets={tickets} activeId={activeId} setActiveId={setActiveId} payment={payment} setPayment={setPayment} processPayment={processPayment} deleteTicket={async (id) => { if (confirm("Borrar?")) await updateDoc(doc(db, "tickets", id), { status: 'CANCELLED' }) }} updateSnacks={async (id, c) => updateDoc(doc(db, "tickets", id), { snackCount: Math.max(0, c) })} addDebt={async (e, c) => addDoc(collection(db, "deductions"), { employee: e, amount: c * SNACK_PRICE, status: 'PENDING', timestamp: serverTimestamp() })} employees={employees} exRate={exRate} startEdit={startEdit} />}
+                        {view === 'CASHIER' && <CashierView tickets={tickets} activeId={activeId} setActiveId={setActiveId} payment={payment} setPayment={setPayment} processPayment={processPayment} deleteTicket={async (id) => { if (confirm("Borrar?")) await updateDoc(doc(db, "tickets", id), { status: 'CANCELLED' }) }} updateSnacks={updateSnacks} addDebt={async (e, c) => addDoc(collection(db, "deductions"), { employee: e, amount: c * SNACK_PRICE, status: 'PENDING', timestamp: serverTimestamp() })} employees={employees} exRate={exRate} startEdit={startEdit} />}
                         {view === 'HISTORY' && <HistoryView history={history.concat(tickets.filter(t => t.status === 'PAID'))} />}
                         {view === 'ADMIN' && <AdminPanel employees={employees} setEmployees={setEmployees} history={history} deductions={deductions} db={db} exRate={exRate} setExRate={setExRate} />}
                     </main>
