@@ -436,9 +436,8 @@
                 return date >= start && date <= end;
             };
 
-            // Filter history and deductions for the selected range
-            const rangeHistory = history.filter(t => (t.status === 'PAID' || t.status === 'ARCHIVED') && filterRange(t.timestamp));
-            const rangeDeductions = deductions.filter(d => filterRange(d.timestamp));
+            const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
+            const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
 
             // Calculate Snack Totals
             const clientSnackTotal = rangeHistory.reduce((acc, t) => acc + ((t.snackCount || 0) * SNACK_PRICE), 0);
@@ -483,10 +482,9 @@
                     html += `<table>
                                 <thead>
                                     <tr>
-                                        <th style="width:18%">Fecha</th>
-                                        <th style="width:35%">Servicio</th>
-                                        <th style="width:32%">Vehículo</th>
-                                        <th style="width:15%" class="amount">Pago</th>
+                                        <th style="width:30%">Fecha</th>
+                                        <th style="width:50%">Servicio</th>
+                                        <th style="width:20%" class="amount">Pago</th>
                                     </tr>
                                 </thead>
                                 <tbody>`;
@@ -496,44 +494,24 @@
                         html += `<tr>
                                     <td>${dateStr}</td>
                                     <td>${det.service}</td>
-                                    <td>${det.desc}</td>
                                     <td class="amount">${formatCurrency(det.amount)}</td>
                                  </tr>`;
                     });
 
                     html += `<tr class="total-row">
-                                <td colspan="3" style="text-align:right">Subtotal Servicios:</td>
+                                <td colspan="2" style="text-align:right">Subtotal Servicios:</td>
                                 <td class="amount">${formatCurrency(p.total)}</td>
                              </tr>`;
-                    html += `</tbody></table>`;
 
-                    // Deductions
+                    // Deductions Summary Row (No table)
                     if (p.deductionTotal > 0) {
-                        html += `<div class="sub-header">Deducciones / Deudas</div>`;
-                        html += `<table>
-                                    <thead>
-                                        <tr>
-                                            <th style="width:20%">Fecha</th>
-                                            <th style="width:65%">Concepto</th>
-                                            <th style="width:15%" class="amount">Monto</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>`;
-
-                        p.deductionDetails.forEach(d => {
-                            const dateStr = new Date(d.date).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
-                            html += `<tr>
-                                        <td>${dateStr}</td>
-                                        <td>${d.desc}</td>
-                                        <td class="amount" style="color:red">-${formatCurrency(d.amount)}</td>
-                                      </tr>`;
-                        });
-
-                        html += `<tr class="total-row">
-                                    <td colspan="2" style="text-align:right">Total Deducciones:</td>
-                                    <td class="amount" style="color:red">-${formatCurrency(p.deductionTotal)}</td>
-                                 </tr></tbody></table>`;
+                        html += `<tr class="total-row" style="color:red;">
+                                    <td colspan="2" style="text-align:right">Total Deducciones (Snacks/Prestamos):</td>
+                                    <td class="amount">-${formatCurrency(p.deductionTotal)}</td>
+                                 </tr>`;
                     }
+
+                    html += `</tbody></table>`;
 
                     html += `<div class="net-pay">TOTAL A PAGAR: ${formatCurrency(p.netPay)}</div>`;
                     html += `<div class="signature">Firma de Recibido</div>`;
