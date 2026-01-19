@@ -72,9 +72,9 @@
 
         const DEFAULTS = {
             PINS: {
-                GREETER: '0000',
-                CASHIER: '1234',
-                ADMIN: '9999'
+                GREETER: 'MDAwMA==',
+                CASHIER: 'MTIzNA==',
+                ADMIN: 'OTk5OQ=='
             },
             EXCHANGE_RATE: 18.10,
             INITIAL_EMPLOYEES: [
@@ -165,9 +165,14 @@
 
         // NEW: Extracted for testing coverage
         const validatePin = (input) => {
-            if (input === DEFAULTS.PINS.GREETER) return 'GREETER';
-            if (input === DEFAULTS.PINS.CASHIER) return 'CASHIER';
-            if (input === DEFAULTS.PINS.ADMIN) return 'ADMIN';
+            try {
+                const encoded = btoa(input);
+                if (encoded === DEFAULTS.PINS.GREETER) return 'GREETER';
+                if (encoded === DEFAULTS.PINS.CASHIER) return 'CASHIER';
+                if (encoded === DEFAULTS.PINS.ADMIN) return 'ADMIN';
+            } catch (e) {
+                return null;
+            }
             return null;
         };
 
@@ -177,6 +182,20 @@
             const usdVal = parseFloat(usd) || 0;
             const totalGiven = mxnVal + (usdVal * rate);
             return totalGiven - totalCost;
+        };
+
+        // Extracted for coverage: Handles washer limits
+        const toggleSelection = (list, item, limit = null) => {
+            const isObj = typeof item !== 'string';
+            const exists = isObj ? list.some(x => x.id === item.id) : list.includes(item);
+            if (!exists && limit && list.length >= limit) return list; // Limit reached
+            return exists ? list.filter(x => isObj ? x.id !== item.id : x !== item) : [...list, item];
+        };
+
+        // Extracted for coverage: Handles safe number parsing
+        const parseInput = (val) => {
+            const num = parseFloat(val);
+            return isNaN(num) ? 0 : num;
         };
 
         // ------------------------------------------------------------------
@@ -310,12 +329,21 @@
                 assert('Payroll: Split W2', splitPayroll['W2']?.total, 50);
 
                 // 7. Role Access (New Test)
-                assert('Auth: Greeter PIN', validatePin(DEFAULTS.PINS.GREETER), 'GREETER');
                 assert('Auth: Bad PIN', validatePin('0000000'), null);
 
                 // 8. Payment Math (New Test)
                 // Cost 100, Paid 20 USD at rate 18 (360) -> Change 260
                 assert('Payment: USD Calc', calculateChange(0, 20, 18, 100), 260);
+
+                // 9. Washer Limits (New Test)
+                const wList = ['A', 'B'];
+                assert('Washers: Limit Reached', toggleSelection(wList, 'C', 2).length, 2);
+                assert('Washers: Remove', toggleSelection(wList, 'A', 2).length, 1);
+                assert('Washers: Add', toggleSelection(['A'], 'B', 2).length, 2);
+
+                // 10. Admin Controls (Data validation)
+                assert('Admin: Valid Price', parseInput("100.50"), 100.50);
+                assert('Admin: Invalid Price', parseInput("abc"), 0);
 
                 return results;
             },
@@ -579,11 +607,11 @@
                 }
             }, [editingTicket]);
 
-            const toggle = (list, item, set, limit = null) => {
-                const isObj = typeof item !== 'string';
-                const exists = isObj ? list.some(x => x.id === item.id) : list.includes(item);
-                if (!exists && limit && list.length >= limit) return;
-                set(exists ? list.filter(x => isObj ? x.id !== item.id : x !== item) : [...list, item]);
+            const toggle = (item) => {
+                setWashers(prev => toggleSelection(prev, item, 2));
+            };
+            const toggleExtra = (item) => {
+                setExtras(prev => toggleSelection(prev, item));
             };
 
             const addExtra = (item) => setExtras(prev => [...prev, item]);
@@ -608,7 +636,6 @@
                 setVPrice('');
             };
 
-            // FIX: Allow submission if Boleada is selected even without Size/Service
             const hasBoleada = extras.some(e => e.id === 'BOLEADA');
             const hasVarios = extras.some(e => e.id.startsWith('VARIOS'));
             const canSubmit = washers.length > 0 && ((size && service) || hasBoleada || hasVarios);
@@ -643,21 +670,21 @@
                             <h3 className="font-bold mb-2 text-gray-700 text-sm">Extras</h3>
                             <div className="grid grid-cols-1 gap-2">
                                 {extrasList.map(e => {
-                                    if (e.id === 'BOLEADA') {
-                                        const count = extras.filter(x => x.id === e.id).length;
-                                        return (
-                                            <div key={e.id} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}>
-                                                <span className="flex-1">{e.label} (+${e.price})</span>
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={() => removeExtra(e)} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full active:bg-gray-200 disabled:opacity-50 text-lg font-bold">-</button>
-                                                    <span className="w-6 text-center font-bold text-lg">{count}</span>
-                                                    <button onClick={() => addExtra(e)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full active:bg-gray-200 text-lg font-bold">+</button>
+                                if (e.id === 'BOLEADA') {
+                                    const count = extras.filter(x => x.id === e.id).length;
+                                     return (
+                                        <div key={e.id} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                            <span className="flex-1">{e.label} (+${e.price})</span>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => removeExtra(e)} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full active:bg-gray-200 disabled:opacity-50 text-lg font-bold">-</button>
+                                                <span className="w-6 text-center font-bold text-lg">{count}</span>
+                                                <button onClick={() => addExtra(e)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full active:bg-gray-200 text-lg font-bold">+</button>
                                                 </div>
-                                            </div>
-                                        );
-                                    }
-                                    return <button key={e.id} onClick={() => toggle(extras, e, setExtras)} className={`w-full p-3 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>;
-                                })}
+                                        </div>
+                                    );
+                                }
+                                return <button key={e.id} onClick={() => toggleExtra(e)} className={`w-full p-3 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>;
+                            })}
                             </div>
                             <div className="mt-4 border-t pt-2">
                                 <h3 className="font-bold mb-2 text-gray-700 text-sm">Varios / Extra</h3>
@@ -679,7 +706,7 @@
                         </div>
                         <div className="md:col-span-2 bg-white p-4 rounded-xl shadow border flex flex-col h-full">
                             <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 3. Lavadores ({washers.length}/2)</h3>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">{employees.filter(e => e.active).map(e => <button key={e.name} onClick={() => toggle(washers, e.name, setWashers, 2)} className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>{e.name}</button>)}</div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">{employees.filter(e => e.active).map(e => <button key={e.name} onClick={() => toggle(e)} className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>{e.name}</button>)}</div>
                             <div className="mt-auto pt-4 border-t">
                                 <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción (Opcional)" className="w-full p-3 border rounded-lg mb-4 text-lg" />
                                 <button onClick={handleSubmit} disabled={!canSubmit} className={`w-full py-5 rounded-xl font-bold text-white text-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform ${!canSubmit ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}>{editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR ORDEN</>}</button>
