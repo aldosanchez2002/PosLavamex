@@ -115,8 +115,8 @@
         const formatCurrency = (amount) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
 
         const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0) => {
-            const basePrice = prices[serviceId]?.[sizeId] || 0;
-            const baseComm = commissions[serviceId]?.[sizeId] || 0;
+            const basePrice = (serviceId && sizeId && prices[serviceId]?.[sizeId]) || 0;
+            const baseComm = (serviceId && sizeId && commissions[serviceId]?.[sizeId]) || 0;
             const extrasPrice = extraList.reduce((a, b) => a + b.price, 0);
             const extrasComm = extraList.reduce((a, b) => a + b.commission, 0);
             const snackCost = snackCount * SNACK_PRICE;
@@ -143,7 +143,7 @@
                     payroll[washerName].total += splitCommission;
                     payroll[washerName].details.push({
                         date: item.timestamp,
-                        service: `${item.service.label} (${item.size.label})`,
+                        service: `${item.service?.label || 'Extras'} (${item.size?.label || '-'})`,
                         desc: item.vehicleDesc || 'Sin descripción',
                         amount: splitCommission
                     });
@@ -195,7 +195,7 @@
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>TICKET:</span><b>#${shortId}</b></div>
                     <div style="text-align:center; font-weight:bold; font-size:16px; margin:10px 0; width:58mm;">${washers}</div>
-                    <div style="text-align:center; font-weight:bold; font-size:14px; width:58mm;">${ticket.size.label}<br>${ticket.service.label}</div>
+                    <div style="text-align:center; font-weight:bold; font-size:14px; width:58mm;">${ticket.size ? ticket.size.label : ''}<br>${ticket.service ? ticket.service.label : 'Extras Only'}</div>
                     <div style="width:58mm;">${extrasHtml}</div>
                     ${ticket.vehicleDesc ? `<div style="text-align:center; width:58mm;">(${ticket.vehicleDesc})</div>` : ''}
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
@@ -215,7 +215,7 @@
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>Ticket:</span><span>#${shortId}</span></div>
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>Fecha:</span><span>${new Date().toLocaleDateString()}</span></div>
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
-                    <div style="display:flex; justify-content:space-between; width:58mm;"><span>${ticket.service.label}</span><span>${formatCurrency(displayBasePrice)}</span></div>
+                    <div style="display:flex; justify-content:space-between; width:58mm;"><span>${ticket.service ? ticket.service.label : 'Servicio General'}</span><span>${formatCurrency(displayBasePrice)}</span></div>
                     <div style="width:58mm;">${extrasHtml}</div>
                     ${ticket.snackCount > 0 ? `<div style="display:flex; justify-content:space-between; width:58mm;"><span>+ Snacks (${ticket.snackCount})</span><span>${formatCurrency(ticket.snackCount * SNACK_PRICE)}</span></div>` : ''}
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
@@ -388,7 +388,10 @@
             const saveTicket = async (data) => {
                 const snacks = editingTicket ? (editingTicket.snackCount || 0) : 0;
                 // Pass current state prices/commissions
-                const totals = calculateTicketTotals(data.service.id, data.size.id, data.extras, prices, commissions, snacks);
+                // FIX: safely access service.id and size.id
+                const serviceId = data.service ? data.service.id : null;
+                const sizeId = data.size ? data.size.id : null;
+                const totals = calculateTicketTotals(serviceId, sizeId, data.extras, prices, commissions, snacks);
 
                 const ticketData = {
                     ...data,
@@ -525,8 +528,21 @@
                 set(exists ? list.filter(x => isObj ? x.id !== item.id : x !== item) : [...list, item]);
             };
 
+            const addExtra = (item) => setExtras(prev => [...prev, item]);
+            const removeExtra = (item) => setExtras(prev => {
+                const idx = prev.findIndex(x => x.id === item.id);
+                if (idx === -1) return prev;
+                const newArr = [...prev];
+                newArr.splice(idx, 1);
+                return newArr;
+            });
+
+            // FIX: Allow submission if Boleada is selected even without Size/Service
+            const hasBoleada = extras.some(e => e.id === 'BOLEADA');
+            const canSubmit = washers.length > 0 && ((size && service) || hasBoleada);
+
             const handleSubmit = () => {
-                if (!size || !service || washers.length === 0) return;
+                if (!canSubmit) return;
                 saveTicket({ size, service, washers, extras, desc });
                 if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); }
             };
@@ -553,14 +569,31 @@
                                 )
                             })}</div>
                             <h3 className="font-bold mb-2 text-gray-700 text-sm">Extras</h3>
-                            <div className="grid grid-cols-1 gap-2">{extrasList.map(e => <button key={e.id} onClick={() => toggle(extras, e, setExtras)} className={`w-full p-3 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>)}</div>
+                            <div className="grid grid-cols-1 gap-2">
+                                {extrasList.map(e => {
+                                    if (e.id === 'BOLEADA') {
+                                        const count = extras.filter(x => x.id === e.id).length;
+                                        return (
+                                            <div key={e.id} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                                <span className="flex-1">{e.label} (+${e.price})</span>
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={() => removeExtra(e)} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full active:bg-gray-200 disabled:opacity-50 text-lg font-bold">-</button>
+                                                    <span className="w-6 text-center font-bold text-lg">{count}</span>
+                                                    <button onClick={() => addExtra(e)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full active:bg-gray-200 text-lg font-bold">+</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return <button key={e.id} onClick={() => toggle(extras, e, setExtras)} className={`w-full p-3 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>;
+                                })}
+                            </div>
                         </div>
                         <div className="md:col-span-2 bg-white p-4 rounded-xl shadow border flex flex-col h-full">
                             <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 3. Lavadores ({washers.length})</h3>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">{employees.filter(e => e.active).map(e => <button key={e.name} onClick={() => toggle(washers, e.name, setWashers)} className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>{e.name}</button>)}</div>
                             <div className="mt-auto pt-4 border-t">
                                 <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción (Opcional)" className="w-full p-3 border rounded-lg mb-4 text-lg" />
-                                <button onClick={handleSubmit} disabled={!size || !service || washers.length === 0} className={`w-full py-5 rounded-xl font-bold text-white text-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform ${!size || !service || washers.length === 0 ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}>{editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR ORDEN</>}</button>
+                                <button onClick={handleSubmit} disabled={!canSubmit} className={`w-full py-5 rounded-xl font-bold text-white text-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform ${!canSubmit ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}>{editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR ORDEN</>}</button>
                             </div>
                         </div>
                     </div>
@@ -589,7 +622,7 @@
                             {tickets.map(ticket => (
                                 <div key={ticket.id} onClick={() => setActiveId(ticket.id)} className={`p-4 rounded-lg border cursor-pointer transition-all ${activeId === ticket.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:bg-gray-50'}`}>
                                     <div className="flex justify-between font-bold text-gray-800"><span>#{ticket.id.slice(-4).toUpperCase()}</span><span>{formatCurrency(ticket.price)}</span></div>
-                                    <div className="text-sm text-gray-600 mt-1">{ticket.service.label} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size.label}</span></div>
+                                    <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || 'Extras'} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size?.label || '-'}</span></div>
                                     {ticket.vehicleDesc && <div className="text-xs text-blue-600 italic mt-1">{ticket.vehicleDesc}</div>}
                                 </div>
                             ))}
@@ -671,7 +704,7 @@
                         <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 font-bold text-gray-700 sticky top-0"><tr><th className="p-3">ID</th><th className="p-3">Hora</th><th className="p-3">Servicio</th><th className="p-3 text-right">Total</th></tr></thead>
-                                <tbody>{allPaid.map(t => (<tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td><td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleString('es-MX', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...'}</td><td className="p-3"><div className="font-medium">{t.service.label}</div>{t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}</td><td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td></tr>))}</tbody>
+                                <tbody>{allPaid.map(t => (<tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td><td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleString('es-MX', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...'}</td><td className="p-3"><div className="font-medium">{t.service?.label || 'Extras'}</div>{t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}</td><td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td></tr>))}</tbody>
                             </table>
                         </div>
                     </div>
