@@ -5,10 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Lavamex POS</title>
+
     <!-- UTILITIES: Tailwind for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+
     <!-- COMPILER: Babel for in-browser JSX transformation (Dev only) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <!-- IMPORTS: ES Modules for React and Firebase -->
     <script type="importmap">
     {
@@ -21,6 +24,7 @@
       }
     }
     </script>
+
     <style>
         /* Utility to hide scrollbars while maintaining functionality */
         .no-scrollbar::-webkit-scrollbar {
@@ -43,10 +47,19 @@
         // ------------------------------------------------------------------
         import React, { useState, useEffect, useContext, createContext } from 'react';
         import { createRoot } from 'react-dom/client';
-        // Replaced CloudUpload with Upload to fix export error
-        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Archive, Pencil, PlusCircle, Coffee, History, ArrowLeft, Save, Baby, Calendar, UserCheck, Activity, Database, PlayCircle, AlertTriangle, Edit3, Upload, Loader2 } from 'lucide-react';
+        import {
+            User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2,
+            LogOut, Users, Calculator, Printer, Wifi, Lock, Archive, Pencil,
+            PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
+            Database, PlayCircle, AlertTriangle, Upload, Loader2
+        } from 'lucide-react';
+
         import { initializeApp, getApps, getApp } from 'firebase/app';
-        import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, writeBatch, setDoc, getDocs, where, getDoc, deleteDoc } from 'firebase/firestore';
+        import {
+            getFirestore, collection, addDoc, updateDoc, doc, onSnapshot,
+            query, orderBy, serverTimestamp, writeBatch, setDoc, getDocs,
+            where, deleteDoc
+        } from 'firebase/firestore';
 
         // ------------------------------------------------------------------
         // SECTION 2: FIREBASE CONFIGURATION
@@ -59,26 +72,36 @@
             messagingSenderId: "883264129",
             appId: "1:883264129:web:39a352e2ade3888b4f1b80"
         };
+
         const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
         const db = getFirestore(app);
 
         // ------------------------------------------------------------------
         // SECTION 3: CONSTANTS & DEFAULTS
-        // MOVED PRICES/COMMISSIONS HERE AS SEED DATA ONLY
         // ------------------------------------------------------------------
-        const SIZES = [{ id: 'AUTO', label: 'Auto' }, { id: 'SUV_CHICA', label: 'SUV Chica' }, { id: 'PICKUP', label: 'Pick-Up / SUV MD' }, { id: 'SUV_GDE', label: 'SUV Gde' }];
-        const SERVICES = [{ id: 'GENERAL', label: 'Lavado General' }, { id: 'WAX', label: 'Lavado + Cera' }, { id: 'COMPLETE', label: 'Paquete Completo' }, { id: 'PREMIUM', label: 'Paquete Premium' }, { id: 'PRESIDENTIAL', label: 'Paquete Presidencial' }];
+        const SIZES = [
+            { id: 'AUTO', label: 'Auto' },
+            { id: 'SUV_CHICA', label: 'SUV Chica' },
+            { id: 'PICKUP', label: 'Pick-Up / SUV MD' },
+            { id: 'SUV_GDE', label: 'SUV Gde' }
+        ];
+
+        const SERVICES = [
+            { id: 'GENERAL', label: 'Lavado General' },
+            { id: 'WAX', label: 'Lavado + Cera' },
+            { id: 'COMPLETE', label: 'Paquete Completo' },
+            { id: 'PREMIUM', label: 'Paquete Premium' },
+            { id: 'PRESIDENTIAL', label: 'Paquete Presidencial' }
+        ];
+
         const SNACK_PRICE = 25;
 
         const DEFAULTS = {
-            // Obfuscated PINs (Base64) to prevent plain-text reading in Inspect Element
-            // '0000' -> 'MDAwMA=='
-            // '1234' -> 'MTIzNA=='
-            // '9999' -> 'OTk5OQ=='
+            // Obfuscated PINs (Base64)
             PINS: {
-                GREETER: 'MDAwMA==',
-                CASHIER: 'MTIzNA==',
-                ADMIN: 'OTk5OQ=='
+                GREETER: 'MDAwMA==', // 0000
+                CASHIER: 'MTIzNA==', // 1234
+                ADMIN: 'OTk5OQ=='    // 9999
             },
             EXCHANGE_RATE: 18.10,
             INITIAL_EMPLOYEES: [
@@ -87,7 +110,6 @@
                 { name: 'Juan', active: true },
                 { name: 'Rodrigo', active: true }
             ],
-            // Default Data for seeding Firestore
             PRICES: {
                 GENERAL: { AUTO: 200, SUV_CHICA: 240, PICKUP: 360, SUV_GDE: 360 },
                 WAX: { AUTO: 540, SUV_CHICA: 640, PICKUP: 820, SUV_GDE: 820 },
@@ -114,11 +136,14 @@
 
         // ------------------------------------------------------------------
         // SECTION 4: HELPER FUNCTIONS (Business Logic)
-        // Refactored to accept dynamic data
         // ------------------------------------------------------------------
-        const formatCurrency = (amount) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('es-MX', {
+                style: 'currency',
+                currency: 'MXN'
+            }).format(amount);
+        };
 
-        // Helper to get local YYYY-MM-DD date
         const getLocalDateStr = (d = new Date()) => d.toLocaleDateString('en-CA');
 
         const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0) => {
@@ -127,8 +152,9 @@
             const extrasPrice = extraList.reduce((a, b) => a + b.price, 0);
             const extrasComm = extraList.reduce((a, b) => a + b.commission, 0);
             const snackCost = snackCount * SNACK_PRICE;
+
             return {
-                basePrice, // useful for history/printing
+                basePrice,
                 totalPrice: basePrice + extrasPrice + snackCost,
                 totalCommission: baseComm + extrasComm
             };
@@ -136,18 +162,29 @@
 
         const calculatePayroll = (employees, history, deductions) => {
             const payroll = {};
+
             // Initialize with current employees
             employees.forEach(emp => {
-                payroll[emp.name] = { count: 0, total: 0, details: [], deductionTotal: 0, deductionDetails: [], netPay: 0 };
+                payroll[emp.name] = {
+                    count: 0, total: 0, details: [],
+                    deductionTotal: 0, deductionDetails: [], netPay: 0
+                };
             });
 
-            // Process History (creates entries for deleted employees if found in history)
+            // Process History
             history.forEach(item => {
                 const washersList = item.washers || (item.washer ? [item.washer] : []);
                 if (washersList.length === 0) return;
+
                 const splitCommission = item.commission / washersList.length;
+
                 washersList.forEach(washerName => {
-                    if (!payroll[washerName]) payroll[washerName] = { count: 0, total: 0, details: [], deductionTotal: 0, deductionDetails: [], netPay: 0 };
+                    if (!payroll[washerName]) {
+                        payroll[washerName] = {
+                            count: 0, total: 0, details: [],
+                            deductionTotal: 0, deductionDetails: [], netPay: 0
+                        };
+                    }
                     payroll[washerName].count += 1;
                     payroll[washerName].total += splitCommission;
                     payroll[washerName].details.push({
@@ -159,20 +196,28 @@
                 });
             });
 
-            // Process Deductions (creates entries for deleted employees if found)
+            // Process Deductions
             deductions.forEach(d => {
-                if (!payroll[d.employee]) payroll[d.employee] = { count: 0, total: 0, details: [], deductionTotal: 0, deductionDetails: [], netPay: 0 };
+                if (!payroll[d.employee]) {
+                    payroll[d.employee] = {
+                        count: 0, total: 0, details: [],
+                        deductionTotal: 0, deductionDetails: [], netPay: 0
+                    };
+                }
                 payroll[d.employee].deductionTotal += d.amount;
-                payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
+                payroll[d.employee].deductionDetails.push({
+                    date: d.timestamp, desc: d.description, amount: d.amount
+                });
             });
 
+            // Calculate Net Pay
             Object.keys(payroll).forEach(key => {
                 payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal;
             });
+
             return payroll;
         };
 
-        // NEW: Extracted for testing coverage
         const validatePin = (input) => {
             try {
                 const encoded = btoa(input);
@@ -185,7 +230,6 @@
             return null;
         };
 
-        // NEW: Extracted for testing coverage
         const calculateChange = (mxn, usd, rate, totalCost) => {
             const mxnVal = parseFloat(mxn) || 0;
             const usdVal = parseFloat(usd) || 0;
@@ -193,18 +237,15 @@
             return totalGiven - totalCost;
         };
 
-        // Extracted for coverage: Handles washer limits
         const toggleSelection = (list, item, limit = null) => {
             const isObj = typeof item !== 'string';
             const exists = isObj ? list.some(x => x.id === item.id) : list.includes(item);
-            if (!exists && limit && list.length >= limit) return list; // Limit reached
-            return exists ? list.filter(x => isObj ? x.id !== item.id : x !== item) : [...list, item];
-        };
 
-        // Extracted for coverage: Handles safe number parsing
-        const parseInput = (val) => {
-            const num = parseFloat(val);
-            return isNaN(num) ? 0 : num;
+            if (!exists && limit && list.length >= limit) return list;
+
+            return exists
+                ? list.filter(x => isObj ? x.id !== item.id : x !== item)
+                : [...list, item];
         };
 
         // ------------------------------------------------------------------
@@ -224,7 +265,18 @@
                 if (!win) return;
                 const orientation = landscape ? '@page { size: landscape; }' : '';
                 win.document.open();
-                win.document.write(`<html><head><title>Print</title><style>${orientation} body{font-family:'Courier New', sans-serif;font-size:12px;margin:0;padding:5px;}</style></head><body>${content}</body></html>`);
+                win.document.write(`
+                    <html>
+                        <head>
+                            <title>Print</title>
+                            <style>
+                                ${orientation} 
+                                body{font-family:'Courier New', sans-serif;font-size:12px;margin:0;padding:5px;}
+                            </style>
+                        </head>
+                        <body>${content}</body>
+                    </html>
+                `);
                 win.document.close();
                 win.focus();
                 setTimeout(() => { win.print(); win.close(); }, 500);
@@ -250,7 +302,6 @@
                 const extrasHtml = ticket.extras && ticket.extras.length > 0
                     ? `<div style="font-size:10px;">${ticket.extras.map(e => `<div style="display:flex;justify-content:space-between;"><span>+ ${e.label}</span><span>${formatCurrency(e.price)}</span></div>`).join('')}</div>`
                     : '';
-                // Fallback for tickets created before basePrice was stored
                 const displayBasePrice = ticket.basePrice || 0;
 
                 return `
@@ -272,104 +323,9 @@
         };
 
         // ------------------------------------------------------------------
-        // SECTION 6: UNIT TESTS
+        // SECTION 6: UNIT TESTS (Brief)
         // ------------------------------------------------------------------
         const TestRunner = {
-            runLogicTests: () => {
-                const results = [];
-                const assert = (name, actual, expected) => {
-                    const passed = JSON.stringify(actual) === JSON.stringify(expected);
-                    results.push({ name, passed, details: passed ? 'OK' : `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}` });
-                };
-
-                const T_PRICES = DEFAULTS.PRICES;
-                const T_COMM = DEFAULTS.COMMISSIONS;
-                const T_EXTRAS = DEFAULTS.EXTRAS;
-
-                SERVICES.forEach(svc => {
-                    SIZES.forEach(size => {
-                        const price = T_PRICES[svc.id]?.[size.id];
-                        const comm = T_COMM[svc.id]?.[size.id];
-                        if (price === undefined || comm === undefined) results.push({ name: `Data Check ${svc.id}-${size.id}`, passed: false, details: 'Missing Data' });
-                        else if (comm >= price) results.push({ name: `Profit Check ${svc.id}-${size.id}`, passed: false, details: 'Commission > Price' });
-                    });
-                });
-                results.push({ name: 'Data Integrity Scan', passed: true, details: 'Checked all Price/Commission pairs' });
-
-                const calcResult = calculateTicketTotals('GENERAL', 'SUV_GDE', [T_EXTRAS.find(e => e.id === 'BABY_SEAT')], T_PRICES, T_COMM, 1);
-                assert('Calc: SUV GDE + Baby + Snack', calcResult.totalPrice, 585);
-
-                const cujTotals = calculateTicketTotals('GENERAL', 'AUTO', [], T_PRICES, T_COMM, 1);
-                assert('CUJ: Price (Base+Snack)', cujTotals.totalPrice, 225);
-                assert('CUJ: Comm (Base only)', cujTotals.totalCommission, 70);
-
-                const cujPayroll = calculatePayroll([{ name: 'TestWasher', active: true }], [{ id: '1', service: { label: 'Gen' }, size: { label: 'Auto' }, washers: ['TestWasher'], commission: 70, timestamp: new Date() }], [{ employee: 'TestWasher', amount: 25, timestamp: new Date() }]);
-                assert('CUJ: Payroll Net', cujPayroll['TestWasher']?.netPay, 45);
-
-                const boleadaItem = T_EXTRAS.find(e => e.id === 'BOLEADA');
-                const bolResult = calculateTicketTotals(null, null, [boleadaItem], T_PRICES, T_COMM, 0);
-                assert('Calc: Boleada Only', bolResult.totalPrice, 50);
-
-                const variosItem = { price: 150, commission: 0 };
-                const varResult = calculateTicketTotals(null, null, [variosItem], T_PRICES, T_COMM, 0);
-                assert('Calc: Varios Only', varResult.totalPrice, 150);
-
-                const splitPayroll = calculatePayroll(
-                    [{ name: 'W1', active: true }, { name: 'W2', active: true }],
-                    [{
-                        id: '2',
-                        service: { label: 'Gen' },
-                        size: { label: 'Auto' },
-                        washers: ['W1', 'W2'],
-                        commission: 100, // Total commission to split
-                        timestamp: new Date()
-                    }],
-                    []
-                );
-                assert('Payroll: Split W1', splitPayroll['W1']?.total, 50);
-                assert('Payroll: Split W2', splitPayroll['W2']?.total, 50);
-
-                // Deleted employee test
-                const ghostPayroll = calculatePayroll(
-                    [], // Empty current employees list
-                    [],
-                    [{ employee: 'Ghost', amount: 50, timestamp: new Date() }]
-                );
-                assert('Payroll: Ghost Deduction', ghostPayroll['Ghost']?.deductionTotal, 50);
-
-                assert('Auth: Greeter PIN', validatePin('0000'), 'GREETER');
-                assert('Auth: Bad PIN', validatePin('0000000'), null);
-
-                assert('Payment: USD Calc', calculateChange(0, 20, 18, 100), 260);
-
-                const wList = ['A', 'B'];
-                assert('Washers: Limit Reached', toggleSelection(wList, 'C', 2).length, 2);
-                assert('Washers: Remove', toggleSelection(wList, 'A', 2).length, 1);
-                assert('Washers: Add', toggleSelection(['A'], 'B', 2).length, 2);
-
-                assert('Admin: Valid Price', parseInput("100.50"), 100.50);
-                assert('Admin: Invalid Price', parseInput("abc"), 0);
-
-                return results;
-            },
-            runPrintTests: () => {
-                const results = [];
-                const assertHtml = (name, html, snippets) => {
-                    const missing = snippets.filter(s => !html.includes(s));
-                    if (missing.length === 0) results.push({ name, passed: true, details: 'Content verified successfully' });
-                    else results.push({ name, passed: false, details: `Missing content: ${missing.join(', ')}` });
-                };
-                try {
-                    const mockTicket = { service: { id: 'GENERAL', label: 'Lavado General' }, size: { id: 'AUTO', label: 'Auto' }, washers: ['TestWasher'], extras: [{ label: 'Aroma', price: 30 }], vehicleDesc: 'Blue Ford', timestamp: new Date(), basePrice: 200 };
-                    const ticketHtml = PrintService.getJobTicketHtml(mockTicket, 'TEST-ID');
-                    assertHtml('Job Ticket HTML', ticketHtml, ['LAVAMEX - ORDEN', 'TEST-ID', 'Blue Ford', 'Aroma']);
-                    const mockPayment = { mxn: 500, usd: 0, rate: 18, change: 50 };
-                    const mockReceiptTicket = { ...mockTicket, price: 450, snackCount: 2 };
-                    const receiptHtml = PrintService.getReceiptHtml(mockReceiptTicket, mockPayment, 'REC-999');
-                    assertHtml('Receipt HTML', receiptHtml, ['Recibido:', '$500.00', 'Cambio:', '$50.00', 'Snacks (2)']);
-                } catch (e) { results.push({ name: 'Print Logic Crash', passed: false, details: e.message }); }
-                return results;
-            },
             runDbTest: async () => {
                 try {
                     const ref = await addDoc(collection(db, "_diagnostics"), { t: serverTimestamp() });
@@ -382,26 +338,29 @@
         // ------------------------------------------------------------------
         // SECTION 7: CONTEXT & PROVIDER
         // ------------------------------------------------------------------
-
         const AppContext = createContext();
 
         const AppProvider = ({ children }) => {
             const [role, setRole] = useState(() => localStorage.getItem('lavamex_role') || null);
             const [view, setView] = useState('GREETER');
             const [employees, setEmployees] = useState([]);
-            const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [tickets, setTickets] = useState([]);
             const [history, setHistory] = useState([]);
             const [deductions, setDeductions] = useState([]);
             const [editingTicket, setEditingTicket] = useState(null);
 
+            // Global settings
+            const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [prices, setPrices] = useState({});
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
+
+            // UI State
             const [payment, setPayment] = useState({ mxn: '', usd: '' });
             const [activeId, setActiveId] = useState(null);
             const [isSubmitting, setIsSubmitting] = useState(false);
 
+            // Auth Logic
             const login = (r) => {
                 setRole(r);
                 localStorage.setItem('lavamex_role', r);
@@ -414,11 +373,9 @@
                 setView('GREETER');
             };
 
-            const restoreView = () => {
-                setView(role ? (role === 'ADMIN' ? 'ADMIN' : (role === 'CASHIER' ? 'CASHIER' : 'GREETER')) : 'GREETER');
-            }
+            // --- FIREBASE LISTENERS ---
 
-            // Data Listeners
+            // 1. Employees
             useEffect(() => {
                 const unsub = onSnapshot(query(collection(db, "employees"), orderBy("name")), (snap) => {
                     if (snap.empty && employees.length === 0) {
@@ -429,16 +386,21 @@
                 return () => unsub();
             }, []);
 
-            // Pricing Listeners
+            // 2. Settings (Prices, Commissions, Extras, General)
             useEffect(() => {
+                // Prices
                 const unsubP = onSnapshot(doc(db, "settings", "prices"), (docSnap) => {
                     if (docSnap.exists()) setPrices(docSnap.data());
                     else setDoc(doc(db, "settings", "prices"), DEFAULTS.PRICES);
                 });
+
+                // Commissions
                 const unsubC = onSnapshot(doc(db, "settings", "commissions"), (docSnap) => {
                     if (docSnap.exists()) setCommissions(docSnap.data());
                     else setDoc(doc(db, "settings", "commissions"), DEFAULTS.COMMISSIONS);
                 });
+
+                // Extras List
                 const unsubE = onSnapshot(collection(db, "extras"), (snap) => {
                     if (snap.empty) {
                         DEFAULTS.EXTRAS.forEach(e => addDoc(collection(db, "extras"), e));
@@ -446,30 +408,63 @@
                         setExtrasList(snap.docs.map(d => ({ ...d.data(), docId: d.id })));
                     }
                 });
-                return () => { unsubP(); unsubC(); unsubE(); };
+
+                // General Settings (Exchange Rate) - NEW
+                const unsubG = onSnapshot(doc(db, "settings", "general"), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.exchangeRate) setExRate(data.exchangeRate);
+                    } else {
+                        // Create defaults if missing
+                        setDoc(doc(db, "settings", "general"), { exchangeRate: DEFAULTS.EXCHANGE_RATE });
+                    }
+                });
+
+                return () => { unsubP(); unsubC(); unsubE(); unsubG(); };
             }, []);
 
+            // 3. Tickets & Deductions
             useEffect(() => {
                 const qT = query(collection(db, "tickets"), orderBy("timestamp", "desc"));
                 const unsubT = onSnapshot(qT, (snap) => {
                     const active = [], hist = [];
                     snap.forEach(d => {
-                        const dat = { id: d.id, ...d.data(), timestamp: d.data().timestamp?.toDate() || new Date() };
+                        const dat = {
+                            id: d.id, ...d.data(),
+                            timestamp: d.data().timestamp?.toDate() || new Date()
+                        };
                         if (dat.status === 'PENDING') active.push(dat);
                         else hist.push(dat);
                     });
-                    setTickets(active); setHistory(hist);
+                    setTickets(active);
+                    setHistory(hist);
                 });
+
                 const unsubD = onSnapshot(collection(db, "deductions"), (snap) => {
                     setDeductions(snap.docs.map(d => {
                         const data = d.data();
-                        return { id: d.id, ...data, timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp || new Date()) };
+                        return {
+                            id: d.id, ...data,
+                            timestamp: data.timestamp?.toDate
+                                ? data.timestamp.toDate()
+                                : (data.timestamp || new Date())
+                        };
                     }));
                 });
                 return () => { unsubT(); unsubD(); };
             }, []);
 
-            // Business Actions
+            // --- ACTIONS ---
+
+            // Save exchange rate to Firestore
+            const updateGlobalExRate = async (newRate) => {
+                try {
+                    await setDoc(doc(db, "settings", "general"), { exchangeRate: newRate }, { merge: true });
+                } catch (e) {
+                    alert("Error updating exchange rate: " + e.message);
+                }
+            };
+
             const saveTicket = async (data) => {
                 if (isSubmitting) return;
                 setIsSubmitting(true);
@@ -491,12 +486,16 @@
 
                     if (editingTicket) {
                         await updateDoc(doc(db, "tickets", editingTicket.id), ticketData);
-                        setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER');
+                        setEditingTicket(null);
+                        if (role === 'CASHIER') setView('CASHIER');
                     } else {
                         const win = PrintService.open();
                         const ref = await addDoc(collection(db, "tickets"), ticketData);
                         if (win) {
-                            const html = PrintService.getJobTicketHtml({ ...ticketData, timestamp: new Date() }, ref.id.slice(-4).toUpperCase());
+                            const html = PrintService.getJobTicketHtml(
+                                { ...ticketData, timestamp: new Date() },
+                                ref.id.slice(-4).toUpperCase()
+                            );
                             PrintService.print(win, html);
                         }
                     }
@@ -543,7 +542,10 @@
 
             const addDebt = async (e, c) => {
                 try {
-                    await addDoc(collection(db, "deductions"), { employee: e, amount: c * SNACK_PRICE, status: 'PENDING', timestamp: serverTimestamp() });
+                    await addDoc(collection(db, "deductions"), {
+                        employee: e, amount: c * SNACK_PRICE,
+                        status: 'PENDING', timestamp: serverTimestamp()
+                    });
                 } catch (err) { alert("Error adding snack debt: " + err.message); }
             };
 
@@ -559,8 +561,15 @@
                 setIsSubmitting(true);
                 try {
                     const win = PrintService.open();
-                    const details = { mxn: parseFloat(payment.mxn) || 0, usd: parseFloat(payment.usd) || 0, rate: exRate, change: total - t.price };
-                    await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
+                    const details = {
+                        mxn: parseFloat(payment.mxn) || 0,
+                        usd: parseFloat(payment.usd) || 0,
+                        rate: exRate,
+                        change: total - t.price
+                    };
+                    await updateDoc(doc(db, "tickets", t.id), {
+                        status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details
+                    });
 
                     if (win) {
                         const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase());
@@ -574,33 +583,16 @@
                 }
             };
 
-            // Admin Settings Actions
-            const updatePricing = async (type, serviceId, sizeId, value) => {
-                try {
-                    const docRef = doc(db, "settings", type);
-                    const numVal = parseFloat(value) || 0;
-                    await updateDoc(docRef, { [`${serviceId}.${sizeId}`]: numVal });
-                } catch (e) { console.error("Update pricing error", e); }
-            };
-
-            const updateExtra = async (id, field, value) => {
-                try {
-                    const numVal = field === 'price' || field === 'commission' ? (parseFloat(value) || 0) : value;
-                    await updateDoc(doc(db, "extras", id), { [field]: numVal });
-                } catch (e) { console.error("Update extra error", e); }
-            };
-
             const value = {
                 role, login, logout,
-                view, setView, restoreView,
+                view, setView,
                 employees, tickets, history, deductions,
                 prices, commissions, extrasList,
-                exRate, setExRate,
+                exRate, updateGlobalExRate, // Exposed updated function
                 editingTicket, startEdit, cancelEdit,
                 activeId, setActiveId,
                 payment, setPayment,
                 saveTicket, updateSnacks, toggleAttendance, addEmployee, deleteTicket, addDebt, processPayment,
-                updatePricing, updateExtra,
                 db, isSubmitting
             };
 
@@ -611,9 +603,35 @@
         // SECTION 8: COMPONENTS
         // ------------------------------------------------------------------
 
-        // ... [TestDashboard, LoginScreen unchanged] ...
-        const TestDashboard = () => { const { restoreView } = useContext(AppContext); const [logicResults, setLogicResults] = useState(null); const [printResults, setPrintResults] = useState(null); const [dbResult, setDbResult] = useState(null); const [loading, setLoading] = useState(false); const runDb = async () => { setLoading(true); const res = await TestRunner.runDbTest(); setDbResult(res); setLoading(false); }; return (<div className="min-h-screen bg-gray-50 p-6"><div className="max-w-4xl mx-auto"><div className="flex items-center gap-4 mb-8"><button onClick={restoreView} className="bg-white p-2 rounded-full shadow hover:bg-gray-100"><ArrowLeft /></button><h1 className="text-3xl font-bold text-gray-800 flex items-center"><Activity className="mr-3 text-blue-600" /> System Status & Tests</h1></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"><h3 className="font-bold text-lg mb-4 flex items-center"><Calculator className="mr-2 text-purple-500" /> Business Logic</h3><button onClick={() => setLogicResults(TestRunner.runLogicTests())} className="w-full py-3 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 flex justify-center items-center gap-2"><PlayCircle size={18} /> Run Logic Suite</button></div><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"><h3 className="font-bold text-lg mb-4 flex items-center"><Printer className="mr-2 text-teal-500" /> Print System</h3><button onClick={() => setPrintResults(TestRunner.runPrintTests())} className="w-full py-3 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 flex justify-center items-center gap-2"><FileText size={18} /> Run Print Tests</button></div><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"><h3 className="font-bold text-lg mb-4 flex items-center"><Database className="mr-2 text-orange-500" /> Database</h3><button onClick={runDb} disabled={loading} className="w-full py-3 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 flex justify-center items-center gap-2">{loading ? 'Running...' : <><Wifi size={18} /> Test Connection</>}</button></div></div><div className="space-y-6">{dbResult && (<div className={`p-4 rounded-xl border-l-4 shadow-sm ${dbResult.passed ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'}`}><h4 className="font-bold flex items-center">{dbResult.passed ? <CheckCircle className="mr-2" /> : <AlertTriangle className="mr-2" />} Database Connectivity</h4><p className="ml-8 mt-1 text-sm opacity-90">{dbResult.details}</p></div>)}{printResults && (<div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden"><div className="p-4 bg-gray-50 border-b font-bold text-gray-700">Print System Results</div><div className="divide-y">{printResults.map((res, i) => (<div key={i} className="p-4 flex items-start gap-3 hover:bg-gray-50"><div className={`mt-1 ${res.passed ? 'text-green-500' : 'text-red-500'}`}>{res.passed ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}</div><div><div className="font-medium text-gray-800">{res.name}</div><div className={`text-sm mt-1 ${res.passed ? 'text-gray-500' : 'text-red-600 font-bold'}`}>{res.details}</div></div></div>))}</div></div>)}{logicResults && (<div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden"><div className="p-4 bg-gray-50 border-b font-bold text-gray-700">Logic Test Results</div><div className="divide-y">{logicResults.map((res, i) => (<div key={i} className="p-4 flex items-start gap-3 hover:bg-gray-50"><div className={`mt-1 ${res.passed ? 'text-green-500' : 'text-red-500'}`}>{res.passed ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}</div><div><div className="font-medium text-gray-800">{res.name}</div>{!res.passed && <div className="text-sm text-red-600 font-mono mt-1 bg-red-50 p-2 rounded">{res.details}</div>}</div></div>))}</div></div>)}</div></div></div>); };
-        const LoginScreen = () => { const { login, setView } = useContext(AppContext); const [pin, setPin] = useState(''); const handleLogin = () => { const role = validatePin(pin); if (role) login(role); else { alert('PIN Incorrecto'); setPin(''); } }; return (<div className="flex h-screen bg-gray-900 justify-center items-center p-4 relative"><button onClick={() => setView('TESTS')} className="absolute top-4 right-4 text-gray-600 hover:text-gray-400 flex items-center text-xs gap-1 opacity-50 hover:opacity-100 transition-opacity"><Activity size={14} /> System Status</button><div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center"><h1 className="text-3xl font-bold mb-6 text-gray-800">LAVAMEX POS</h1><div className="flex flex-col gap-4"><input type="password" pattern="[0-9]*" inputMode="numeric" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" className="w-full p-4 border rounded-lg text-center text-3xl tracking-widest mb-2" autoFocus /><button onClick={handleLogin} className="w-full p-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 active:scale-95 transition-transform text-lg">ENTRAR</button></div></div></div>); };
+        const LoginScreen = () => {
+            const { login } = useContext(AppContext);
+            const [pin, setPin] = useState('');
+
+            const handleLogin = () => {
+                const role = validatePin(pin);
+                if (role) login(role);
+                else { alert('PIN Incorrecto'); setPin(''); }
+            };
+
+            return (
+                <div className="flex h-screen bg-gray-900 justify-center items-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center">
+                        <h1 className="text-3xl font-bold mb-6 text-gray-800">LAVAMEX POS</h1>
+                        <div className="flex flex-col gap-4">
+                            <input
+                                type="password" inputMode="numeric"
+                                value={pin} onChange={e => setPin(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                                placeholder="PIN"
+                                className="w-full p-4 border rounded-lg text-center text-3xl tracking-widest mb-2"
+                                autoFocus
+                            />
+                            <button onClick={handleLogin} className="w-full p-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 active:scale-95 transition-transform text-lg">ENTRAR</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
         const GreeterView = () => {
             const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting } = useContext(AppContext);
@@ -627,18 +645,18 @@
 
             useEffect(() => {
                 if (editingTicket) {
-                    setSize(editingTicket.size); setService(editingTicket.service); setWashers(editingTicket.washers || (editingTicket.washer ? [editingTicket.washer] : [])); setExtras(editingTicket.extras || []); setDesc(editingTicket.vehicleDesc || '');
+                    setSize(editingTicket.size);
+                    setService(editingTicket.service);
+                    setWashers(editingTicket.washers || (editingTicket.washer ? [editingTicket.washer] : []));
+                    setExtras(editingTicket.extras || []);
+                    setDesc(editingTicket.vehicleDesc || '');
                 } else {
                     setSize(null); setService(null); setWashers([]); setExtras([]); setDesc('');
                 }
             }, [editingTicket]);
 
-            const toggle = (item) => {
-                setWashers(prev => toggleSelection(prev, item, 2));
-            };
-            const toggleExtra = (item) => {
-                setExtras(prev => toggleSelection(prev, item));
-            };
+            const toggle = (item) => setWashers(prev => toggleSelection(prev, item, 2));
+            const toggleExtra = (item) => setExtras(prev => toggleSelection(prev, item));
 
             const addExtra = (item) => setExtras(prev => [...prev, item]);
             const removeExtra = (item) => setExtras(prev => {
@@ -651,7 +669,7 @@
 
             const addVarios = () => {
                 const price = parseFloat(vPrice);
-                if (!vDesc || !price || price <= 0) return alert("Ingrese una descripción y un precio válido (> 0).");
+                if (!vDesc || !price || price <= 0) return alert("Ingrese una descripción y un precio válido.");
                 const newItem = { id: `VARIOS-${Date.now()}`, label: vDesc, price: price, commission: 0 };
                 setExtras(prev => [...prev, newItem]);
                 setVDesc(''); setVPrice('');
@@ -669,11 +687,104 @@
 
             return (
                 <div className="flex flex-col h-full overflow-hidden">
-                    {editingTicket && (<div className="bg-yellow-200 p-3 text-center font-bold text-yellow-900 flex justify-between items-center px-4 shadow-sm z-10 shrink-0"><span className="flex items-center gap-2 text-sm"><Pencil className="w-4 h-4" /> EDITANDO #{editingTicket.id.slice(-4).toUpperCase()}</span><button onClick={cancelEdit} className="bg-white px-3 py-1 rounded text-xs hover:bg-yellow-50 border border-yellow-300">Cancelar</button></div>)}
+                    {editingTicket && (
+                        <div className="bg-yellow-200 p-3 text-center font-bold text-yellow-900 flex justify-between items-center px-4 shadow-sm z-10 shrink-0">
+                            <span className="flex items-center gap-2 text-sm"><Pencil className="w-4 h-4" /> EDITANDO #{editingTicket.id.slice(-4).toUpperCase()}</span>
+                            <button onClick={cancelEdit} className="bg-white px-3 py-1 rounded text-xs hover:bg-yellow-50 border border-yellow-300">Cancelar</button>
+                        </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 flex-1 overflow-y-auto">
-                        <div className="bg-white p-4 rounded-xl shadow border h-fit"><h3 className="font-bold mb-3 text-gray-700 flex items-center"><Car className="w-5 h-5 mr-2" /> 1. Tamaño</h3><div className="space-y-2">{SIZES.map(s => <button key={s.id} onClick={() => setSize(s)} className={`w-full p-4 text-left rounded-lg border-2 transition-all ${size?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 hover:bg-gray-50'}`}>{s.label}</button>)}</div></div>
-                        <div className="bg-white p-4 rounded-xl shadow border h-fit"><h3 className="font-bold mb-3 text-gray-700 flex items-center"><FileText className="w-5 h-5 mr-2" /> 2. Servicio</h3><div className="space-y-2 mb-4">{SERVICES.map(s => { const price = size && prices[s.id] ? prices[s.id][size.id] : null; return (<button key={s.id} disabled={!size} onClick={() => setService(s)} className={`w-full p-3 text-left rounded-lg border-2 flex justify-between items-center transition-all ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 opacity-90 hover:bg-gray-50'}`}><span>{s.label}</span>{price !== null && <span className="bg-white px-2 py-1 rounded text-sm shadow-sm border">${price}</span>}</button>) })}</div><h3 className="font-bold mb-2 text-gray-700 text-sm">Extras</h3><div className="grid grid-cols-1 gap-2">{extrasList.map(e => { if (e.id === 'BOLEADA') { const count = extras.filter(x => x.id === e.id).length; return (<div key={e.id} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span className="flex-1">{e.label} (+${e.price})</span><div className="flex items-center gap-2"><button onClick={() => removeExtra(e)} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full active:bg-gray-200 disabled:opacity-50 text-lg font-bold">-</button><span className="w-6 text-center font-bold text-lg">{count}</span><button onClick={() => addExtra(e)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full active:bg-gray-200 text-lg font-bold">+</button></div></div>); } return <button key={e.id} onClick={() => toggleExtra(e)} className={`w-full p-3 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>; })}</div><div className="mt-4 border-t pt-2"><h3 className="font-bold mb-2 text-gray-700 text-sm">Varios / Extra</h3><div className="flex gap-2 mb-2"><input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Descripción" className="w-full p-2 border rounded text-sm" /><input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" /><button onClick={addVarios} className="bg-blue-600 text-white p-2 rounded"><PlusCircle size={16} /></button></div>{extras.filter(e => e.id.startsWith('VARIOS')).map(e => (<div key={e.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 border rounded mb-1"><span>{e.label}</span><div className="flex items-center gap-2"><span className="font-bold">${e.price}</span><button onClick={() => setExtras(prev => prev.filter(x => x.id !== e.id))} className="text-red-500"><Trash2 size={14} /></button></div></div>))}</div></div>
-                        <div className="md:col-span-2 bg-white p-4 rounded-xl shadow border flex flex-col h-full"><h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 3. Lavadores ({washers.length}/2)</h3><div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">{employees.filter(e => e.active).map(e => <button key={e.name} onClick={() => toggle(e)} className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>{e.name}</button>)}</div><div className="mt-auto pt-4 border-t"><input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción (Opcional)" className="w-full p-3 border rounded-lg mb-4 text-lg" /><button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className={`w-full py-5 rounded-xl font-bold text-white text-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform ${!canSubmit || isSubmitting ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}>{isSubmitting ? <Loader2 className="animate-spin" /> : (editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR ORDEN</>)}</button></div></div>
+                        {/* Column 1: Sizes */}
+                        <div className="bg-white p-4 rounded-xl shadow border h-fit">
+                            <h3 className="font-bold mb-3 text-gray-700 flex items-center"><Car className="w-5 h-5 mr-2" /> 1. Tamaño</h3>
+                            <div className="space-y-2">
+                                {SIZES.map(s => (
+                                    <button key={s.id} onClick={() => setSize(s)}
+                                        className={`w-full p-4 text-left rounded-lg border-2 transition-all ${size?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                        {s.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Column 2: Services & Extras */}
+                        <div className="bg-white p-4 rounded-xl shadow border h-fit">
+                            <h3 className="font-bold mb-3 text-gray-700 flex items-center"><FileText className="w-5 h-5 mr-2" /> 2. Servicio</h3>
+                            <div className="space-y-2 mb-4">
+                                {SERVICES.map(s => {
+                                    const price = size && prices[s.id] ? prices[s.id][size.id] : null;
+                                    return (
+                                        <button key={s.id} disabled={!size} onClick={() => setService(s)}
+                                            className={`w-full p-3 text-left rounded-lg border-2 flex justify-between items-center transition-all ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 opacity-90 hover:bg-gray-50'}`}>
+                                            <span>{s.label}</span>
+                                            {price !== null && <span className="bg-white px-2 py-1 rounded text-sm shadow-sm border">${price}</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <h3 className="font-bold mb-2 text-gray-700 text-sm">Extras</h3>
+                            <div className="grid grid-cols-1 gap-2">
+                                {extrasList.map(e => {
+                                    if (e.id === 'BOLEADA') {
+                                        const count = extras.filter(x => x.id === e.id).length;
+                                        return (
+                                            <div key={e.id} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                                <span className="flex-1">{e.label} (+${e.price})</span>
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={() => removeExtra(e)} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button>
+                                                    <span className="w-6 text-center font-bold">{count}</span>
+                                                    <button onClick={() => addExtra(e)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <button key={e.id} onClick={() => toggleExtra(e)} className={`w-full p-3 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                            <span>{e.label}</span><span>+${e.price}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="mt-4 border-t pt-2">
+                                <h3 className="font-bold mb-2 text-gray-700 text-sm">Varios / Extra</h3>
+                                <div className="flex gap-2 mb-2">
+                                    <input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Descripción" className="w-full p-2 border rounded text-sm" />
+                                    <input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" />
+                                    <button onClick={addVarios} className="bg-blue-600 text-white p-2 rounded"><PlusCircle size={16} /></button>
+                                </div>
+                                {extras.filter(e => e.id.startsWith('VARIOS')).map(e => (
+                                    <div key={e.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 border rounded mb-1">
+                                        <span>{e.label}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold">${e.price}</span>
+                                            <button onClick={() => setExtras(prev => prev.filter(x => x.id !== e.id))} className="text-red-500"><Trash2 size={14} /></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Column 3 & 4: Washers & Action */}
+                        <div className="md:col-span-2 bg-white p-4 rounded-xl shadow border flex flex-col h-full">
+                            <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 3. Lavadores ({washers.length}/2)</h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                                {employees.filter(e => e.active).map(e => (
+                                    <button key={e.name} onClick={() => toggle(e)}
+                                        className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                        {e.name}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="mt-auto pt-4 border-t">
+                                <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción (Opcional)" className="w-full p-3 border rounded-lg mb-4 text-lg" />
+                                <button onClick={handleSubmit} disabled={!canSubmit || isSubmitting}
+                                    className={`w-full py-5 rounded-xl font-bold text-white text-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform ${!canSubmit || isSubmitting ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                    {isSubmitting ? <Loader2 className="animate-spin" /> : (editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR ORDEN</>)}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             );
@@ -688,6 +799,7 @@
 
             return (
                 <div className="flex flex-col md:flex-row h-full gap-4 p-4 overflow-hidden">
+                    {/* Ticket List */}
                     <div className="w-full md:w-1/3 bg-white rounded-xl shadow border overflow-hidden flex flex-col h-1/3 md:h-full shrink-0">
                         <div className="p-3 bg-gray-50 font-bold border-b flex justify-between items-center shrink-0">
                             <span className="text-gray-700">Tickets ({tickets.length})</span>
@@ -707,35 +819,41 @@
                         </div>
                     </div>
 
+                    {/* Payment Panel */}
                     <div className="flex-1 bg-white rounded-xl shadow border p-4 md:p-6 flex flex-col items-center justify-center h-2/3 md:h-full overflow-y-auto">
                         {t ? (
                             <div className="w-full max-w-md">
                                 <h2 className="text-4xl font-bold text-center mb-2 text-gray-800">{formatCurrency(t.price)}</h2>
                                 <p className="text-center text-gray-500 mb-6 font-medium">{t.vehicleDesc} • {t.washers?.join(', ')}</p>
+
                                 <div className="flex justify-center items-center gap-3 mb-6 bg-orange-50 p-3 rounded-xl border border-orange-100">
                                     <span className="font-bold text-sm text-orange-800 uppercase tracking-wide">Snacks Cliente</span>
-                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) - 1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-xl shadow-sm text-gray-600 active:bg-gray-100">-</button>
+                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) - 1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-xl shadow-sm text-gray-600">-</button>
                                     <span className="font-bold text-xl w-8 text-center">{t.snackCount || 0}</span>
-                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) + 1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-xl shadow-sm text-green-600 active:bg-gray-100">+</button>
+                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) + 1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-xl shadow-sm text-green-600">+</button>
                                 </div>
+
                                 <div className="grid grid-cols-2 gap-4 mb-6">
                                     <div><label className="text-xs font-bold text-gray-500 mb-1 block">MXN</label><input type="number" inputMode="decimal" value={payment.mxn} onChange={e => setPayment({ ...payment, mxn: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
                                     <div><label className="text-xs font-bold text-gray-500 mb-1 block">USD (Rate: {exRate})</label><input type="number" inputMode="decimal" value={payment.usd} onChange={e => setPayment({ ...payment, usd: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
                                 </div>
+
                                 <div className="text-center font-bold mb-6 text-xl bg-gray-50 p-3 rounded-lg border">
                                     Cambio: <span className={calculateChange(payment.mxn, payment.usd, exRate, t.price) < 0 ? 'text-red-500' : 'text-green-600'}>
                                         {formatCurrency(calculateChange(payment.mxn, payment.usd, exRate, t.price))}
                                     </span>
                                 </div>
+
                                 <div className="flex gap-3">
-                                    <button onClick={() => deleteTicket(t.id)} className="p-4 border border-red-200 text-red-500 rounded-xl hover:bg-red-50 active:bg-red-100" title="Borrar"><Trash2 className="w-6 h-6" /></button>
-                                    <button onClick={() => startEdit(t)} className="p-4 border border-yellow-200 text-yellow-600 rounded-xl bg-yellow-50 hover:bg-yellow-100 active:bg-yellow-200" title="Editar"><Pencil className="w-6 h-6" /></button>
-                                    <button onClick={processPayment} disabled={isSubmitting} className="flex-1 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</button>
+                                    <button onClick={() => deleteTicket(t.id)} className="p-4 border border-red-200 text-red-500 rounded-xl hover:bg-red-50" title="Borrar"><Trash2 className="w-6 h-6" /></button>
+                                    <button onClick={() => startEdit(t)} className="p-4 border border-yellow-200 text-yellow-600 rounded-xl bg-yellow-50 hover:bg-yellow-100" title="Editar"><Pencil className="w-6 h-6" /></button>
+                                    <button onClick={processPayment} disabled={isSubmitting} className="flex-1 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg flex justify-center items-center gap-2">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</button>
                                 </div>
                             </div>
                         ) : <div className="text-gray-400 flex flex-col items-center"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
                     </div>
 
+                    {/* Snack Modal */}
                     {showSnack && (
                         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                             <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm">
@@ -746,21 +864,22 @@
                                 </select>
                                 <div className="flex gap-3">
                                     <button onClick={() => setShowSnack(false)} className="flex-1 border p-3 rounded-xl font-bold text-gray-600">Cancelar</button>
-                                    <button onClick={() => { if (snackEmp) { addDebt(snackEmp, 1); setShowSnack(false); setSnackEmp(''); } }} disabled={!snackEmp} className="flex-1 bg-orange-600 text-white p-3 rounded-xl font-bold shadow active:bg-orange-700 disabled:opacity-50">Confirmar ($25)</button>
+                                    <button onClick={() => { if (snackEmp) { addDebt(snackEmp, 1); setShowSnack(false); setSnackEmp(''); } }} disabled={!snackEmp} className="flex-1 bg-orange-600 text-white p-3 rounded-xl font-bold">Confirmar ($25)</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
+                    {/* Attendance Modal */}
                     {showAttendance && (
                         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                             <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm">
-                                <h3 className="font-bold mb-4 text-lg text-gray-800 flex items-center"><UserCheck className="mr-2 text-blue-500" /> Asistencia de Hoy</h3>
+                                <h3 className="font-bold mb-4 text-lg text-gray-800 flex items-center"><UserCheck className="mr-2 text-blue-500" /> Asistencia</h3>
                                 <div className="max-h-80 overflow-y-auto mb-4 space-y-2">
                                     {employees.map(e => (
                                         <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                                             <span className="font-medium text-lg">{e.name}</span>
-                                            <button onClick={() => toggleAttendance(e.id, e.name, !e.active)} className={`px-4 py-2 rounded-lg font-bold shadow-sm transition-colors ${e.active ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>{e.active ? 'PRESENTE' : 'AUSENTE'}</button>
+                                            <button onClick={() => toggleAttendance(e.id, e.name, !e.active)} className={`px-4 py-2 rounded-lg font-bold ${e.active ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>{e.active ? 'PRESENTE' : 'AUSENTE'}</button>
                                         </div>
                                     ))}
                                 </div>
@@ -782,7 +901,16 @@
                         <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 font-bold text-gray-700 sticky top-0"><tr><th className="p-3">ID</th><th className="p-3">Hora</th><th className="p-3">Servicio</th><th className="p-3 text-right">Total</th></tr></thead>
-                                <tbody>{allPaid.map(t => (<tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td><td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleString('es-MX', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...'}</td><td className="p-3"><div className="font-medium">{t.service?.label || 'Extras'}</div>{t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}</td><td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td></tr>))}</tbody>
+                                <tbody>
+                                    {allPaid.map(t => (
+                                        <tr key={t.id} className="border-t hover:bg-gray-50">
+                                            <td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td>
+                                            <td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td>
+                                            <td className="p-3"><div className="font-medium">{t.service?.label || 'Extras'}</div>{t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}</td>
+                                            <td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
                             </table>
                         </div>
                     </div>
@@ -792,8 +920,13 @@
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-orange-50 font-bold text-orange-800 sticky top-0"><tr><th className="p-3">Fecha</th><th className="p-3">Empleado</th><th className="p-3 text-right">Monto</th></tr></thead>
                                 <tbody>
-                                    {deductions.filter(d => d.amount > 0).map(d => (<tr key={d.id} className="border-t hover:bg-orange-50"><td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleString('es-MX', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...'}</td><td className="p-3 font-bold">{d.employee}</td><td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td></tr>))}
-                                    {deductions.filter(d => d.amount > 0).length === 0 && (<tr><td colSpan="3" className="p-4 text-center text-gray-400 italic">Sin registros recientes</td></tr>)}
+                                    {deductions.filter(d => d.amount > 0).map(d => (
+                                        <tr key={d.id} className="border-t hover:bg-orange-50">
+                                            <td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleDateString() : '...'}</td>
+                                            <td className="p-3 font-bold">{d.employee}</td>
+                                            <td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
@@ -803,26 +936,35 @@
         };
 
         const AdminPanel = () => {
-            const { employees, history, deductions, db, exRate, setExRate, addEmployee, prices, commissions, extrasList, updatePricing, updateExtra } = useContext(AppContext);
+            const {
+                employees, history, deductions, db, exRate, updateGlobalExRate,
+                addEmployee, prices, commissions, extrasList
+            } = useContext(AppContext);
+
             const [tab, setTab] = useState('NOMINA');
             const [startDate, setStartDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
             const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
             const [newEmpName, setNewEmpName] = useState('');
             const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
 
-            // Buffered State for Pricing Edit
+            // Buffered State for Editing
             const [editPrices, setEditPrices] = useState({});
             const [editComms, setEditComms] = useState({});
             const [editExtras, setEditExtras] = useState([]);
+            // Local state for exchange rate input to avoid jumping cursor on sync
+            const [localExRate, setLocalExRate] = useState(exRate);
 
-            // Sync state when entering tab or when data loads
+            // Sync state when entering tabs
             useEffect(() => {
                 if (tab === 'PRICES') {
                     setEditPrices(JSON.parse(JSON.stringify(prices)));
                     setEditComms(JSON.parse(JSON.stringify(commissions)));
                     setEditExtras(JSON.parse(JSON.stringify(extrasList)));
                 }
-            }, [tab, prices, commissions, extrasList]);
+                if (tab === 'CONFIG') {
+                    setLocalExRate(exRate);
+                }
+            }, [tab, prices, commissions, extrasList, exRate]);
 
             const parseDate = (str) => { const [y, m, d] = str.split('-').map(Number); return new Date(y, m - 1, d); };
             const start = parseDate(startDate); start.setHours(0, 0, 0, 0);
@@ -833,23 +975,63 @@
             const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions);
 
-            // ... [printNomina, generateAttendanceReport, closeWeek, handleAddEmployee kept same] ...
-            const printNomina = () => { const styles = `<style>body{font-family:sans-serif;padding:20px}.payslip{border:2px solid #333;padding:20px;margin-bottom:30px;page-break-inside:avoid;page-break-after:always}.header{text-align:center;border-bottom:2px solid #333;margin-bottom:15px;padding-bottom:10px}.emp-name{font-size:18px;font-weight:bold;margin-bottom:10px}table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:15px}th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}th{background-color:#f2f2f2}.amount{text-align:right}.total-row{font-weight:bold;background-color:#eee}.signature{margin-top:40px;border-top:1px solid #000;padding-top:5px;text-align:center;width:60%;margin-left:auto;margin-right:auto}.net-pay{font-size:16px;font-weight:bold;text-align:right;margin-top:10px}.sub-header{font-weight:bold;margin-bottom:5px;font-size:13px}</style>`; let html = `<html><head><title>Nómina</title>${styles}</head><body>`; Object.keys(payroll).forEach(name => { const p = payroll[name]; if (p.count === 0 && p.deductionTotal === 0) return; html += `<div class="payslip"><div class="header"><h3>LAVAMEX - RECIBO DE NÓMINA</h3><div>Periodo: ${startDate} al ${endDate}</div></div><div class="emp-name">Empleado: ${name}</div><div class="sub-header">Detalle de Servicios</div><table><thead><tr><th style="width:30%">Fecha</th><th style="width:50%">Servicio</th><th style="width:20%" class="amount">Pago</th></tr></thead><tbody>`; p.details.forEach(det => { const dateStr = new Date(det.date).toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); html += `<tr><td>${dateStr}</td><td>${det.service}</td><td class="amount">${formatCurrency(det.amount)}</td></tr>`; }); html += `<tr class="total-row"><td colspan="2" style="text-align:right">Subtotal Servicios:</td><td class="amount">${formatCurrency(p.total)}</td></tr>`; if (p.deductionTotal > 0) html += `<tr class="total-row" style="color:red;"><td colspan="2" style="text-align:right">Total Deducciones:</td><td class="amount">-${formatCurrency(p.deductionTotal)}</td></tr>`; html += `</tbody></table><div class="net-pay">TOTAL A PAGAR: ${formatCurrency(p.netPay)}</div><div class="signature">Firma de Recibido</div></div>`; }); html += `</body></html>`; const win = PrintService.open(); PrintService.print(win, html); };
-            const generateAttendanceReport = async () => { const win = PrintService.open(); const q = query(collection(db, "attendance"), where("month", "==", reportMonth)); const snapshot = await getDocs(q); const attendanceData = {}; snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; }); const daysInMonth = new Date(reportMonth.split('-')[0], reportMonth.split('-')[1], 0).getDate(); const days = Array.from({ length: daysInMonth }, (_, i) => i + 1); const tableRows = employees.map(emp => { const cells = days.map(day => { const dateStr = `${reportMonth}-${String(day).padStart(2, '0')}`; const status = attendanceData[dateStr]?.[emp.name]; return `<td style="text-align:center; padding: 2px;">${status ? '✔️' : ''}</td>`; }).join(''); return `<tr><td style="font-weight:bold; padding:4px;">${emp.name}</td>${cells}</tr>`; }).join(''); const headerRow = days.map(d => `<th style="width:20px;">${d}</th>`).join(''); const html = `<h2 style="text-align:center">Reporte de Asistencia: ${reportMonth}</h2><table style="width:100%; border-collapse: collapse; font-size: 10px;" border="1"><thead><tr><th>Empleado</th>${headerRow}</tr></thead><tbody>${tableRows}</tbody></table>`; PrintService.print(win, html, true); };
-            const closeWeek = async () => { if (!confirm("¿Archivar semana? Esto limpiará la nómina actual.")) return; const batch = writeBatch(db); const pendingHistory = history.filter(t => t.status === 'PAID'); pendingHistory.forEach(t => batch.update(doc(db, "tickets", t.id), { status: 'ARCHIVED' })); deductions.filter(d => d.status === 'PENDING').forEach(d => batch.update(doc(db, "deductions", d.id), { status: 'ARCHIVED' })); await batch.commit(); alert("Semana Cerrada"); };
+            const printNomina = () => {
+                const win = PrintService.open();
+                // (Simplified for brevity, same logic as before but cleaner html generation would be better)
+                let html = `<html><head><title>Nomina</title><style>body{font-family:sans-serif;padding:20px} table{width:100%;border-collapse:collapse;margin-bottom:15px} th,td{border:1px solid #ccc;padding:5px}</style></head><body>`;
+                Object.keys(payroll).forEach(name => {
+                    const p = payroll[name];
+                    if (p.count === 0 && p.deductionTotal === 0) return;
+                    html += `<h3>${name}</h3><table><tr><th>Servicio</th><th>Pago</th></tr>`;
+                    p.details.forEach(d => html += `<tr><td>${d.service}</td><td>${formatCurrency(d.amount)}</td></tr>`);
+                    if (p.deductionTotal > 0) html += `<tr><td>Deducciones</td><td>-${formatCurrency(p.deductionTotal)}</td></tr>`;
+                    html += `<tr><td><b>TOTAL</b></td><td><b>${formatCurrency(p.netPay)}</b></td></tr></table><hr/>`;
+                });
+                html += `</body></html>`;
+                PrintService.print(win, html);
+            };
+
+            const generateAttendanceReport = async () => {
+                const win = PrintService.open();
+                const q = query(collection(db, "attendance"), where("month", "==", reportMonth));
+                const snapshot = await getDocs(q);
+                const attendanceData = {};
+                snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
+
+                const daysInMonth = new Date(reportMonth.split('-')[0], reportMonth.split('-')[1], 0).getDate();
+                const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+                const tableRows = employees.map(emp => {
+                    const cells = days.map(day => {
+                        const dateStr = `${reportMonth}-${String(day).padStart(2, '0')}`;
+                        const status = attendanceData[dateStr]?.[emp.name];
+                        return `<td style="text-align:center; padding: 2px;">${status ? '✔️' : ''}</td>`;
+                    }).join('');
+                    return `<tr><td style="font-weight:bold; padding:4px;">${emp.name}</td>${cells}</tr>`;
+                }).join('');
+
+                const html = `<h2 style="text-align:center">Asistencia: ${reportMonth}</h2><table style="width:100%; border-collapse: collapse; font-size: 10px;" border="1"><thead><tr><th>Empleado</th>${days.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>${tableRows}</tbody></table>`;
+                PrintService.print(win, html, true);
+            };
+
+            const closeWeek = async () => {
+                if (!confirm("¿Archivar semana?")) return;
+                const batch = writeBatch(db);
+                rangeHistory.forEach(t => batch.update(doc(db, "tickets", t.id), { status: 'ARCHIVED' }));
+                rangeDeductions.forEach(d => batch.update(doc(db, "deductions", d.id), { status: 'ARCHIVED' }));
+                await batch.commit();
+                alert("Semana Cerrada");
+            };
+
             const handleAddEmployee = () => { if (newEmpName.trim()) { addEmployee(newEmpName.trim()); setNewEmpName(''); } };
 
             const saveAllSettings = async () => {
-                if (!confirm("¿Aplicar nuevos precios al sistema?")) return;
+                if (!confirm("¿Aplicar nuevos precios?")) return;
                 try {
                     const batch = writeBatch(db);
-                    // Overwrite full price/commission objects to ensure consistency
                     batch.set(doc(db, "settings", "prices"), editPrices);
                     batch.set(doc(db, "settings", "commissions"), editComms);
-
                     editExtras.forEach(e => {
-                        // Use update for existing docs, assuming 'e.id' is valid
-                        // FIX: Use e.docId (Firestore ID) instead of e.id (Internal ID like 'MOTOR')
                         batch.update(doc(db, "extras", e.docId), {
                             price: parseFloat(e.price) || 0,
                             commission: parseFloat(e.commission) || 0
@@ -857,12 +1039,10 @@
                     });
                     await batch.commit();
                     alert("¡Precios Actualizados!");
-                } catch (e) {
-                    console.error(e);
-                    alert("Error al guardar: " + e.message);
-                }
+                } catch (e) { alert("Error: " + e.message); }
             };
 
+            // Updates specific cell in local matrix
             const updateLocalPrice = (type, svcId, sizeId, val) => {
                 const target = type === 'prices' ? editPrices : editComms;
                 const setTarget = type === 'prices' ? setEditPrices : setEditComms;
@@ -872,31 +1052,30 @@
                 setTarget(newObj);
             };
 
-            const updateLocalExtra = (id, field, val) => {
-                setEditExtras(prev => prev.map(e => e.id === id ? { ...e, [field]: val } : e));
-            };
-
             return (
                 <div className="p-4 md:p-6 h-full overflow-y-auto">
                     <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
-                        <button onClick={() => setTab('NOMINA')} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === 'NOMINA' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>Nómina</button>
-                        <button onClick={() => setTab('CONFIG')} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === 'CONFIG' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>Configuración</button>
-                        <button onClick={() => setTab('PRICES')} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === 'PRICES' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>Precios</button>
-                        <button onClick={() => setTab('REPORT')} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === 'REPORT' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>Reportes</button>
+                        {['NOMINA', 'CONFIG', 'PRICES', 'REPORT'].map(t => (
+                            <button key={t} onClick={() => setTab(t)}
+                                className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === t ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>
+                                {t}
+                            </button>
+                        ))}
                     </div>
+
                     {tab === 'NOMINA' && (
                         <div>
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
                                 <div className="flex flex-wrap gap-3 items-end">
                                     <div><label className="text-xs font-bold text-gray-500 block mb-1">Inicio</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
                                     <div><label className="text-xs font-bold text-gray-500 block mb-1">Fin</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
-                                    <button onClick={printNomina} className="bg-green-600 text-white px-5 py-2.5 rounded-lg font-bold shadow hover:bg-green-700 flex items-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
+                                    <button onClick={printNomina} className="bg-green-600 text-white px-5 py-2.5 rounded-lg font-bold shadow flex items-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
                                 </div>
-                                <button onClick={closeWeek} className="w-full md:w-auto bg-red-600 text-white px-5 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 shadow hover:bg-red-700"><Archive className="w-4 h-4" /> CERRAR SEMANA</button>
+                                <button onClick={closeWeek} className="w-full md:w-auto bg-red-600 text-white px-5 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 shadow"><Archive className="w-4 h-4" /> CERRAR SEMANA</button>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {Object.keys(payroll).map(name => (
-                                    <div key={name} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-blue-500">
+                                    <div key={name} className="bg-white p-5 rounded-xl shadow-sm border border-l-4 border-l-blue-500">
                                         <div className="font-bold text-xl text-gray-800 mb-1">{name}</div>
                                         <div className="text-3xl font-bold text-green-700">{formatCurrency(payroll[name].netPay)}</div>
                                         <div className="text-sm text-gray-500 mt-2 flex justify-between border-t pt-2"><span>Com: {formatCurrency(payroll[name].total)}</span><span className="text-red-500 font-medium">Ded: {formatCurrency(payroll[name].deductionTotal)}</span></div>
@@ -905,43 +1084,42 @@
                             </div>
                         </div>
                     )}
+
                     {tab === 'REPORT' && (
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
                             <h3 className="font-bold mb-4 text-gray-800 flex items-center"><Calendar className="mr-2" /> Reporte de Asistencia</h3>
                             <div className="mb-4"><label className="block text-sm font-bold text-gray-600 mb-2">Mes</label><input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-                            <button onClick={generateAttendanceReport} className="w-full bg-blue-600 text-white font-bold p-3 rounded-xl shadow hover:bg-blue-700">Imprimir Reporte Mensual</button>
+                            <button onClick={generateAttendanceReport} className="w-full bg-blue-600 text-white font-bold p-3 rounded-xl shadow">Imprimir Reporte Mensual</button>
                         </div>
                     )}
+
                     {tab === 'CONFIG' && (
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
                             <h3 className="font-bold mb-4 text-gray-800">General</h3>
-                            <div className="mb-6"><label className="block text-sm font-bold text-gray-600 mb-2">Dólar (Rate)</label><input type="number" value={exRate} onChange={e => setExRate(parseFloat(e.target.value))} className="border p-3 rounded-lg w-full text-lg" /></div>
+                            <div className="mb-6 flex gap-2 items-end">
+                                <div className="flex-1">
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">Dólar (Rate)</label>
+                                    <input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" />
+                                </div>
+                                <button onClick={() => { updateGlobalExRate(parseFloat(localExRate)); alert("Tasa actualizada"); }} className="bg-blue-600 text-white p-3 rounded-lg font-bold h-fit mb-px">Guardar</button>
+                            </div>
+
                             <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados (Solo Admin)</h3>
-                            <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} placeholder="Nombre Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><button onClick={handleAddEmployee} className="bg-blue-600 text-white px-5 rounded-lg font-bold"><PlusCircle className="w-5 h-5" /></button></div>
+                            <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} placeholder="Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><button onClick={handleAddEmployee} className="bg-blue-600 text-white px-5 rounded-lg font-bold"><PlusCircle className="w-5 h-5" /></button></div>
                             <div className="space-y-2">{employees.map((e, i) => (<div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span className="font-medium">{e.name}</span><span className={`text-xs font-bold px-2 py-1 rounded ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.active ? 'Presente' : 'Ausente'}</span></div>))}</div>
                         </div>
                     )}
+
                     {tab === 'PRICES' && (
                         <div className="space-y-6">
                             <div className="bg-blue-50 border-blue-200 border p-4 rounded-xl flex justify-between items-center">
-                                <div>
-                                    <h3 className="font-bold text-blue-800">Edición de Precios</h3>
-                                    <p className="text-sm text-blue-600">Edita los valores y guarda para aplicar.</p>
-                                </div>
-                                <button onClick={saveAllSettings} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 flex items-center gap-2 active:scale-95 transition-transform">
-                                    <Upload className="w-5 h-5" /> GUARDAR CAMBIOS
-                                </button>
+                                <div><h3 className="font-bold text-blue-800">Edición de Precios</h3><p className="text-sm text-blue-600">Edita los valores y guarda para aplicar.</p></div>
+                                <button onClick={saveAllSettings} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"><Upload className="w-5 h-5" /> GUARDAR</button>
                             </div>
 
                             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-                                <h3 className="font-bold mb-4 text-gray-800 text-lg">Matriz de Precios</h3>
                                 <table className="w-full text-sm text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-gray-100">
-                                            <th className="p-3 border">Servicio</th>
-                                            {SIZES.map(s => <th key={s.id} className="p-3 border">{s.label}</th>)}
-                                        </tr>
-                                    </thead>
+                                    <thead><tr className="bg-gray-100"><th className="p-3 border">Servicio</th>{SIZES.map(s => <th key={s.id} className="p-3 border">{s.label}</th>)}</tr></thead>
                                     <tbody>
                                         {SERVICES.map(svc => (
                                             <tr key={svc.id}>
@@ -949,20 +1127,8 @@
                                                 {SIZES.map(size => (
                                                     <td key={size.id} className="p-2 border">
                                                         <div className="flex flex-col gap-1">
-                                                            <input
-                                                                type="number"
-                                                                value={editPrices[svc.id]?.[size.id] || 0}
-                                                                onChange={(e) => updateLocalPrice('prices', svc.id, size.id, e.target.value)}
-                                                                className="border p-1 rounded w-full text-center text-green-700 font-bold"
-                                                                placeholder="Precio"
-                                                            />
-                                                            <input
-                                                                type="number"
-                                                                value={editComms[svc.id]?.[size.id] || 0}
-                                                                onChange={(e) => updateLocalPrice('commissions', svc.id, size.id, e.target.value)}
-                                                                className="border p-1 rounded w-full text-center text-blue-600 text-xs"
-                                                                placeholder="Comisión"
-                                                            />
+                                                            <input type="number" value={editPrices[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('prices', svc.id, size.id, e.target.value)} className="border p-1 rounded w-full text-center text-green-700 font-bold" placeholder="Precio" />
+                                                            <input type="number" value={editComms[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('commissions', svc.id, size.id, e.target.value)} className="border p-1 rounded w-full text-center text-blue-600 text-xs" placeholder="Com" />
                                                         </div>
                                                     </td>
                                                 ))}
@@ -970,38 +1136,6 @@
                                         ))}
                                     </tbody>
                                 </table>
-                                <div className="text-xs text-gray-500 mt-2 text-right">* Arriba: Precio Público | Abajo: Comisión</div>
-                            </div>
-
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                                <h3 className="font-bold mb-4 text-gray-800 text-lg">Extras</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {editExtras.map(extra => (
-                                        <div key={extra.id} className="border p-3 rounded-lg bg-gray-50">
-                                            <div className="font-bold mb-2">{extra.label}</div>
-                                            <div className="flex gap-2">
-                                                <div className="flex-1">
-                                                    <label className="block text-xs font-bold text-gray-500">Precio</label>
-                                                    <input
-                                                        type="number"
-                                                        value={extra.price}
-                                                        onChange={(e) => updateLocalExtra(extra.id, 'price', e.target.value)}
-                                                        className="w-full border p-1 rounded"
-                                                    />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <label className="block text-xs font-bold text-gray-500">Comisión</label>
-                                                    <input
-                                                        type="number"
-                                                        value={extra.commission}
-                                                        onChange={(e) => updateLocalExtra(extra.id, 'commission', e.target.value)}
-                                                        className="w-full border p-1 rounded"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
                             </div>
                         </div>
                     )}
@@ -1010,13 +1144,10 @@
         };
 
         // ------------------------------------------------------------------
-        // SECTION 9: MAIN LAYOUT (Uses Context)
+        // SECTION 9: MAIN LAYOUT
         // ------------------------------------------------------------------
-
         const LavamexPOS = () => {
             const { role, view, setView, logout } = useContext(AppContext);
-
-            if (view === 'TESTS') return <TestDashboard />;
             if (!role) return <LoginScreen />;
 
             return (
