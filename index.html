@@ -513,6 +513,8 @@
             const [washers, setWashers] = useState([]);
             const [extras, setExtras] = useState([]);
             const [desc, setDesc] = useState('');
+            const [vDesc, setVDesc] = useState('');
+            const [vPrice, setVPrice] = useState('');
 
             useEffect(() => {
                 if (editingTicket) {
@@ -522,9 +524,10 @@
                 }
             }, [editingTicket]);
 
-            const toggle = (list, item, set) => {
+            const toggle = (list, item, set, limit = null) => {
                 const isObj = typeof item !== 'string';
                 const exists = isObj ? list.some(x => x.id === item.id) : list.includes(item);
+                if (!exists && limit && list.length >= limit) return;
                 set(exists ? list.filter(x => isObj ? x.id !== item.id : x !== item) : [...list, item]);
             };
 
@@ -537,9 +540,23 @@
                 return newArr;
             });
 
+            const addVarios = () => {
+                if (!vDesc || !vPrice) return;
+                const newItem = {
+                    id: `VARIOS-${Date.now()}`,
+                    label: vDesc,
+                    price: parseFloat(vPrice) || 0,
+                    commission: 0
+                };
+                setExtras(prev => [...prev, newItem]);
+                setVDesc('');
+                setVPrice('');
+            };
+
             // FIX: Allow submission if Boleada is selected even without Size/Service
             const hasBoleada = extras.some(e => e.id === 'BOLEADA');
-            const canSubmit = washers.length > 0 && ((size && service) || hasBoleada);
+            const hasVarios = extras.some(e => e.id.startsWith('VARIOS'));
+            const canSubmit = washers.length > 0 && ((size && service) || hasBoleada || hasVarios);
 
             const handleSubmit = () => {
                 if (!canSubmit) return;
@@ -587,10 +604,27 @@
                                     return <button key={e.id} onClick={() => toggle(extras, e, setExtras)} className={`w-full p-3 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>;
                                 })}
                             </div>
+                            <div className="mt-4 border-t pt-2">
+                                <h3 className="font-bold mb-2 text-gray-700 text-sm">Varios / Extra</h3>
+                                <div className="flex gap-2 mb-2">
+                                    <input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Descripción" className="w-full p-2 border rounded text-sm" />
+                                    <input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" />
+                                    <button onClick={addVarios} className="bg-blue-600 text-white p-2 rounded"><PlusCircle size={16} /></button>
+                                </div>
+                                {extras.filter(e => e.id.startsWith('VARIOS')).map(e => (
+                                    <div key={e.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 border rounded mb-1">
+                                        <span>{e.label}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold">${e.price}</span>
+                                            <button onClick={() => setExtras(prev => prev.filter(x => x.id !== e.id))} className="text-red-500"><Trash2 size={14} /></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                         <div className="md:col-span-2 bg-white p-4 rounded-xl shadow border flex flex-col h-full">
-                            <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 3. Lavadores ({washers.length})</h3>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">{employees.filter(e => e.active).map(e => <button key={e.name} onClick={() => toggle(washers, e.name, setWashers)} className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>{e.name}</button>)}</div>
+                            <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 3. Lavadores ({washers.length}/2)</h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">{employees.filter(e => e.active).map(e => <button key={e.name} onClick={() => toggle(washers, e.name, setWashers, 2)} className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>{e.name}</button>)}</div>
                             <div className="mt-auto pt-4 border-t">
                                 <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción (Opcional)" className="w-full p-3 border rounded-lg mb-4 text-lg" />
                                 <button onClick={handleSubmit} disabled={!canSubmit} className={`w-full py-5 rounded-xl font-bold text-white text-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform ${!canSubmit ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}>{editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR ORDEN</>}</button>
