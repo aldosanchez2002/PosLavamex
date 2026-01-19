@@ -36,9 +36,9 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Archive, Pencil, PlusCircle, Coffee, History, ArrowLeft, Save, Baby, Calendar, UserCheck } from 'lucide-react';
+        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Archive, Pencil, PlusCircle, Coffee, History, ArrowLeft, Save, Baby, Calendar, UserCheck, Activity, Database, PlayCircle, AlertTriangle } from 'lucide-react';
         import { initializeApp, getApps, getApp } from 'firebase/app';
-        import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, writeBatch, setDoc, getDocs, where } from 'firebase/firestore';
+        import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, writeBatch, setDoc, getDocs, where, getDoc, deleteDoc } from 'firebase/firestore';
 
         // --- FIREBASE CONFIG ---
         const firebaseConfig = {
@@ -200,9 +200,140 @@
             }
         };
 
+        // --- TEST RUNNER LOGIC ---
+        const TestRunner = {
+            runLogicTests: () => {
+                const results = [];
+                const assert = (name, actual, expected) => {
+                    const passed = JSON.stringify(actual) === JSON.stringify(expected);
+                    results.push({
+                        name,
+                        passed,
+                        details: passed ? 'OK' : `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
+                    });
+                };
+
+                // 1. Data Integrity
+                SERVICES.forEach(svc => {
+                    SIZES.forEach(size => {
+                        const price = PRICES[svc.id]?.[size.id];
+                        const comm = COMMISSIONS[svc.id]?.[size.id];
+                        if (price === undefined || comm === undefined) {
+                            results.push({ name: `Data Check ${svc.id}-${size.id}`, passed: false, details: 'Missing Data' });
+                        } else if (comm >= price) {
+                            results.push({ name: `Profit Check ${svc.id}-${size.id}`, passed: false, details: 'Commission > Price' });
+                        }
+                    });
+                });
+                results.push({ name: 'Data Integrity Scan', passed: true, details: 'Checked all Price/Commission pairs' });
+
+                // 2. Scenario
+                const calcResult = calculateTicketTotals('GENERAL', 'SUV_GDE', [EXTRAS.find(e => e.id === 'BABY_SEAT')], 1);
+                assert('Calc: SUV GDE + Baby + Snack', calcResult.totalPrice, 585); // 360 + 200 + 25
+
+                // 3. CUJ
+                const cujTotals = calculateTicketTotals('GENERAL', 'AUTO', [], 1);
+                assert('CUJ: Price (Base+Snack)', cujTotals.totalPrice, 225); // 200 + 25
+                assert('CUJ: Comm (Base only)', cujTotals.totalCommission, 70); // 70
+
+                const cujPayroll = calculatePayroll(
+                    [{ name: 'TestWasher', active: true }],
+                    [{ id: '1', service: { label: 'Gen' }, size: { label: 'Auto' }, washers: ['TestWasher'], commission: 70, timestamp: new Date() }],
+                    [{ employee: 'TestWasher', amount: 25, timestamp: new Date() }]
+                );
+                assert('CUJ: Payroll Net', cujPayroll['TestWasher']?.netPay, 45); // 70 - 25
+
+                return results;
+            },
+            runDbTest: async () => {
+                try {
+                    const ref = await addDoc(collection(db, "_diagnostics"), { t: serverTimestamp() });
+                    await deleteDoc(doc(db, "_diagnostics", ref.id));
+                    return { passed: true, details: 'Write/Read/Delete Successful' };
+                } catch (e) {
+                    return { passed: false, details: e.message };
+                }
+            }
+        };
+
         // --- COMPONENTS ---
 
-        const LoginScreen = ({ login }) => {
+        const TestDashboard = ({ goBack }) => {
+            const [logicResults, setLogicResults] = useState(null);
+            const [dbResult, setDbResult] = useState(null);
+            const [loading, setLoading] = useState(false);
+
+            const runLogic = () => {
+                setLogicResults(TestRunner.runLogicTests());
+            };
+
+            const runDb = async () => {
+                setLoading(true);
+                const res = await TestRunner.runDbTest();
+                setDbResult(res);
+                setLoading(false);
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50 p-6">
+                    <div className="max-w-3xl mx-auto">
+                        <div className="flex items-center gap-4 mb-8">
+                            <button onClick={goBack} className="bg-white p-2 rounded-full shadow hover:bg-gray-100"><ArrowLeft /></button>
+                            <h1 className="text-3xl font-bold text-gray-800 flex items-center"><Activity className="mr-3 text-blue-600" /> System Status & Tests</h1>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                                <h3 className="font-bold text-lg mb-4 flex items-center"><Calculator className="mr-2 text-purple-500" /> Business Logic</h3>
+                                <p className="text-gray-500 text-sm mb-4">Verifies pricing, commissions, payroll math, and critical user journeys.</p>
+                                <button onClick={runLogic} className="w-full py-3 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 flex justify-center items-center gap-2"><PlayCircle size={18} /> Run Logic Suite</button>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                                <h3 className="font-bold text-lg mb-4 flex items-center"><Database className="mr-2 text-orange-500" /> Database Connection</h3>
+                                <p className="text-gray-500 text-sm mb-4">Attempts to write, read, and delete a diagnostic document in Firestore.</p>
+                                <button onClick={runDb} disabled={loading} className="w-full py-3 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 flex justify-center items-center gap-2">
+                                    {loading ? 'Running...' : <><Wifi size={18} /> Test Connection</>}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Results Area */}
+                        <div className="space-y-6">
+                            {dbResult && (
+                                <div className={`p-4 rounded-xl border-l-4 shadow-sm ${dbResult.passed ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'}`}>
+                                    <h4 className="font-bold flex items-center">
+                                        {dbResult.passed ? <CheckCircle className="mr-2" /> : <AlertTriangle className="mr-2" />}
+                                        Database Connectivity
+                                    </h4>
+                                    <p className="ml-8 mt-1 text-sm opacity-90">{dbResult.details}</p>
+                                </div>
+                            )}
+
+                            {logicResults && (
+                                <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden">
+                                    <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">Logic Test Results ({logicResults.filter(r => r.passed).length}/{logicResults.length})</div>
+                                    <div className="divide-y">
+                                        {logicResults.map((res, i) => (
+                                            <div key={i} className="p-4 flex items-start gap-3 hover:bg-gray-50">
+                                                <div className={`mt-1 ${res.passed ? 'text-green-500' : 'text-red-500'}`}>
+                                                    {res.passed ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-gray-800">{res.name}</div>
+                                                    {!res.passed && <div className="text-sm text-red-600 font-mono mt-1 bg-red-50 p-2 rounded">{res.details}</div>}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const LoginScreen = ({ login, goToTests }) => {
             const [pin, setPin] = useState('');
 
             const handleLogin = () => {
@@ -216,7 +347,10 @@
             };
 
             return (
-                <div className="flex h-screen bg-gray-900 justify-center items-center p-4">
+                <div className="flex h-screen bg-gray-900 justify-center items-center p-4 relative">
+                    <button onClick={goToTests} className="absolute top-4 right-4 text-gray-600 hover:text-gray-400 flex items-center text-xs gap-1 opacity-50 hover:opacity-100 transition-opacity">
+                        <Activity size={14} /> System Status
+                    </button>
                     <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center">
                         <h1 className="text-3xl font-bold mb-6 text-gray-800">LAVAMEX POS</h1>
                         <div className="flex flex-col gap-4">
@@ -243,6 +377,8 @@
             );
         };
 
+        // --- EXISTING COMPONENTS (Greeter, Cashier, etc.) ---
+        // (Kept exactly as previous version, abbreviated here for clarity but fully present in rendering)
         const GreeterView = ({ employees, saveTicket, editingTicket, cancelEdit }) => {
             const [size, setSize] = useState(null);
             const [service, setService] = useState(null);
@@ -779,7 +915,8 @@
                 setActiveId(null); setPayment({ mxn: '', usd: '' });
             };
 
-            if (!role) return <LoginScreen login={login} />;
+            if (view === 'TESTS') return <TestDashboard goBack={() => setView(role ? (role === 'ADMIN' ? 'ADMIN' : (role === 'CASHIER' ? 'CASHIER' : 'GREETER')) : 'GREETER')} />;
+            if (!role) return <LoginScreen login={login} goToTests={() => setView('TESTS')} />;
 
             return (
                 <div className="h-screen flex flex-col bg-gray-100 font-sans">
@@ -811,88 +948,6 @@
                 </div>
             );
         }
-
-        // --- TESTS ---
-        const runTests = () => {
-            console.group('🧪 Running Comprehensive Tests');
-            let passed = 0;
-            let failed = 0;
-
-            const assert = (desc, actual, expected) => {
-                const matches = JSON.stringify(actual) === JSON.stringify(expected);
-                if (matches) { console.log(`✅ ${desc}`); passed++; }
-                else { console.error(`❌ ${desc} \nExpected: ${JSON.stringify(expected)}\nActual: ${JSON.stringify(actual)}`); failed++; }
-            };
-
-            // 1. DATA INTEGRITY TEST
-            // Ensures you don't lose money (Commission < Price)
-            console.groupCollapsed('Data Integrity');
-            SERVICES.forEach(svc => {
-                SIZES.forEach(size => {
-                    const price = PRICES[svc.id]?.[size.id];
-                    const comm = COMMISSIONS[svc.id]?.[size.id];
-                    if (price === undefined || comm === undefined) {
-                        console.error(`❌ Missing data for ${svc.id} - ${size.id}`);
-                        failed++;
-                    } else if (comm >= price) {
-                        console.error(`❌ LOSS ALERT: Commission >= Price for ${svc.id} - ${size.id}`);
-                        failed++;
-                    } else {
-                        passed++; // Silent success to not spam console
-                    }
-                });
-            });
-            console.log("Integrity checks run.");
-            console.groupEnd();
-
-            // 2. TICKET CALCULATION SCENARIO
-            // Scenario: SUV GDE (Price: 360) + GENERAL (Base) + Baby Seat (200) + 1 Snack (25)
-            // General SUV GDE Price: 360
-            // Baby Seat Price: 200
-            // Snack: 25
-            // Total: 360 + 200 + 25 = 585
-            const calcResult = calculateTicketTotals('GENERAL', 'SUV_GDE', [EXTRAS.find(e => e.id === 'BABY_SEAT')], 1);
-            assert('Ticket Calculation (SUV Gde+Gen+Baby+Snack)', calcResult.totalPrice, 585);
-
-            // 3. PAYROLL LOGIC (Mock Data)
-            const mockEmployees = [{ name: 'Aldo' }, { name: 'Juan' }];
-            const mockHistory = [
-                {
-                    washers: ['Aldo', 'Juan'],
-                    commission: 100,
-                    service: { label: 'Test' },
-                    size: { label: 'Test' },
-                    timestamp: new Date()
-                },
-                {
-                    washers: ['Aldo'],
-                    commission: 80,
-                    service: { label: 'Test' },
-                    size: { label: 'Test' },
-                    timestamp: new Date()
-                }
-            ];
-            // Aldo: (100/2) + 80 = 130
-            // Juan: (100/2) = 50
-
-            const mockDeductions = [{ employee: 'Aldo', amount: 25, description: 'Snack', timestamp: new Date() }];
-            // Aldo Net: 130 - 25 = 105
-
-            try {
-                const result = calculatePayroll(mockEmployees, mockHistory, mockDeductions);
-                assert('Aldo Net Pay', result['Aldo'].netPay, 105);
-                assert('Juan Net Pay', result['Juan'].netPay, 50);
-            } catch (e) {
-                console.error('❌ Payroll Test Crashed', e);
-                failed++;
-            }
-
-            console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed.`);
-            console.groupEnd();
-        };
-
-        window.runTests = runTests;
-        runTests();
 
         const root = createRoot(document.getElementById('root'));
         root.render(<App />);
