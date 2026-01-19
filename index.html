@@ -5,8 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Lavamex POS</title>
+    <!-- UTILITIES: Tailwind for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- COMPILER: Babel for in-browser JSX transformation (Dev only) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- IMPORTS: ES Modules for React and Firebase -->
     <script type="importmap">
     {
       "imports": {
@@ -19,6 +22,7 @@
     }
     </script>
     <style>
+        /* Utility to hide scrollbars while maintaining functionality */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
@@ -34,13 +38,19 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
+        // ------------------------------------------------------------------
+        // SECTION 1: IMPORTS & SETUP
+        // ------------------------------------------------------------------
         import React, { useState, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
         import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Archive, Pencil, PlusCircle, Coffee, History, ArrowLeft, Save, Baby, Calendar, UserCheck, Activity, Database, PlayCircle, AlertTriangle } from 'lucide-react';
         import { initializeApp, getApps, getApp } from 'firebase/app';
         import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, writeBatch, setDoc, getDocs, where, getDoc, deleteDoc } from 'firebase/firestore';
 
-        // --- FIREBASE CONFIG ---
+        // ------------------------------------------------------------------
+        // SECTION 2: FIREBASE CONFIGURATION
+        // NOTE: In production, consider using environment variables.
+        // ------------------------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyByIvJpBZv32Zd22fxlYWL9etzBa66Q2rE",
             authDomain: "poslavamex.firebaseapp.com",
@@ -49,10 +59,14 @@
             messagingSenderId: "883264129",
             appId: "1:883264129:web:39a352e2ade3888b4f1b80"
         };
+        // Singleton pattern to prevent multiple Firebase initializations
         const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
         const db = getFirestore(app);
 
-        // --- APP DEFAULTS & SETTINGS ---
+        // ------------------------------------------------------------------
+        // SECTION 3: CONSTANTS & BUSINESS LOGIC DATA
+        // These serve as the "Source of Truth" for pricing and logic.
+        // ------------------------------------------------------------------
         const DEFAULTS = {
             PINS: {
                 GREETER: '0000',
@@ -60,7 +74,6 @@
                 ADMIN: '9999'
             },
             EXCHANGE_RATE: 18.10,
-            // Fallback employees if DB is empty
             INITIAL_EMPLOYEES: [
                 { name: 'Aldo', active: true },
                 { name: 'Sergio', active: true },
@@ -69,7 +82,6 @@
             ]
         };
 
-        // --- BUSINESS DATA ---
         const SIZES = [{ id: 'AUTO', label: 'Auto' }, { id: 'SUV_CHICA', label: 'SUV Chica' }, { id: 'PICKUP', label: 'Pick-Up / SUV MD' }, { id: 'SUV_GDE', label: 'SUV Gde' }];
         const SERVICES = [{ id: 'GENERAL', label: 'Lavado General' }, { id: 'WAX', label: 'Lavado + Cera' }, { id: 'COMPLETE', label: 'Paquete Completo' }, { id: 'PREMIUM', label: 'Paquete Premium' }, { id: 'PRESIDENTIAL', label: 'Paquete Presidencial' }];
 
@@ -100,9 +112,13 @@
             PRESIDENTIAL: { AUTO: 539, SUV_CHICA: 679, PICKUP: 812, SUV_GDE: 812 },
         };
 
-        // --- PURE LOGIC FUNCTIONS ---
+        // ------------------------------------------------------------------
+        // SECTION 4: HELPER FUNCTIONS (Business Logic)
+        // ------------------------------------------------------------------
+
         const formatCurrency = (amount) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
 
+        // Calculates the final price and commission for a specific ticket combination
         const calculateTicketTotals = (serviceId, sizeId, extraList, snackCount = 0) => {
             const basePrice = PRICES[serviceId][sizeId];
             const baseComm = COMMISSIONS[serviceId][sizeId];
@@ -115,15 +131,19 @@
             };
         };
 
+        // Main Payroll Algorithm: Iterates through history to sum commissions per employee
         const calculatePayroll = (employees, history, deductions) => {
             const payroll = {};
+            // Initialize every employee with 0 balance
             employees.forEach(emp => {
                 payroll[emp.name] = { count: 0, total: 0, details: [], deductionTotal: 0, deductionDetails: [], netPay: 0 };
             });
 
+            // Process Earnings
             history.forEach(item => {
                 const washersList = item.washers || (item.washer ? [item.washer] : []);
                 if (washersList.length === 0) return;
+                // Split commission evenly among washers on the ticket
                 const splitCommission = item.commission / washersList.length;
                 washersList.forEach(washerName => {
                     if (!payroll[washerName]) payroll[washerName] = { count: 0, total: 0, details: [], deductionTotal: 0, deductionDetails: [], netPay: 0 };
@@ -138,6 +158,7 @@
                 });
             });
 
+            // Process Deductions (Snacks)
             deductions.forEach(d => {
                 if (payroll[d.employee]) {
                     payroll[d.employee].deductionTotal += d.amount;
@@ -145,12 +166,17 @@
                 }
             });
 
+            // Calculate Net
             Object.keys(payroll).forEach(key => {
                 payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal;
             });
             return payroll;
         };
 
+        // ------------------------------------------------------------------
+        // SECTION 5: PRINTING SERVICE
+        // Handles browser window generation for thermal printers
+        // ------------------------------------------------------------------
         const PrintService = {
             // 1. Open window immediately (synchronously) to bypass iOS block
             open: () => {
@@ -172,7 +198,7 @@
                 win.focus();
                 setTimeout(() => { win.print(); win.close(); }, 500);
             },
-            // 3. Generators return HTML string only
+            // 3. HTML Generators for Thermal Printer (58mm width approx)
             getJobTicketHtml: (ticket, shortId) => {
                 const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
                 const extrasHtml = ticket.extras && ticket.extras.length > 0
@@ -212,7 +238,10 @@
             }
         };
 
-        // --- TEST RUNNER LOGIC ---
+        // ------------------------------------------------------------------
+        // SECTION 6: UNIT TESTS (In-App)
+        // Allows testing critical logic directly in the browser.
+        // ------------------------------------------------------------------
         const TestRunner = {
             runLogicTests: () => {
                 const results = [];
@@ -309,7 +338,9 @@
             }
         };
 
-        // --- COMPONENTS ---
+        // ------------------------------------------------------------------
+        // SECTION 7: REACT COMPONENTS
+        // ------------------------------------------------------------------
 
         const TestDashboard = ({ goBack }) => {
             const [logicResults, setLogicResults] = useState(null);
@@ -415,6 +446,7 @@
             );
         };
 
+        // --- AUTH COMPONENT ---
         const LoginScreen = ({ login, goToTests }) => {
             const [pin, setPin] = useState('');
 
@@ -459,8 +491,7 @@
             );
         };
 
-        // --- EXISTING COMPONENTS (Greeter, Cashier, etc.) ---
-        // (Kept exactly as previous version, abbreviated here for clarity but fully present in rendering)
+        // --- GREETER COMPONENT (Creates Tickets) ---
         const GreeterView = ({ employees, saveTicket, editingTicket, cancelEdit }) => {
             const [size, setSize] = useState(null);
             const [service, setService] = useState(null);
@@ -534,6 +565,7 @@
             );
         };
 
+        // --- CASHIER COMPONENT (Processes Payments) ---
         const CashierView = ({ tickets, activeId, setActiveId, payment, setPayment, processPayment, deleteTicket, startEdit, updateSnacks, addDebt, employees, exRate, toggleAttendance }) => {
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
@@ -645,6 +677,7 @@
             );
         };
 
+        // --- HISTORY COMPONENT (Read-Only List) ---
         const HistoryView = ({ history, deductions }) => (
             <div className="p-4 h-full overflow-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
@@ -716,6 +749,7 @@
             </div>
         );
 
+        // --- ADMIN COMPONENT (Payroll & Settings) ---
         const AdminPanel = ({ employees, setEmployees, history, deductions, db, exRate, setExRate, addEmployee }) => {
             const [tab, setTab] = useState('NOMINA');
             const [startDate, setStartDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
@@ -901,7 +935,10 @@
             );
         };
 
-        // --- MAIN APP ---
+        // ------------------------------------------------------------------
+        // SECTION 8: MAIN APP CONTAINER
+        // Handles routing via state (Greeter/Cashier/Admin) and global data fetching
+        // ------------------------------------------------------------------
         function App() {
             const [role, setRole] = useState(() => localStorage.getItem('lavamex_role') || null);
             const login = (r) => { setRole(r); localStorage.setItem('lavamex_role', r); if (r) setView(r === 'ADMIN' ? 'ADMIN' : (r === 'CASHIER' ? 'CASHIER' : 'GREETER')); };
