@@ -152,21 +152,33 @@
         };
 
         const PrintService = {
-            printHtml: (content, landscape = false) => {
+            // 1. Open window immediately (synchronously) to bypass iOS block
+            open: () => {
                 const win = window.open('', '', 'height=600,width=800');
-                if (!win) return alert("Popups blocked.");
+                if (win) {
+                    win.document.write('<html><body style="font-family:sans-serif; text-align:center; padding-top:50px;"><h3>Generando Ticket...</h3></body></html>');
+                } else {
+                    alert("Popups blocked. Please allow popups for this site.");
+                }
+                return win;
+            },
+            // 2. Write content to existing window
+            print: (win, content, landscape = false) => {
+                if (!win) return;
                 const orientation = landscape ? '@page { size: landscape; }' : '';
+                win.document.open();
                 win.document.write(`<html><head><title>Print</title><style>${orientation} body{font-family:'Courier New', sans-serif;font-size:12px;margin:0;padding:5px;}</style></head><body>${content}</body></html>`);
                 win.document.close();
                 win.focus();
                 setTimeout(() => { win.print(); win.close(); }, 500);
             },
-            jobTicket: (ticket, shortId) => {
+            // 3. Generators return HTML string only
+            getJobTicketHtml: (ticket, shortId) => {
                 const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
                 const extrasHtml = ticket.extras && ticket.extras.length > 0
                     ? `<div style="text-align:center;font-size:12px; margin-top:5px; font-weight:bold;">+ ${ticket.extras.map(e => e.label).join('<br>+ ')}</div>`
                     : '';
-                PrintService.printHtml(`
+                return `
                     <div style="width:58mm; text-align:center; font-weight:bold;">LAVAMEX - ORDEN</div>
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>TICKET:</span><b>#${shortId}</b></div>
@@ -176,13 +188,13 @@
                     ${ticket.vehicleDesc ? `<div style="text-align:center; width:58mm;">(${ticket.vehicleDesc})</div>` : ''}
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="text-align:center; width:58mm;">.. TABLERO ..</div>
-                `);
+                `;
             },
-            receipt: (ticket, payment, shortId) => {
+            getReceiptHtml: (ticket, payment, shortId) => {
                 const extrasHtml = ticket.extras && ticket.extras.length > 0
                     ? `<div style="font-size:10px;">${ticket.extras.map(e => `<div style="display:flex;justify-content:space-between;"><span>+ ${e.label}</span><span>${formatCurrency(e.price)}</span></div>`).join('')}</div>`
                     : '';
-                PrintService.printHtml(`
+                return `
                     <div style="width:58mm; text-align:center; font-weight:bold;">LAVAMEX</div>
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>Ticket:</span><span>#${shortId}</span></div>
@@ -196,7 +208,7 @@
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>Recibido:</span><span>${formatCurrency(payment.mxn + (payment.usd * payment.rate))}</span></div>
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>Cambio:</span><span>${formatCurrency(payment.change)}</span></div>
                     <div style="text-align:center; margin-top:10px; width:58mm;">¡Gracias!</div>
-                `);
+                `;
             }
         };
 
@@ -247,21 +259,6 @@
             },
             runPrintTests: () => {
                 const results = [];
-                const originalOpen = window.open;
-                let capturedHtml = '';
-
-                // Mock window.open to intercept HTML content
-                window.open = () => {
-                    return {
-                        document: {
-                            write: (html) => { capturedHtml = html; },
-                            close: () => { },
-                        },
-                        focus: () => { },
-                        print: () => { },
-                        close: () => { }
-                    };
-                };
 
                 const assertHtml = (name, html, snippets) => {
                     const missing = snippets.filter(s => !html.includes(s));
@@ -282,8 +279,8 @@
                         vehicleDesc: 'Blue Ford',
                         timestamp: new Date()
                     };
-                    PrintService.jobTicket(mockTicket, 'TEST-ID');
-                    assertHtml('Job Ticket Content', capturedHtml, ['LAVAMEX - ORDEN', 'TEST-ID', 'Blue Ford', 'Aroma']);
+                    const ticketHtml = PrintService.getJobTicketHtml(mockTicket, 'TEST-ID');
+                    assertHtml('Job Ticket HTML', ticketHtml, ['LAVAMEX - ORDEN', 'TEST-ID', 'Blue Ford', 'Aroma']);
 
                     // Test 2: Receipt Generation
                     const mockPayment = { mxn: 500, usd: 0, rate: 18, change: 50 };
@@ -292,13 +289,11 @@
                         price: 450,
                         snackCount: 2
                     };
-                    PrintService.receipt(mockReceiptTicket, mockPayment, 'REC-999');
-                    assertHtml('Receipt Content', capturedHtml, ['Recibido:', '$500.00', 'Cambio:', '$50.00', 'Snacks (2)']);
+                    const receiptHtml = PrintService.getReceiptHtml(mockReceiptTicket, mockPayment, 'REC-999');
+                    assertHtml('Receipt HTML', receiptHtml, ['Recibido:', '$500.00', 'Cambio:', '$50.00', 'Snacks (2)']);
 
                 } catch (e) {
-                    results.push({ name: 'Print Generation Crash', passed: false, details: e.message });
-                } finally {
-                    window.open = originalOpen; // Restore original window.open
+                    results.push({ name: 'Print Logic Crash', passed: false, details: e.message });
                 }
 
                 return results;
@@ -751,7 +746,6 @@
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions);
 
             const printNomina = () => {
-                // ... same printNomina styles ...
                 const styles = `
                     <style>
                         body { font-family: sans-serif; padding: 20px; }
@@ -782,10 +776,16 @@
                     html += `</tbody></table><div class="net-pay">TOTAL A PAGAR: ${formatCurrency(p.netPay)}</div><div class="signature">Firma de Recibido</div></div>`;
                 });
                 html += `</body></html>`;
-                PrintService.printHtml(html);
+
+                // Use new PrintService Logic
+                const win = PrintService.open();
+                PrintService.print(win, html);
             };
 
             const generateAttendanceReport = async () => {
+                // Pre-open window to satisfy iOS
+                const win = PrintService.open();
+
                 const q = query(collection(db, "attendance"), where("month", "==", reportMonth));
                 const snapshot = await getDocs(q);
                 const attendanceData = {};
@@ -812,7 +812,9 @@
                         <tbody>${tableRows}</tbody>
                     </table>
                 `;
-                PrintService.printHtml(html, true);
+
+                // Write to the pre-opened window
+                PrintService.print(win, html, true);
             };
 
             const closeWeek = async () => {
@@ -952,12 +954,20 @@
                 const snacks = editingTicket ? (editingTicket.snackCount || 0) : 0;
                 const totals = calculateTicketTotals(data.service.id, data.size.id, data.extras, snacks);
                 const ticketData = { ...data, price: totals.totalPrice, commission: totals.totalCommission, snackCount: snacks, status: 'PENDING', timestamp: serverTimestamp() };
+
                 if (editingTicket) {
                     await updateDoc(doc(db, "tickets", editingTicket.id), ticketData);
                     setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER');
                 } else {
+                    // FIX: Open window immediately to satisfy iOS popup blocker
+                    const win = PrintService.open();
+
                     const ref = await addDoc(collection(db, "tickets"), ticketData);
-                    PrintService.jobTicket({ ...ticketData, timestamp: new Date() }, ref.id.slice(-4).toUpperCase());
+
+                    if (win) {
+                        const html = PrintService.getJobTicketHtml({ ...ticketData, timestamp: new Date() }, ref.id.slice(-4).toUpperCase());
+                        PrintService.print(win, html);
+                    }
                 }
             };
 
@@ -996,9 +1006,18 @@
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
                 const total = (parseFloat(payment.mxn) || 0) + ((parseFloat(payment.usd) || 0) * exRate);
                 if (total < t.price) return alert("Falta dinero");
+
+                // FIX: Open window immediately to satisfy iOS popup blocker
+                const win = PrintService.open();
+
                 const details = { mxn: parseFloat(payment.mxn) || 0, usd: parseFloat(payment.usd) || 0, rate: exRate, change: total - t.price };
                 await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
-                PrintService.receipt(t, details, t.id.slice(-4).toUpperCase());
+
+                if (win) {
+                    const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase());
+                    PrintService.print(win, html);
+                }
+
                 setActiveId(null); setPayment({ mxn: '', usd: '' });
             };
 
