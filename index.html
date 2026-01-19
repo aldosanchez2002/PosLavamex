@@ -356,7 +356,7 @@
                     if (snap.empty) {
                         DEFAULTS.EXTRAS.forEach(e => addDoc(collection(db, "extras"), e));
                     } else {
-                        setExtrasList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        setExtrasList(snap.docs.map(d => ({ ...d.data(), docId: d.id })));
                     }
                 });
                 return () => { unsubP(); unsubC(); unsubE(); };
@@ -736,7 +736,7 @@
 
                     editExtras.forEach(e => {
                         // Use update for existing docs, assuming 'e.id' is valid
-                        batch.update(doc(db, "extras", e.id), {
+                        batch.update(doc(db, "extras", e.docId), {
                             price: parseFloat(e.price) || 0,
                             commission: parseFloat(e.commission) || 0
                         });
@@ -894,57 +894,3 @@
                 </div>
             );
         };
-
-        // ------------------------------------------------------------------
-        // SECTION 9: MAIN LAYOUT (Uses Context)
-        // ------------------------------------------------------------------
-
-        const LavamexPOS = () => {
-            const { role, view, setView, logout } = useContext(AppContext);
-
-            if (view === 'TESTS') return <TestDashboard />;
-            if (!role) return <LoginScreen />;
-
-            return (
-                <div className="h-screen flex flex-col bg-gray-100 font-sans">
-                    <header className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md shrink-0 z-50">
-                        <div className="flex items-center gap-2 font-bold text-lg md:text-xl truncate">
-                            <Car className="text-blue-400 shrink-0" /> <span>LAVAMEX</span>
-                            <span className="hidden sm:inline text-xs bg-gray-800 px-2 py-1 rounded font-normal text-gray-300 ml-2">{role}</span>
-                        </div>
-                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                            <button onClick={() => setView('GREETER')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'GREETER' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><CheckCircle size={18} /> <span className="hidden sm:inline">Entrada</span></button>
-                            {(role === 'CASHIER' || role === 'ADMIN') && (
-                                <>
-                                    <button onClick={() => setView('CASHIER')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'CASHIER' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><Calculator size={18} /> <span className="hidden sm:inline">Caja</span></button>
-                                    <button onClick={() => setView('HISTORY')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'HISTORY' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><History size={18} /> <span className="hidden sm:inline">Historial</span></button>
-                                </>
-                            )}
-                            {role === 'ADMIN' && (
-                                <button onClick={() => setView('ADMIN')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'ADMIN' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><Settings size={18} /> <span className="hidden sm:inline">Admin</span></button>
-                            )}
-                            <button onClick={logout} className="bg-red-900/80 px-3 rounded ml-2 hover:bg-red-700 shrink-0"><LogOut size={18} /></button>
-                        </div>
-                    </header>
-                    <main className="flex-1 overflow-hidden relative">
-                        {view === 'GREETER' && <GreeterView />}
-                        {view === 'CASHIER' && <CashierView />}
-                        {view === 'HISTORY' && <HistoryView />}
-                        {view === 'ADMIN' && <AdminPanel />}
-                    </main>
-                </div>
-            );
-        };
-
-        const App = () => (
-            <AppProvider>
-                <LavamexPOS />
-            </AppProvider>
-        );
-
-        const root = createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-
-</html>
