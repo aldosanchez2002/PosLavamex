@@ -373,8 +373,18 @@
 
         .strip-item:last-child {
             border-right: none;
-            justify-content: flex-start;
+            justify-content: space-between; /* Spreads text to left and price to right */
             padding-left: 30px;
+            padding-right: 30px;
+            width: 100%; /* Ensures it takes available space */
+        }
+
+        /* Style for the list of items to replace commas with spacing */
+        .zone-list {
+            display: flex;
+            gap: 50px; /* Simulates tab spacing */
+            font-size: 1.6rem; /* Larger font size as requested */
+            font-weight: 700; /* Bold for visibility */
         }
 
         .strip-title {
@@ -481,7 +491,7 @@
                         <div class="col-header">
                             <!-- Pick-up -->
                             <div class="header-icon-img icon-pickup" role="img" aria-label="Pick-up"></div>
-                            <span class="header-text">PICK-UP/SUV MD</span>
+                            <span class="header-text">PICK-UP/SUV</span>
                         </div>
                     </th>
                     <th class="col-suv-gde">
@@ -564,11 +574,16 @@
 
             <div class="blue-info-strip">
                 <div class="strip-item strip-title">
-                    LIMPIEZA POR ZONA
+                    LIMPIEZA POR ZONA $200 c/u
                 </div>
                 <div class="strip-item" style="flex-grow: 1;">
-                    <span>Cinturones, Cajuela, Cielo, Plásticos, Silla de Bebe: </span><span
-                        class="strip-price" style="margin-left: 5px;"> $200 c/u</span>
+                    <div class="zone-list">
+                        <span>Cinturones</span>
+                        <span>Cajuela</span>
+                        <span>Cielo</span>
+                        <span>Plásticos</span>
+                        <span>Silla de bebe</span>
+                    </div>
                 </div>
             </div>
         </div>
