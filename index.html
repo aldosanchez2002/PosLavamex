@@ -40,7 +40,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Archive, Pencil, PlusCircle, Coffee, History, ArrowLeft, Save } from 'lucide-react';
+        import { User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2, LogOut, Users, Calculator, Printer, Wifi, WifiOff, Lock, Archive, Pencil, PlusCircle, Coffee, History, ArrowLeft, Save, Baby } from 'lucide-react';
         import { initializeApp, getApps, getApp } from 'firebase/app';
         import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
 
@@ -65,6 +65,7 @@
             { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
             { id: 'BOLEADA', label: 'Boleada', price: 50, commission: 17.50 },
             { id: 'TAPICERIA', label: 'Limpieza Tapicería', price: 600, commission: 210 },
+            { id: 'BABY_SEAT', label: 'Asiento de Bebé', price: 200, commission: 70 }, // Added: 35% commission
         ];
         const SNACK_PRICE = 25;
         const PRICES = {
@@ -780,6 +781,60 @@
                 </div>
             );
         }
+
+        // --- TESTS ---
+        const runTests = () => {
+            console.group('🧪 Running Logic Tests');
+            let passed = 0;
+            let failed = 0;
+
+            const assert = (desc, actual, expected) => {
+                if (JSON.stringify(actual) === JSON.stringify(expected)) {
+                    console.log(`✅ ${desc}`);
+                    passed++;
+                } else {
+                    console.error(`❌ ${desc} \nExpected: ${JSON.stringify(expected)}\nActual: ${JSON.stringify(actual)}`);
+                    failed++;
+                }
+            };
+
+            // Mock Data
+            const mockEmployees = [{ name: 'Aldo' }, { name: 'Juan' }];
+            
+            // Scenario: 
+            // Ticket 1: Commission 100 split between Aldo/Juan (50 each)
+            // Ticket 2: Commission 80 for Aldo only (80)
+            // Deduction: Aldo owes 25
+            // Expected Aldo: 50 + 80 - 25 = 105
+            // Expected Juan: 50
+            const mockHistory = [
+                { washers: ['Aldo', 'Juan'], commission: 100, service: { label: 'Test' }, size: { label: 'Test' }, timestamp: new Date() },
+                { washers: ['Aldo'], commission: 80, service: { label: 'Test' }, size: { label: 'Test' }, timestamp: new Date() }
+            ];
+            const mockDeductions = [
+                { employee: 'Aldo', amount: 25, description: 'Snack', timestamp: new Date() }
+            ];
+
+            try {
+                const result = calculatePayroll(mockEmployees, mockHistory, mockDeductions);
+
+                // Assertions
+                assert('Aldo Net Pay Calculation', result['Aldo'].netPay, 105);
+                assert('Juan Net Pay Calculation', result['Juan'].netPay, 50);
+                assert('Aldo Deduction Total', result['Aldo'].deductionTotal, 25);
+                assert('Juan Deduction Total', result['Juan'].deductionTotal, 0);
+                
+            } catch (e) {
+                console.error('❌ Test Crashed', e);
+                failed++;
+            }
+
+            console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed.`);
+            console.groupEnd();
+        };
+
+        window.runTests = runTests; // Expose to console
+        runTests(); // Run on startup
 
         const root = createRoot(document.getElementById('root'));
         root.render(<App />);
