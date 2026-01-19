@@ -13,12 +13,24 @@
     <style>
         :root {
             --color-orange: #E86C24;
-            /* Adjusted to match bright orange in flyers */
+            /* Branding Orange */
             --color-navy: #0F2D4A;
             /* Deep Navy */
             --color-blue: #3A6894;
-            /* Medium Blue */
+            /* Branding Blue */
             --color-white: #ffffff;
+
+            /* Specific Column Colors (RGB) */
+            --col-autos: rgb(72, 108, 144);
+            --col-suv-chica: rgb(61, 89, 125);
+            --col-pickup: rgb(204, 103, 42);
+            --col-suv-gde: rgb(163, 99, 50);
+
+            /* Icon Image Links - Add your URLs inside the parentheses */
+            --url-icon-auto: url('/icons/auto.png');
+            --url-icon-suv-chica: url('/icons/suv-chica.png');
+            --url-icon-pickup: url('/icons/pickup.png');
+            --url-icon-suv-gde: url('/icons/suv-gde.png');
         }
 
         * {
@@ -151,19 +163,52 @@
             width: 100%;
         }
 
-        .col-blue {
-            background-color: var(--color-blue);
+        .col-autos {
+            background-color: var(--col-autos);
             width: 18%;
         }
 
-        .col-orange {
-            background-color: var(--color-orange);
+        .col-suv-chica {
+            background-color: var(--col-suv-chica);
             width: 18%;
         }
 
-        .header-icon {
-            font-size: 2.2rem;
+        .col-pickup {
+            background-color: var(--col-pickup);
+            width: 18%;
+        }
+
+        .col-suv-gde {
+            background-color: var(--col-suv-gde);
+            width: 18%;
+        }
+
+        /* Updated Icon Styling for Imported Images */
+        .header-icon-img {
+            width: 70px;
+            height: 40px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
             margin-bottom: 5px;
+            display: block;
+        }
+
+        /* Classes to apply the variables */
+        .icon-auto {
+            background-image: var(--url-icon-auto);
+        }
+
+        .icon-suv-chica {
+            background-image: var(--url-icon-suv-chica);
+        }
+
+        .icon-pickup {
+            background-image: var(--url-icon-pickup);
+        }
+
+        .icon-suv-gde {
+            background-image: var(--url-icon-suv-gde);
         }
 
         .header-text {
@@ -216,15 +261,23 @@
             letter-spacing: -0.5px;
         }
 
-        .pricing-table tbody td:nth-child(2),
-        .pricing-table tbody td:nth-child(3) {
-            background-color: var(--color-blue);
+        .pricing-table tbody td:nth-child(2) {
+            background-color: var(--col-autos);
             border-right: 2px solid rgba(255, 255, 255, 0.4);
         }
 
-        .pricing-table tbody td:nth-child(4),
+        .pricing-table tbody td:nth-child(3) {
+            background-color: var(--col-suv-chica);
+            border-right: 2px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .pricing-table tbody td:nth-child(4) {
+            background-color: var(--col-pickup);
+            border-right: 2px solid rgba(255, 255, 255, 0.4);
+        }
+
         .pricing-table tbody td:nth-child(5) {
-            background-color: var(--color-orange);
+            background-color: var(--col-suv-gde);
             border-right: 2px solid rgba(255, 255, 255, 0.4);
         }
 
@@ -400,27 +453,31 @@
                         <span class="title-underline"></span>
                     </th>
                     <!-- Headers -->
-                    <th class="col-blue">
+                    <th class="col-autos">
                         <div class="col-header">
-                            <i class="fa-solid fa-car-side header-icon"></i>
+                            <!-- Autos (Sedan) -->
+                            <div class="header-icon-img icon-auto" role="img" aria-label="Auto"></div>
                             <span class="header-text">AUTOS</span>
                         </div>
                     </th>
-                    <th class="col-blue">
+                    <th class="col-suv-chica">
                         <div class="col-header">
-                            <i class="fa-solid fa-car header-icon"></i>
+                            <!-- SUV Chica (Crossover/Hatchback) -->
+                            <div class="header-icon-img icon-suv-chica" role="img" aria-label="SUV Chica"></div>
                             <span class="header-text">SUV CHICA</span>
                         </div>
                     </th>
-                    <th class="col-orange">
+                    <th class="col-pickup">
                         <div class="col-header">
-                            <i class="fa-solid fa-truck-pickup header-icon"></i>
+                            <!-- Pick-up -->
+                            <div class="header-icon-img icon-pickup" role="img" aria-label="Pick-up"></div>
                             <span class="header-text">PICK-UP/SUV</span>
                         </div>
                     </th>
-                    <th class="col-orange">
+                    <th class="col-suv-gde">
                         <div class="col-header">
-                            <i class="fa-solid fa-van-shuttle header-icon"></i>
+                            <!-- SUV Grande (Large SUV) -->
+                            <div class="header-icon-img icon-suv-gde" role="img" aria-label="SUV Grande"></div>
                             <span class="header-text">SUV GDE.</span>
                         </div>
                     </th>
@@ -485,28 +542,24 @@
         <div class="services-section">
             <h2 class="services-header">SERVICIOS</h2>
 
-            <div class="services-row-1">
-                <div class="service-pill" style="flex: 1.2;">LAVADO DE MOTOR: $400</div>
-                <div class="service-pill" style="flex: 1.2;">LAVADO DE CHASIS: $400</div>
-                <div class="service-pill" style="flex: 1;">LIMPIEZA DE FOCOS: $340</div>
+            <div class="services-grid">
+                <div class="service-pill">LAVADO DE MOTOR: $400</div>
+                <div class="service-pill">LAVADO DE CHASIS: $400</div>
+                <div class="service-pill">LIMPIEZA DE FOCOS: $340</div>
+                <div class="service-pill">BOLEADA: $60</div>
+                <div class="service-pill">BRILLO EXTRA: $40</div>
+                <div class="service-pill">ASPIRADO CAJUELA: $40</div>
+                <div class="service-pill">AROMA: $20</div>
             </div>
 
-            <div class="services-row-2">
-                <div class="service-pill" style="flex: 0.8;">BOLEADA: $60</div>
-                <div class="service-pill" style="flex: 0.9;">BRILLO EXTRA: $40</div>
-                <div class="service-pill" style="flex: 1.2;">ASPIRADO CAJUELA: $40</div>
-                <div class="service-pill" style="flex: 0.6;">AROMA: $20</div>
-            </div>
-        </div>
-
-        <!-- Blue Strip Info -->
-        <div class="blue-info-strip">
-            <div class="strip-item strip-title">
-                LIMPIEZA POR ZONA
-            </div>
-            <div class="strip-item" style="flex-grow: 1;">
-                <span style="font-weight: 500;">Cinturones, Cajuela, Cielo, Plásticos, Silla de Bebe: </span><span
-                    class="strip-price" style="margin-left: 5px;"> $200 c/u</span>
+            <div class="blue-info-strip">
+                <div class="strip-item strip-title">
+                    LIMPIEZA POR ZONA
+                </div>
+                <div class="strip-item" style="flex-grow: 1;">
+                    <span>Cinturones, Cajuela, Cielo, Plásticos, Silla de Bebe: </span><span
+                        class="strip-price" style="margin-left: 5px;"> $200 c/u</span>
+                </div>
             </div>
         </div>
 
