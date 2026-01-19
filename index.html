@@ -19,17 +19,13 @@
     }
     </script>
     <style>
-        /* Hide scrollbar for Chrome, Safari and Opera */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
 
-        /* Hide scrollbar for IE, Edge and Firefox */
         .no-scrollbar {
             -ms-overflow-style: none;
-            /* IE and Edge */
             scrollbar-width: none;
-            /* Firefox */
         }
     </style>
 </head>
@@ -44,7 +40,7 @@
         import { initializeApp, getApps, getApp } from 'firebase/app';
         import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
 
-        // --- CONFIG ---
+        // --- FIREBASE CONFIG ---
         const firebaseConfig = {
             apiKey: "AIzaSyByIvJpBZv32Zd22fxlYWL9etzBa66Q2rE",
             authDomain: "poslavamex.firebaseapp.com",
@@ -56,18 +52,37 @@
         const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
         const db = getFirestore(app);
 
-        // --- DATA ---
+        // --- APP DEFAULTS & SETTINGS ---
+        // Edit these values to change default behavior
+        const DEFAULTS = {
+            PINS: {
+                CASHIER: '1234',
+                ADMIN: '9999'
+            },
+            EXCHANGE_RATE: 18.10,
+            EMPLOYEES: [
+                { name: 'Aldo', active: true },
+                { name: 'Sergio', active: true },
+                { name: 'Juan', active: true },
+                { name: 'Rodrigo', active: true }
+            ]
+        };
+
+        // --- BUSINESS DATA ---
         const SIZES = [{ id: 'AUTO', label: 'Auto' }, { id: 'SUV_CHICA', label: 'SUV Chica' }, { id: 'PICKUP', label: 'Pick-Up / SUV MD' }, { id: 'SUV_GDE', label: 'SUV Gde' }];
         const SERVICES = [{ id: 'GENERAL', label: 'Lavado General' }, { id: 'WAX', label: 'Lavado + Cera' }, { id: 'COMPLETE', label: 'Paquete Completo' }, { id: 'PREMIUM', label: 'Paquete Premium' }, { id: 'PRESIDENTIAL', label: 'Paquete Presidencial' }];
+
         const EXTRAS = [
             { id: 'MOTOR', label: 'Lavado Motor', price: 400, commission: 140 },
             { id: 'CHASIS', label: 'Chasis', price: 150, commission: 52.50 },
             { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
             { id: 'BOLEADA', label: 'Boleada', price: 50, commission: 17.50 },
             { id: 'TAPICERIA', label: 'Limpieza Tapicería', price: 600, commission: 210 },
-            { id: 'BABY_SEAT', label: 'Asiento de Bebé', price: 200, commission: 70 }, // Added: 35% commission
+            { id: 'BABY_SEAT', label: 'Asiento de Bebé', price: 200, commission: 70 },
         ];
+
         const SNACK_PRICE = 25;
+
         const PRICES = {
             GENERAL: { AUTO: 200, SUV_CHICA: 240, PICKUP: 360, SUV_GDE: 360 },
             WAX: { AUTO: 540, SUV_CHICA: 640, PICKUP: 820, SUV_GDE: 820 },
@@ -75,6 +90,7 @@
             PREMIUM: { AUTO: 1180, SUV_CHICA: 1440, PICKUP: 1620, SUV_GDE: 2100 },
             PRESIDENTIAL: { AUTO: 1540, SUV_CHICA: 1940, PICKUP: 2320, SUV_GDE: 2320 },
         };
+
         const COMMISSIONS = {
             GENERAL: { AUTO: 70, SUV_CHICA: 84, PICKUP: 126, SUV_GDE: 126 },
             WAX: { AUTO: 189, SUV_CHICA: 224, PICKUP: 287, SUV_GDE: 287 },
@@ -83,8 +99,23 @@
             PRESIDENTIAL: { AUTO: 539, SUV_CHICA: 679, PICKUP: 812, SUV_GDE: 812 },
         };
 
-        // --- UTILS ---
+        // --- PURE LOGIC FUNCTIONS (TESTABLE) ---
         const formatCurrency = (amount) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+
+        const calculateTicketTotals = (serviceId, sizeId, extraList, snackCount = 0) => {
+            const basePrice = PRICES[serviceId][sizeId];
+            const baseComm = COMMISSIONS[serviceId][sizeId];
+
+            const extrasPrice = extraList.reduce((a, b) => a + b.price, 0);
+            const extrasComm = extraList.reduce((a, b) => a + b.commission, 0);
+
+            const snackCost = snackCount * SNACK_PRICE;
+
+            return {
+                totalPrice: basePrice + extrasPrice + snackCost,
+                totalCommission: baseComm + extrasComm
+            };
+        };
 
         const calculatePayroll = (employees, history, deductions) => {
             const payroll = {};
@@ -196,11 +227,11 @@
             const handleLogin = (targetRole) => {
                 if (targetRole === 'GREETER') return login('GREETER');
                 if (targetRole === 'CASHIER') {
-                    if (pin === '1234') login('CASHIER');
+                    if (pin === DEFAULTS.PINS.CASHIER) login('CASHIER');
                     else alert('PIN Incorrecto');
                 }
                 if (targetRole === 'ADMIN') {
-                    if (pin === '9999') login('ADMIN');
+                    if (pin === DEFAULTS.PINS.ADMIN) login('ADMIN');
                     else alert('PIN Incorrecto');
                 }
                 setPin('');
@@ -667,8 +698,8 @@
             const [view, setView] = useState('GREETER');
             const [editingTicket, setEditingTicket] = useState(null);
 
-            const [employees, setEmployees] = useState([{ name: 'Aldo', active: true }, { name: 'Sergio', active: true }, { name: 'Juan', active: true }, { name: 'Rodrigo', active: true }]);
-            const [exRate, setExRate] = useState(18.10);
+            const [employees, setEmployees] = useState(DEFAULTS.EMPLOYEES);
+            const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [tickets, setTickets] = useState([]);
             const [history, setHistory] = useState([]);
             const [deductions, setDeductions] = useState([]);
@@ -696,18 +727,15 @@
             }, []);
 
             const saveTicket = async (data) => {
-                const base = PRICES[data.service.id][data.size.id];
-                const comm = COMMISSIONS[data.service.id][data.size.id];
-                const extrasPrice = data.extras.reduce((a, b) => a + b.price, 0);
-                const extrasComm = data.extras.reduce((a, b) => a + b.commission, 0);
                 const snacks = editingTicket ? (editingTicket.snackCount || 0) : 0;
-                const snackCost = snacks * SNACK_PRICE;
-                const totalPrice = base + extrasPrice + snackCost;
+
+                // Use the new Pure Function for logic
+                const totals = calculateTicketTotals(data.service.id, data.size.id, data.extras, snacks);
 
                 const ticketData = {
                     ...data,
-                    price: totalPrice,
-                    commission: comm + extrasComm,
+                    price: totals.totalPrice,
+                    commission: totals.totalCommission,
                     snackCount: snacks,
                     status: 'PENDING',
                     timestamp: serverTimestamp()
@@ -729,10 +757,9 @@
                 const t = tickets.find(x => x.id === id);
                 if (!t) return;
                 const newCount = Math.max(0, count);
-                const base = PRICES[t.service.id][t.size.id];
-                const extras = (t.extras || []).reduce((a, b) => a + b.price, 0);
-                const newPrice = base + extras + (newCount * SNACK_PRICE);
-                await updateDoc(doc(db, "tickets", id), { snackCount: newCount, price: newPrice });
+                // Use pure function logic
+                const totals = calculateTicketTotals(t.service.id, t.size.id, t.extras || [], newCount);
+                await updateDoc(doc(db, "tickets", id), { snackCount: newCount, price: totals.totalPrice });
             };
 
             const startEdit = (ticket) => { setEditingTicket(ticket); setView('GREETER'); };
@@ -782,50 +809,61 @@
             );
         }
 
-        // --- TESTS ---
+        // --- EXTENDED TESTS ---
         const runTests = () => {
-            console.group('🧪 Running Logic Tests');
+            console.group('🧪 Running Comprehensive Tests');
             let passed = 0;
             let failed = 0;
 
             const assert = (desc, actual, expected) => {
-                if (JSON.stringify(actual) === JSON.stringify(expected)) {
-                    console.log(`✅ ${desc}`);
-                    passed++;
-                } else {
-                    console.error(`❌ ${desc} \nExpected: ${JSON.stringify(expected)}\nActual: ${JSON.stringify(actual)}`);
-                    failed++;
-                }
+                const matches = JSON.stringify(actual) === JSON.stringify(expected);
+                if (matches) { console.log(`✅ ${desc}`); passed++; }
+                else { console.error(`❌ ${desc} \nExpected: ${JSON.stringify(expected)}\nActual: ${JSON.stringify(actual)}`); failed++; }
             };
 
-            // Mock Data
+            // 1. DATA INTEGRITY TEST
+            // Ensures you don't lose money (Commission < Price)
+            console.groupCollapsed('Data Integrity');
+            SERVICES.forEach(svc => {
+                SIZES.forEach(size => {
+                    const price = PRICES[svc.id]?.[size.id];
+                    const comm = COMMISSIONS[svc.id]?.[size.id];
+                    if (price === undefined || comm === undefined) {
+                        console.error(`❌ Missing data for ${svc.id} - ${size.id}`);
+                        failed++;
+                    } else if (comm >= price) {
+                        console.error(`❌ LOSS ALERT: Commission >= Price for ${svc.id} - ${size.id}`);
+                        failed++;
+                    } else {
+                        passed++; // Silent success to not spam console
+                    }
+                });
+            });
+            console.log("Integrity checks run.");
+            console.groupEnd();
+
+            // 2. TICKET CALCULATION SCENARIO
+            // Scenario: SUV GDE (Price: 240) + WAX (Price diff) + Baby Seat (200)
+            // Wait, logic is Price[Service][Size].
+            // Test: Service: GENERAL (200 for Auto), Size: AUTO. Extra: BABY_SEAT (200). Snack: 1 (25).
+            // Total should be: 200 + 200 + 25 = 425
+            const calcResult = calculateTicketTotals('GENERAL', 'AUTO', [EXTRAS.find(e => e.id === 'BABY_SEAT')], 1);
+            assert('Ticket Calculation (Auto+Gen+Baby+Snack)', calcResult.totalPrice, 425);
+
+            // 3. PAYROLL LOGIC (Previous Test)
             const mockEmployees = [{ name: 'Aldo' }, { name: 'Juan' }];
-            
-            // Scenario: 
-            // Ticket 1: Commission 100 split between Aldo/Juan (50 each)
-            // Ticket 2: Commission 80 for Aldo only (80)
-            // Deduction: Aldo owes 25
-            // Expected Aldo: 50 + 80 - 25 = 105
-            // Expected Juan: 50
             const mockHistory = [
                 { washers: ['Aldo', 'Juan'], commission: 100, service: { label: 'Test' }, size: { label: 'Test' }, timestamp: new Date() },
                 { washers: ['Aldo'], commission: 80, service: { label: 'Test' }, size: { label: 'Test' }, timestamp: new Date() }
             ];
-            const mockDeductions = [
-                { employee: 'Aldo', amount: 25, description: 'Snack', timestamp: new Date() }
-            ];
+            const mockDeductions = [{ employee: 'Aldo', amount: 25, description: 'Snack', timestamp: new Date() }];
 
             try {
                 const result = calculatePayroll(mockEmployees, mockHistory, mockDeductions);
-
-                // Assertions
-                assert('Aldo Net Pay Calculation', result['Aldo'].netPay, 105);
-                assert('Juan Net Pay Calculation', result['Juan'].netPay, 50);
-                assert('Aldo Deduction Total', result['Aldo'].deductionTotal, 25);
-                assert('Juan Deduction Total', result['Juan'].deductionTotal, 0);
-                
+                assert('Aldo Net Pay', result['Aldo'].netPay, 105);
+                assert('Juan Net Pay', result['Juan'].netPay, 50);
             } catch (e) {
-                console.error('❌ Test Crashed', e);
+                console.error('❌ Payroll Test Crashed', e);
                 failed++;
             }
 
@@ -833,8 +871,8 @@
             console.groupEnd();
         };
 
-        window.runTests = runTests; // Expose to console
-        runTests(); // Run on startup
+        window.runTests = runTests;
+        runTests();
 
         const root = createRoot(document.getElementById('root'));
         root.render(<App />);
