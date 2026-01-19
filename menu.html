@@ -357,23 +357,24 @@
             display: flex;
             align-items: center;
             padding: 0;
-            height: 50px;
+            height: 60px; /* Increased height */
         }
 
         .strip-item {
-            padding: 0 15px;
+            padding: 0 25px; /* Increased horizontal padding */
             border-right: 2px solid white;
-            font-size: 1.1rem;
+            font-size: 1.25rem; /* Increased font size */
             height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
+            white-space: nowrap; /* Prevent wrapping */
         }
 
         .strip-item:last-child {
             border-right: none;
             justify-content: flex-start;
-            padding-left: 20px;
+            padding-left: 30px;
         }
 
         .strip-title {
@@ -480,7 +481,7 @@
                         <div class="col-header">
                             <!-- Pick-up -->
                             <div class="header-icon-img icon-pickup" role="img" aria-label="Pick-up"></div>
-                            <span class="header-text">PICK-UP/SUV</span>
+                            <span class="header-text">PICK-UP/SUV MD</span>
                         </div>
                     </th>
                     <th class="col-suv-gde">
