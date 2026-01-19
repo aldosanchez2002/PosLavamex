@@ -124,15 +124,12 @@
 
         /* Header Row Styles */
         .pricing-table thead th {
-            color: white;
+            color: var(--color-navy); /* Changed from white to Navy */
             font-weight: 900;
-            height: 135px;
-            /* Reduced height to remove empty space above icons */
+            height: 135px; /* Reduced height to remove empty space above icons */
             position: relative;
-            vertical-align: bottom;
-            /* Align cell content to bottom */
-            padding-bottom: 0;
-            /* Remove default padding to let flexbox handle it */
+            vertical-align: bottom; /* Align cell content to bottom */
+            padding-bottom: 0; /* Remove default padding to let flexbox handle it */
         }
 
         /* Column 1 Header: Title */
@@ -163,74 +160,59 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-end;
-            /* Align content to the bottom */
+            justify-content: flex-end; /* Align content to the bottom */
             height: 100%;
             width: 100%;
-            padding-bottom: 8px;
-            /* Small padding from the bottom edge */
+            padding-bottom: 8px; /* Small padding from the bottom edge */
         }
 
         .col-autos {
-            background-color: var(--col-autos);
             width: 18%;
         }
 
         .col-suv-chica {
-            background-color: var(--col-suv-chica);
             width: 18%;
         }
 
         .col-pickup {
-            background-color: var(--col-pickup);
             width: 18%;
         }
 
         .col-suv-gde {
-            background-color: var(--col-suv-gde);
             width: 18%;
         }
 
         /* Updated Icon Styling for Imported Images */
         .header-icon-img {
-            width: 150px;
-            /* Base width for standard icons (SUV GDE) */
-            height: 90px;
-            /* Base height for standard icons (SUV GDE) */
+            width: 150px; /* Base width for standard icons (SUV GDE) */
+            height: 90px; /* Base height for standard icons (SUV GDE) */
             background-size: contain;
             background-repeat: no-repeat;
             background-position: bottom center;
             margin-bottom: 2px;
             display: block;
-            /* Simplified filter to guarantee pure white */
-            filter: brightness(0) invert(1);
+            /* Force icons to be black for contrast against white background */
+            filter: grayscale(100%) brightness(0);
         }
 
         /* Classes to apply the variables */
         .icon-auto {
             background-image: var(--url-icon-auto);
-            width: 173px;
-            /* Scaled up ~15% from 150px */
-            height: 104px;
-            /* Scaled up ~15% from 90px */
+            width: 173px; /* Scaled up ~15% from 150px */
+            height: 104px; /* Scaled up ~15% from 90px */
         }
 
         .icon-suv-chica {
             background-image: var(--url-icon-suv-chica);
-            width: 173px;
-            /* Scaled up ~15% */
-            height: 104px;
-            /* Scaled up ~15% */
+            width: 173px; /* Scaled up ~15% */
+            height: 104px; /* Scaled up ~15% */
         }
 
         .icon-pickup {
             background-image: var(--url-icon-pickup);
-            width: 173px;
-            /* Scaled up ~15% */
-            height: 104px;
-            /* Scaled up ~15% */
-            transform: scaleX(-1);
-            /* Flips the icon horizontally */
+            width: 173px; /* Scaled up ~15% */
+            height: 104px; /* Scaled up ~15% */
+            transform: scaleX(-1); /* Flips the icon horizontally */
         }
 
         .icon-suv-gde {
@@ -584,8 +566,8 @@
                     LIMPIEZA POR ZONA
                 </div>
                 <div class="strip-item" style="flex-grow: 1;">
-                    <span>Cinturones, Cajuela, Cielo, Plásticos, Silla de Bebe: </span><span class="strip-price"
-                        style="margin-left: 5px;"> $200 c/u</span>
+                    <span>Cinturones, Cajuela, Cielo, Plásticos, Silla de Bebe: </span><span
+                        class="strip-price" style="margin-left: 5px;"> $200 c/u</span>
                 </div>
             </div>
         </div>
