@@ -373,7 +373,7 @@
 
         .strip-item:last-child {
             border-right: none;
-            justify-content: space-between; /* Spreads text to left and price to right */
+            justify-content: center; /* Center the container */
             padding-left: 30px;
             padding-right: 30px;
             width: 100%; /* Ensures it takes available space */
@@ -382,8 +382,9 @@
         /* Style for the list of items to replace commas with spacing */
         .zone-list {
             display: flex;
-            gap: 50px; /* Simulates tab spacing */
-            font-size: 1.6rem; /* Larger font size as requested */
+            justify-content: space-between; /* Dynamic spacing instead of fixed gap */
+            width: 100%; /* fill the container */
+            font-size: 1.45rem; /* Slightly adjusted to ensure fit */
             font-weight: 700; /* Bold for visibility */
         }
 
@@ -491,7 +492,7 @@
                         <div class="col-header">
                             <!-- Pick-up -->
                             <div class="header-icon-img icon-pickup" role="img" aria-label="Pick-up"></div>
-                            <span class="header-text">PICK-UP/SUV</span>
+                            <span class="header-text">PICK-UP/SUV MD</span>
                         </div>
                     </th>
                     <th class="col-suv-gde">
