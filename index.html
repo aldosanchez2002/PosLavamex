@@ -771,7 +771,7 @@
                             <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 3. Lavadores ({washers.length}/2)</h3>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
                                 {employees.filter(e => e.active).map(e => (
-                                    <button key={e.name} onClick={() => toggle(e)}
+                                    <button key={e.name} onClick={() => toggle(e.name)}
                                         className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>
                                         {e.name}
                                     </button>
@@ -1098,13 +1098,13 @@
                             <h3 className="font-bold mb-4 text-gray-800">General</h3>
                             <div className="mb-6 flex gap-2 items-end">
                                 <div className="flex-1">
-                                    <label className="block text-sm font-bold text-gray-600 mb-2">Dólar (Rate)</label>
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar</label>
                                     <input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" />
                                 </div>
                                 <button onClick={() => { updateGlobalExRate(parseFloat(localExRate)); alert("Tasa actualizada"); }} className="bg-blue-600 text-white p-3 rounded-lg font-bold h-fit mb-px">Guardar</button>
                             </div>
 
-                            <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados (Solo Admin)</h3>
+                            <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
                             <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} placeholder="Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><button onClick={handleAddEmployee} className="bg-blue-600 text-white px-5 rounded-lg font-bold"><PlusCircle className="w-5 h-5" /></button></div>
                             <div className="space-y-2">{employees.map((e, i) => (<div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span className="font-medium">{e.name}</span><span className={`text-xs font-bold px-2 py-1 rounded ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.active ? 'Presente' : 'Ausente'}</span></div>))}</div>
                         </div>
