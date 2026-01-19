@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Precios Lavamex</title>
+    <!-- Importing Roboto to match the clean sans-serif look -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --color-orange: #E86C24;
+            /* Adjusted to match bright orange in flyers */
+            --color-navy: #0F2D4A;
+            /* Deep Navy */
+            --color-blue: #3A6894;
+            /* Medium Blue */
+            --color-white: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #333;
+            /* Dark background to pop the paper */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Main Container - Fixed size to resemble the printed menu */
+        .menu-container {
+            background-color: white;
+            width: 100%;
+            max-width: 1200px;
+            /* Aspect ratio approx landscape */
+            padding: 20px 40px;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* --- Header Section --- */
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            padding-top: 10px;
+        }
+
+        .logo-text {
+            color: var(--color-orange);
+            font-size: 4rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            line-height: 1;
+            text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.1);
+        }
+
+        .droplets {
+            color: var(--color-blue);
+            font-size: 2rem;
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+        }
+
+        .droplet-small {
+            font-size: 0.6em;
+            margin-bottom: 5px;
+        }
+
+        .droplet-med {
+            font-size: 0.8em;
+            margin-bottom: 2px;
+        }
+
+        /* --- Main Pricing Table --- */
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 1;
+            table-layout: fixed;
+            /* Ensures even columns */
+        }
+
+        .pricing-table th,
+        .pricing-table td {
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        /* Header Row Styles */
+        .pricing-table thead th {
+            color: white;
+            font-weight: 900;
+            height: 85px;
+            position: relative;
+        }
+
+        /* Column 1 Header: Title */
+        .pricing-table thead th:first-child {
+            background-color: white;
+            color: var(--color-navy);
+            text-align: left;
+            font-size: 1.8rem;
+            text-transform: uppercase;
+            padding-left: 0;
+            width: 28%;
+            vertical-align: bottom;
+            padding-bottom: 10px;
+            line-height: 0.9;
+        }
+
+        /* The thin underline for the title */
+        .title-underline {
+            display: block;
+            width: 100%;
+            height: 4px;
+            background-color: var(--color-navy);
+            margin-top: 5px;
+        }
+
+        /* Column Headers Styling */
+        .col-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            width: 100%;
+        }
+
+        .col-blue {
+            background-color: var(--color-blue);
+            width: 18%;
+        }
+
+        .col-orange {
+            background-color: var(--color-orange);
+            width: 18%;
+        }
+
+        .header-icon {
+            font-size: 2.2rem;
+            margin-bottom: 5px;
+        }
+
+        .header-text {
+            font-size: 1rem;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        /* Data Rows Styling */
+
+        /* Row Height Control */
+        .pricing-table tbody tr {
+            height: 60px;
+        }
+
+        /* First Column: Descriptions */
+        .pricing-table tbody td:first-child {
+            background-color: var(--color-navy);
+            color: white;
+            text-align: left;
+            padding: 8px 15px;
+            border-right: 3px solid white;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .service-title {
+            display: block;
+            font-weight: 800;
+            font-size: 1.3rem;
+            text-transform: uppercase;
+            line-height: 1.1;
+        }
+
+        .service-desc {
+            display: block;
+            font-weight: 400;
+            font-size: 0.85rem;
+            color: #ddd;
+            margin-top: 2px;
+        }
+
+        /* Price Columns */
+        .pricing-table tbody td:not(:first-child) {
+            color: white;
+            font-weight: 900;
+            font-size: 1.8rem;
+            border-bottom: 2px solid white;
+            /* Thick white divider */
+            font-family: 'Roboto', sans-serif;
+            letter-spacing: -0.5px;
+        }
+
+        .pricing-table tbody td:nth-child(2),
+        .pricing-table tbody td:nth-child(3) {
+            background-color: var(--color-blue);
+            border-right: 2px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .pricing-table tbody td:nth-child(4),
+        .pricing-table tbody td:nth-child(5) {
+            background-color: var(--color-orange);
+            border-right: 2px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .pricing-table tbody td:last-child {
+            border-right: none;
+        }
+
+        /* Remove bottom border for last row */
+        .pricing-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* --- Services Section --- */
+        .services-section {
+            margin-bottom: 15px;
+            margin-top: 10px;
+        }
+
+        .services-header {
+            color: var(--color-navy);
+            font-weight: 900;
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            padding-left: 5px;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            /* 4 columns for top row, adjust for bottom */
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .services-row-1 {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .services-row-2 {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+        }
+
+        .service-pill {
+            border: 2px solid var(--color-navy);
+            color: var(--color-navy);
+            background: white;
+            padding: 8px 0;
+            border-radius: 50px;
+            font-weight: 800;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            text-align: center;
+            flex: 1;
+            white-space: nowrap;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Blue Strip Bar */
+        .blue-info-strip {
+            background-color: var(--color-blue);
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0;
+            height: 50px;
+        }
+
+        .strip-item {
+            padding: 0 15px;
+            border-right: 2px solid white;
+            font-size: 1.1rem;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .strip-item:last-child {
+            border-right: none;
+            justify-content: flex-start;
+            padding-left: 20px;
+        }
+
+        .strip-title {
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 1.2rem;
+            background-color: var(--color-blue);
+            white-space: nowrap;
+        }
+
+        .strip-price {
+            font-weight: 900;
+            margin-left: 5px;
+        }
+
+        /* --- Footer Section --- */
+        .footer-strip {
+            background-color: var(--color-orange);
+            color: white;
+            padding: 10px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-transform: uppercase;
+            font-weight: 800;
+            font-size: 1.4rem;
+            margin-bottom: 5px;
+            height: 55px;
+        }
+
+        .footer-left {
+            text-align: left;
+        }
+
+        .footer-right {
+            display: flex;
+            gap: 40px;
+        }
+
+        .disclaimer {
+            text-align: left;
+            font-size: 0.75rem;
+            color: #000;
+            font-weight: 500;
+            margin-top: 5px;
+            padding-left: 5px;
+        }
+
+        /* Utilities */
+        .text-small {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .text-navy {
+            color: var(--color-navy);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="menu-container">
+        <!-- Header -->
+        <header>
+            <div class="droplets">
+                <i class="fa-solid fa-droplet droplet-small" style="transform: rotate(15deg);"></i>
+                <i class="fa-solid fa-droplet droplet-med" style="transform: rotate(0deg);"></i>
+                <i class="fa-solid fa-droplet" style="transform: rotate(-15deg);"></i>
+            </div>
+            <div class="logo-text">LAVAMEX</div>
+            <div class="droplets">
+                <i class="fa-solid fa-droplet" style="transform: rotate(15deg);"></i>
+                <i class="fa-solid fa-droplet droplet-med" style="transform: rotate(0deg);"></i>
+                <i class="fa-solid fa-droplet droplet-small" style="transform: rotate(-15deg);"></i>
+            </div>
+        </header>
+
+        <!-- Main Pricing Table -->
+        <table class="pricing-table">
+            <thead>
+                <tr>
+                    <!-- Title Column -->
+                    <th>
+                        PAQUETES DE LAVADO
+                        <span class="title-underline"></span>
+                    </th>
+                    <!-- Headers -->
+                    <th class="col-blue">
+                        <div class="col-header">
+                            <i class="fa-solid fa-car-side header-icon"></i>
+                            <span class="header-text">AUTOS</span>
+                        </div>
+                    </th>
+                    <th class="col-blue">
+                        <div class="col-header">
+                            <i class="fa-solid fa-car header-icon"></i>
+                            <span class="header-text">SUV CHICA</span>
+                        </div>
+                    </th>
+                    <th class="col-orange">
+                        <div class="col-header">
+                            <i class="fa-solid fa-truck-pickup header-icon"></i>
+                            <span class="header-text">PICK-UP/SUV</span>
+                        </div>
+                    </th>
+                    <th class="col-orange">
+                        <div class="col-header">
+                            <i class="fa-solid fa-van-shuttle header-icon"></i>
+                            <span class="header-text">SUV GDE.</span>
+                        </div>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <span class="service-title">LAVADO GENERAL</span>
+                        <span class="service-desc">Exterior, Limpieza Interior, Brillo</span>
+                    </td>
+                    <td>$200</td>
+                    <td>$240</td>
+                    <td>$360</td>
+                    <td>$360</td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="service-title">LAVADO + CERA</span>
+                        <span class="service-desc">Lavado General + Cera</span>
+                    </td>
+                    <td>$540</td>
+                    <td>$640</td>
+                    <td>$820</td>
+                    <td>$820</td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="service-title">PAQUETE COMPLETO</span>
+                        <span class="service-desc" style="font-size: 0.75rem;">Lavado General + Interiores
+                            alfombra/asientos</span>
+                    </td>
+                    <td>$840</td>
+                    <td>$1,040</td>
+                    <td>$1,160</td>
+                    <td>$1,640</td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="service-title">PAQUETE PREMIUM</span>
+                        <span class="service-desc">Gral. + Interiores + Cera</span>
+                    </td>
+                    <td>$1,180</td>
+                    <td>$1,440</td>
+                    <td>$1,620</td>
+                    <td>$2,100</td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="service-title">PAQUETE PRESIDENCIAL</span>
+                        <span class="service-desc">Gral. + Cera + Polish</span>
+                    </td>
+                    <td>$1,540</td>
+                    <td>$1,940</td>
+                    <td>$2,320</td>
+                    <td>$2,320</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Services Section -->
+        <div class="services-section">
+            <h2 class="services-header">SERVICIOS</h2>
+
+            <div class="services-row-1">
+                <div class="service-pill" style="flex: 1.2;">LAVADO DE MOTOR: $400</div>
+                <div class="service-pill" style="flex: 1.2;">LAVADO DE CHASIS: $400</div>
+                <div class="service-pill" style="flex: 1;">LIMPIEZA DE FOCOS: $340</div>
+            </div>
+
+            <div class="services-row-2">
+                <div class="service-pill" style="flex: 0.8;">BOLEADA: $60</div>
+                <div class="service-pill" style="flex: 0.9;">BRILLO EXTRA: $40</div>
+                <div class="service-pill" style="flex: 1.2;">ASPIRADO CAJUELA: $40</div>
+                <div class="service-pill" style="flex: 0.6;">AROMA: $20</div>
+            </div>
+        </div>
+
+        <!-- Blue Strip Info -->
+        <div class="blue-info-strip">
+            <div class="strip-item strip-title">
+                LIMPIEZA POR ZONA
+            </div>
+            <div class="strip-item" style="flex-grow: 1;">
+                <span style="font-weight: 500;">Cinturones, Cajuela, Cielo, Plásticos, Silla de Bebe: </span><span
+                    class="strip-price" style="margin-left: 5px;"> $200 c/u</span>
+            </div>
+        </div>
+
+        <!-- Footer Section -->
+        <div class="footer-strip" style="margin-top: 15px;">
+            <div class="footer-left">VEHÍCULOS RECREATIVOS</div>
+            <div class="footer-right">
+                <span>RAZER CHICO: $640</span>
+                <span>RAZER GRANDE: $800</span>
+            </div>
+        </div>
+
+        <div class="disclaimer">
+            * Precios no incluyen IVA. Los precios pueden variar según el vehiculo.
+        </div>
+    </div>
+
+</body>
+
+</html>
