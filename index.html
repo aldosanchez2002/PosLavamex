@@ -245,6 +245,64 @@
 
                 return results;
             },
+            runPrintTests: () => {
+                const results = [];
+                const originalOpen = window.open;
+                let capturedHtml = '';
+
+                // Mock window.open to intercept HTML content
+                window.open = () => {
+                    return {
+                        document: {
+                            write: (html) => { capturedHtml = html; },
+                            close: () => { },
+                        },
+                        focus: () => { },
+                        print: () => { },
+                        close: () => { }
+                    };
+                };
+
+                const assertHtml = (name, html, snippets) => {
+                    const missing = snippets.filter(s => !html.includes(s));
+                    if (missing.length === 0) {
+                        results.push({ name, passed: true, details: 'Content verified successfully' });
+                    } else {
+                        results.push({ name, passed: false, details: `Missing content: ${missing.join(', ')}` });
+                    }
+                };
+
+                try {
+                    // Test 1: Job Ticket Generation
+                    const mockTicket = {
+                        service: { id: 'GENERAL', label: 'Lavado General' },
+                        size: { id: 'AUTO', label: 'Auto' },
+                        washers: ['TestWasher'],
+                        extras: [{ label: 'Aroma', price: 30 }],
+                        vehicleDesc: 'Blue Ford',
+                        timestamp: new Date()
+                    };
+                    PrintService.jobTicket(mockTicket, 'TEST-ID');
+                    assertHtml('Job Ticket Content', capturedHtml, ['LAVAMEX - ORDEN', 'TEST-ID', 'Blue Ford', 'Aroma']);
+
+                    // Test 2: Receipt Generation
+                    const mockPayment = { mxn: 500, usd: 0, rate: 18, change: 50 };
+                    const mockReceiptTicket = {
+                        ...mockTicket,
+                        price: 450,
+                        snackCount: 2
+                    };
+                    PrintService.receipt(mockReceiptTicket, mockPayment, 'REC-999');
+                    assertHtml('Receipt Content', capturedHtml, ['Recibido:', '$500.00', 'Cambio:', '$50.00', 'Snacks (2)']);
+
+                } catch (e) {
+                    results.push({ name: 'Print Generation Crash', passed: false, details: e.message });
+                } finally {
+                    window.open = originalOpen; // Restore original window.open
+                }
+
+                return results;
+            },
             runDbTest: async () => {
                 try {
                     const ref = await addDoc(collection(db, "_diagnostics"), { t: serverTimestamp() });
@@ -260,11 +318,16 @@
 
         const TestDashboard = ({ goBack }) => {
             const [logicResults, setLogicResults] = useState(null);
+            const [printResults, setPrintResults] = useState(null);
             const [dbResult, setDbResult] = useState(null);
             const [loading, setLoading] = useState(false);
 
             const runLogic = () => {
                 setLogicResults(TestRunner.runLogicTests());
+            };
+
+            const runPrint = () => {
+                setPrintResults(TestRunner.runPrintTests());
             };
 
             const runDb = async () => {
@@ -276,21 +339,26 @@
 
             return (
                 <div className="min-h-screen bg-gray-50 p-6">
-                    <div className="max-w-3xl mx-auto">
+                    <div className="max-w-4xl mx-auto">
                         <div className="flex items-center gap-4 mb-8">
                             <button onClick={goBack} className="bg-white p-2 rounded-full shadow hover:bg-gray-100"><ArrowLeft /></button>
                             <h1 className="text-3xl font-bold text-gray-800 flex items-center"><Activity className="mr-3 text-blue-600" /> System Status & Tests</h1>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                                 <h3 className="font-bold text-lg mb-4 flex items-center"><Calculator className="mr-2 text-purple-500" /> Business Logic</h3>
-                                <p className="text-gray-500 text-sm mb-4">Verifies pricing, commissions, payroll math, and critical user journeys.</p>
+                                <p className="text-gray-500 text-xs mb-4">Verifies pricing, commissions, payroll math, and critical user journeys.</p>
                                 <button onClick={runLogic} className="w-full py-3 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 flex justify-center items-center gap-2"><PlayCircle size={18} /> Run Logic Suite</button>
                             </div>
                             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                                <h3 className="font-bold text-lg mb-4 flex items-center"><Database className="mr-2 text-orange-500" /> Database Connection</h3>
-                                <p className="text-gray-500 text-sm mb-4">Attempts to write, read, and delete a diagnostic document in Firestore.</p>
+                                <h3 className="font-bold text-lg mb-4 flex items-center"><Printer className="mr-2 text-teal-500" /> Print System</h3>
+                                <p className="text-gray-500 text-xs mb-4">Verifies generation of PDF HTML for tickets and receipts.</p>
+                                <button onClick={runPrint} className="w-full py-3 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 flex justify-center items-center gap-2"><FileText size={18} /> Run Print Tests</button>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                                <h3 className="font-bold text-lg mb-4 flex items-center"><Database className="mr-2 text-orange-500" /> Database</h3>
+                                <p className="text-gray-500 text-xs mb-4">Attempts to write, read, and delete a diagnostic document.</p>
                                 <button onClick={runDb} disabled={loading} className="w-full py-3 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 flex justify-center items-center gap-2">
                                     {loading ? 'Running...' : <><Wifi size={18} /> Test Connection</>}
                                 </button>
@@ -306,6 +374,25 @@
                                         Database Connectivity
                                     </h4>
                                     <p className="ml-8 mt-1 text-sm opacity-90">{dbResult.details}</p>
+                                </div>
+                            )}
+
+                            {printResults && (
+                                <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden">
+                                    <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">Print System Results</div>
+                                    <div className="divide-y">
+                                        {printResults.map((res, i) => (
+                                            <div key={i} className="p-4 flex items-start gap-3 hover:bg-gray-50">
+                                                <div className={`mt-1 ${res.passed ? 'text-green-500' : 'text-red-500'}`}>
+                                                    {res.passed ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-gray-800">{res.name}</div>
+                                                    <div className={`text-sm mt-1 ${res.passed ? 'text-gray-500' : 'text-red-600 font-bold'}`}>{res.details}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 
