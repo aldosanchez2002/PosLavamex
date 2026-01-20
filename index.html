@@ -494,12 +494,32 @@
                     else setDoc(doc(db, "settings", "commissions"), DEFAULTS.COMMISSIONS);
                 });
 
-                // Extras List
+                // Extras List - Strict Mode
                 const unsubE = onSnapshot(collection(db, "extras"), (snap) => {
+                    // 1. Capture all DB items
+                    const dbItems = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+
+                    // 2. Map Clean Defaults to DB items (merging)
+                    // This ensures we ONLY show items defined in DEFAULTS.EXTRAS
+                    // and effectively de-duplicates if the DB has errors.
+                    const cleanList = DEFAULTS.EXTRAS.map(def => {
+                        // Find matching item in DB (handle duplicates by taking the first one found)
+                        const match = dbItems.find(item => item.id === def.id);
+
+                        if (match) {
+                            // Use DB values (price/comm), preserve docId for updates
+                            return { ...def, ...match };
+                        } else {
+                            // Use Default values if not in DB yet
+                            return def;
+                        }
+                    });
+
+                    setExtrasList(cleanList);
+
+                    // Seed if absolutely nothing exists
                     if (snap.empty) {
                         DEFAULTS.EXTRAS.forEach(e => addDoc(collection(db, "extras"), e));
-                    } else {
-                        setExtrasList(snap.docs.map(d => ({ ...d.data(), docId: d.id })));
                     }
                 });
 
@@ -1501,19 +1521,9 @@
                 setEditExtras(arr);
             };
 
-            const addExtraRow = () => {
-                setEditExtras([...editExtras, { id: '', label: 'Nuevo Extra', price: 0, commission: 0 }]);
-            };
-
-            const removeExtraRow = (index) => {
-                const item = editExtras[index];
-                if (item.docId) {
-                    setDeletedExtras([...deletedExtras, item.docId]);
-                }
-                const arr = [...editExtras];
-                arr.splice(index, 1);
-                setEditExtras(arr);
-            };
+            // Buttons for adding/removing extras are removed to enforce strict list
+            // const addExtraRow = () => { ... };
+            // const removeExtraRow = (index) => { ... };
 
             return (
                 <div className="p-4 md:p-6 h-full overflow-y-auto">
@@ -1746,7 +1756,7 @@
 
                             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-6">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h4 className="font-bold text-gray-700">Extras</h4>
+                                    <h4 className="font-bold text-gray-700">Extras (Lista Fija)</h4>
                                 </div>
                                 <table className="w-full text-sm text-left border-collapse">
                                     <thead>
