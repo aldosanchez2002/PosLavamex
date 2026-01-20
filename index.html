@@ -51,7 +51,7 @@
             User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2,
             LogOut, Users, Calculator, Printer, Wifi, Lock, Archive, Pencil,
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
-            Database, PlayCircle, AlertTriangle, Upload, Loader2
+            Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard
         } from 'lucide-react';
 
         import { initializeApp, getApps, getApp } from 'firebase/app';
@@ -128,7 +128,7 @@
                 { id: 'MOTOR', label: 'Lavado Motor', price: 400, commission: 140 },
                 { id: 'CHASIS', label: 'Chasis', price: 150, commission: 52.50 },
                 { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
-                { id: 'BOLEADA', label: 'Boleada', price: 50, commission: 17.50 },
+                { id: 'BOLEADA', label: 'Boleada', price: 50, commission: 25 }, // Changed to 50% (25)
                 { id: 'TAPICERIA', label: 'Limpieza Tapicería', price: 600, commission: 210 },
                 { id: 'BABY_SEAT', label: 'Asiento de Bebé', price: 200, commission: 70 },
             ]
@@ -163,11 +163,23 @@
         const calculatePayroll = (employees, history, deductions) => {
             const payroll = {};
 
-            // Initialize with current employees
+            // Initialize structure
             employees.forEach(emp => {
+                // Initialize Grid (Service x Size)
+                const serviceGrid = {};
+                SERVICES.forEach(svc => {
+                    serviceGrid[svc.id] = {};
+                    SIZES.forEach(sz => serviceGrid[svc.id][sz.id] = 0);
+                });
+
                 payroll[emp.name] = {
-                    count: 0, total: 0, details: [],
-                    deductionTotal: 0, deductionDetails: [], netPay: 0
+                    count: 0,
+                    total: 0,
+                    serviceGrid,
+                    earningsBreakdown: {}, // Key: "Label", Value: { count, total }
+                    deductionTotal: 0,
+                    deductionDetails: [],
+                    netPay: 0
                 };
             });
 
@@ -176,38 +188,64 @@
                 const washersList = item.washers || (item.washer ? [item.washer] : []);
                 if (washersList.length === 0) return;
 
-                const splitCommission = item.commission / washersList.length;
+                const washerCount = washersList.length;
+                
+                // 1. Calculate Extras Commission Share
+                let extrasCommissionTotal = 0;
+                const extrasShares = (item.extras || []).map(ex => {
+                    const share = (ex.commission || 0) / washerCount;
+                    extrasCommissionTotal += (ex.commission || 0);
+                    return { label: ex.label, share };
+                });
+
+                // 2. Calculate Base Service Commission Share
+                // We use the stored total commission minus extras to derive the base portion
+                // This protects against legacy data or price changes
+                const totalStoredCommission = item.commission || 0;
+                const baseCommissionTotal = totalStoredCommission - extrasCommissionTotal;
+                const baseShare = baseCommissionTotal / washerCount;
 
                 washersList.forEach(washerName => {
-                    if (!payroll[washerName]) {
-                        payroll[washerName] = {
-                            count: 0, total: 0, details: [],
-                            deductionTotal: 0, deductionDetails: [], netPay: 0
-                        };
+                    if (!payroll[washerName]) return; // Skip if employee deleted
+
+                    const p = payroll[washerName];
+                    p.count += 1;
+                    p.total += (totalStoredCommission / washerCount);
+
+                    // A. Update Matrix Grid (Counts only)
+                    if (item.service && item.size) {
+                         p.serviceGrid[item.service.id][item.size.id] = (p.serviceGrid[item.service.id][item.size.id] || 0) + 1;
+                         
+                         // B. Update Breakdown for Base Service
+                         const baseKey = `${item.service.label} (${item.size.label})`;
+                         if (!p.earningsBreakdown[baseKey]) p.earningsBreakdown[baseKey] = { count: 0, total: 0 };
+                         p.earningsBreakdown[baseKey].count += 1;
+                         p.earningsBreakdown[baseKey].total += baseShare;
+                    } else if (item.service) {
+                         // Fallback for weird data (shouldn't happen often)
+                         const key = item.service.label;
+                         if (!p.earningsBreakdown[key]) p.earningsBreakdown[key] = { count: 0, total: 0 };
+                         p.earningsBreakdown[key].count += 1;
+                         p.earningsBreakdown[key].total += baseShare;
                     }
-                    payroll[washerName].count += 1;
-                    payroll[washerName].total += splitCommission;
-                    payroll[washerName].details.push({
-                        date: item.timestamp,
-                        service: `${item.service?.label || 'Extras'} (${item.size?.label || '-'})`,
-                        desc: item.vehicleDesc || 'Sin descripción',
-                        amount: splitCommission
+
+                    // C. Update Breakdown for Extras
+                    extrasShares.forEach(ex => {
+                        if (!p.earningsBreakdown[ex.label]) p.earningsBreakdown[ex.label] = { count: 0, total: 0 };
+                        p.earningsBreakdown[ex.label].count += 1;
+                        p.earningsBreakdown[ex.label].total += ex.share;
                     });
                 });
             });
 
             // Process Deductions
             deductions.forEach(d => {
-                if (!payroll[d.employee]) {
-                    payroll[d.employee] = {
-                        count: 0, total: 0, details: [],
-                        deductionTotal: 0, deductionDetails: [], netPay: 0
-                    };
+                if (payroll[d.employee]) {
+                    payroll[d.employee].deductionTotal += d.amount;
+                    payroll[d.employee].deductionDetails.push({
+                        date: d.timestamp, desc: d.description, amount: d.amount
+                    });
                 }
-                payroll[d.employee].deductionTotal += d.amount;
-                payroll[d.employee].deductionDetails.push({
-                    date: d.timestamp, desc: d.description, amount: d.amount
-                });
             });
 
             // Calculate Net Pay
@@ -303,20 +341,25 @@
                     ? `<div style="font-size:10px;">${ticket.extras.map(e => `<div style="display:flex;justify-content:space-between;"><span>+ ${e.label}</span><span>${formatCurrency(e.price)}</span></div>`).join('')}</div>`
                     : '';
                 const displayBasePrice = ticket.basePrice || 0;
+                const method = payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO';
 
                 return `
                     <div style="width:58mm; text-align:center; font-weight:bold;">LAVAMEX</div>
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>Ticket:</span><span>#${shortId}</span></div>
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>Fecha:</span><span>${new Date().toLocaleDateString()}</span></div>
+                    <div style="display:flex; justify-content:space-between; width:58mm;"><span>Metodo:</span><span>${method}</span></div>
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>${ticket.service ? ticket.service.label : 'Servicio General'}</span><span>${formatCurrency(displayBasePrice)}</span></div>
                     <div style="width:58mm;">${extrasHtml}</div>
                     ${ticket.snackCount > 0 ? `<div style="display:flex; justify-content:space-between; width:58mm;"><span>+ Snacks (${ticket.snackCount})</span><span>${formatCurrency(ticket.snackCount * SNACK_PRICE)}</span></div>` : ''}
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="display:flex; justify-content:space-between; width:58mm; font-weight:bold;"><span>TOTAL:</span><span>${formatCurrency(ticket.price)}</span></div>
-                    <div style="display:flex; justify-content:space-between; width:58mm;"><span>Recibido:</span><span>${formatCurrency(payment.mxn + (payment.usd * payment.rate))}</span></div>
-                    <div style="display:flex; justify-content:space-between; width:58mm;"><span>Cambio:</span><span>${formatCurrency(payment.change)}</span></div>
+                    ${payment.method === 'CARD' ? 
+                        `<div style="text-align:center; margin-top:5px; font-style:italic;">Cargo a Tarjeta</div>` : 
+                        `<div style="display:flex; justify-content:space-between; width:58mm;"><span>Recibido:</span><span>${formatCurrency(payment.mxn + (payment.usd * payment.rate))}</span></div>
+                         <div style="display:flex; justify-content:space-between; width:58mm;"><span>Cambio:</span><span>${formatCurrency(payment.change)}</span></div>`
+                    }
                     <div style="text-align:center; margin-top:10px; width:58mm;">¡Gracias!</div>
                 `;
             }
@@ -565,7 +608,38 @@
                         mxn: parseFloat(payment.mxn) || 0,
                         usd: parseFloat(payment.usd) || 0,
                         rate: exRate,
-                        change: total - t.price
+                        change: total - t.price,
+                        method: 'CASH'
+                    };
+                    await updateDoc(doc(db, "tickets", t.id), {
+                        status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details
+                    });
+
+                    if (win) {
+                        const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase());
+                        PrintService.print(win, html);
+                    }
+                    setActiveId(null); setPayment({ mxn: '', usd: '' });
+                } catch (e) {
+                    alert("Error processing payment: " + e.message);
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+            
+            const processCardPayment = async () => {
+                if (isSubmitting) return;
+                const t = tickets.find(x => x.id === activeId); if (!t) return;
+                
+                setIsSubmitting(true);
+                try {
+                    const win = PrintService.open();
+                    const details = {
+                        mxn: t.price,
+                        usd: 0,
+                        rate: exRate,
+                        change: 0,
+                        method: 'CARD'
                     };
                     await updateDoc(doc(db, "tickets", t.id), {
                         status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details
@@ -592,7 +666,7 @@
                 editingTicket, startEdit, cancelEdit,
                 activeId, setActiveId,
                 payment, setPayment,
-                saveTicket, updateSnacks, toggleAttendance, addEmployee, deleteTicket, addDebt, processPayment,
+                saveTicket, updateSnacks, toggleAttendance, addEmployee, deleteTicket, addDebt, processPayment, processCardPayment,
                 db, isSubmitting
             };
 
@@ -791,7 +865,7 @@
         };
 
         const CashierView = () => {
-            const { tickets, activeId, setActiveId, payment, setPayment, processPayment, deleteTicket, startEdit, updateSnacks, addDebt, employees, exRate, toggleAttendance, isSubmitting } = useContext(AppContext);
+            const { tickets, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDebt, employees, exRate, toggleAttendance, isSubmitting, role } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showAttendance, setShowAttendance] = useState(false);
@@ -848,6 +922,7 @@
                                     <button onClick={() => deleteTicket(t.id)} className="p-4 border border-red-200 text-red-500 rounded-xl hover:bg-red-50" title="Borrar"><Trash2 className="w-6 h-6" /></button>
                                     <button onClick={() => startEdit(t)} className="p-4 border border-yellow-200 text-yellow-600 rounded-xl bg-yellow-50 hover:bg-yellow-100" title="Editar"><Pencil className="w-6 h-6" /></button>
                                     <button onClick={processPayment} disabled={isSubmitting} className="flex-1 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg flex justify-center items-center gap-2">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</button>
+                                    {role === 'CASHIER' && <button onClick={processCardPayment} disabled={isSubmitting} className="p-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg" title="Cobro Tarjeta">{isSubmitting ? <Loader2 className="animate-spin" /> : <CreditCard className="w-6 h-6" />}</button>}
                                 </div>
                             </div>
                         ) : <div className="text-gray-400 flex flex-col items-center"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
@@ -977,15 +1052,91 @@
 
             const printNomina = () => {
                 const win = PrintService.open();
-                // (Simplified for brevity, same logic as before but cleaner html generation would be better)
-                let html = `<html><head><title>Nomina</title><style>body{font-family:sans-serif;padding:20px} table{width:100%;border-collapse:collapse;margin-bottom:15px} th,td{border:1px solid #ccc;padding:5px}</style></head><body>`;
+                
+                let html = `<html><head><title>Nomina</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; color: #333; }
+                    h2, h3 { margin-bottom: 5px; margin-top: 20px; }
+                    
+                    /* Grid Table Styling */
+                    .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 11px; }
+                    .grid-table th, .grid-table td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+                    .grid-table th { background: #f3f4f6; }
+                    .grid-table .svc-label { text-align: left; font-weight: bold; }
+                    
+                    /* Multiplier List Styling */
+                    .multiplier-list { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px; }
+                    .multiplier-list td { padding: 2px 0; border-bottom: 1px dotted #eee; }
+                    .total-row { font-weight: bold; font-size: 14px; border-top: 1px solid #000; margin-top: 10px; padding-top: 5px; }
+                    .deductions { color: #cc0000; }
+                    
+                    .page-break { page-break-after: always; }
+                    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px; }
+                </style>
+                </head><body>`;
+
                 Object.keys(payroll).forEach(name => {
                     const p = payroll[name];
                     if (p.count === 0 && p.deductionTotal === 0) return;
-                    html += `<h3>${name}</h3><table><tr><th>Servicio</th><th>Pago</th></tr>`;
-                    p.details.forEach(d => html += `<tr><td>${d.service}</td><td>${formatCurrency(d.amount)}</td></tr>`);
-                    if (p.deductionTotal > 0) html += `<tr><td>Varios</td><td>-${formatCurrency(p.deductionTotal)}</td></tr>`;
-                    html += `<tr><td><b>TOTAL</b></td><td><b>${formatCurrency(p.netPay)}</b></td></tr></table><hr/>`;
+
+                    // Header
+                    html += `
+                        <div class="header">
+                            <div>
+                                <h2 style="margin:0">${name}</h2>
+                                <small>${startDate} a ${endDate}</small>
+                            </div>
+                            <div style="text-align:right">
+                                <h2 style="margin:0">${formatCurrency(p.netPay)}</h2>
+                                <small>TOTAL A PAGAR</small>
+                            </div>
+                        </div>
+                    `;
+
+                    // 1. Grid (Counts)
+                    html += `<h4>Cantidad de Servicios</h4>`;
+                    html += `<table class="grid-table">
+                        <thead>
+                            <tr>
+                                <th>Servicio</th>
+                                ${SIZES.map(s => `<th>${s.label}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>`;
+                    
+                    SERVICES.forEach(svc => {
+                        const rowCounts = SIZES.map(sz => p.serviceGrid[svc.id][sz.id] || 0);
+                        // Only show rows that have data
+                        if (rowCounts.some(c => c > 0)) {
+                            html += `<tr>
+                                <td class="svc-label">${svc.label}</td>
+                                ${rowCounts.map(c => `<td style="${c > 0 ? 'font-weight:bold;' : 'color:#ccc'}">${c || '-'}</td>`).join('')}
+                            </tr>`;
+                        }
+                    });
+                    html += `</tbody></table>`;
+
+                    // 2. Multipliers (Breakdown) - REMOVED
+                    // 3. Deductions (Renamed to Varios)
+                    if (p.deductionTotal > 0) {
+                         html += `<div style="margin-top: 15px; border-top: 1px dotted #ccc; padding-top: 5px; display: flex; justify-content: space-between; font-size: 12px; color: #cc0000;">
+                            <span>Varios</span>
+                            <span>-${formatCurrency(p.deductionTotal)}</span>
+                         </div>`;
+                    }
+                    
+                    // 4. Legal Text & Signature
+                    html += `
+                        <div style="margin-top: 30px; font-size: 10px; text-align: justify;">
+                            Recibí de LAVAMEX la cantidad descrita a mi entera satisfacción por concepto de pago por servicios de lavado realizados. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.
+                        </div>
+                        <div style="margin-top: 40px; text-align: center;">
+                            _______________________________<br>
+                            Firma
+                        </div>
+                    `;
+                    
+                    html += `<hr class="page-break" />`;
                 });
                 html += `</body></html>`;
                 PrintService.print(win, html);
