@@ -189,7 +189,7 @@
                 if (washersList.length === 0) return;
 
                 const washerCount = washersList.length;
-                
+
                 // 1. Calculate Extras Commission Share
                 let extrasCommissionTotal = 0;
                 const extrasShares = (item.extras || []).map(ex => {
@@ -214,19 +214,19 @@
 
                     // A. Update Matrix Grid (Counts only)
                     if (item.service && item.size) {
-                         p.serviceGrid[item.service.id][item.size.id] = (p.serviceGrid[item.service.id][item.size.id] || 0) + 1;
-                         
-                         // B. Update Breakdown for Base Service
-                         const baseKey = `${item.service.label} (${item.size.label})`;
-                         if (!p.earningsBreakdown[baseKey]) p.earningsBreakdown[baseKey] = { count: 0, total: 0 };
-                         p.earningsBreakdown[baseKey].count += 1;
-                         p.earningsBreakdown[baseKey].total += baseShare;
+                        p.serviceGrid[item.service.id][item.size.id] = (p.serviceGrid[item.service.id][item.size.id] || 0) + 1;
+
+                        // B. Update Breakdown for Base Service
+                        const baseKey = `${item.service.label} (${item.size.label})`;
+                        if (!p.earningsBreakdown[baseKey]) p.earningsBreakdown[baseKey] = { count: 0, total: 0 };
+                        p.earningsBreakdown[baseKey].count += 1;
+                        p.earningsBreakdown[baseKey].total += baseShare;
                     } else if (item.service) {
-                         // Fallback for weird data (shouldn't happen often)
-                         const key = item.service.label;
-                         if (!p.earningsBreakdown[key]) p.earningsBreakdown[key] = { count: 0, total: 0 };
-                         p.earningsBreakdown[key].count += 1;
-                         p.earningsBreakdown[key].total += baseShare;
+                        // Fallback for weird data (shouldn't happen often)
+                        const key = item.service.label;
+                        if (!p.earningsBreakdown[key]) p.earningsBreakdown[key] = { count: 0, total: 0 };
+                        p.earningsBreakdown[key].count += 1;
+                        p.earningsBreakdown[key].total += baseShare;
                     }
 
                     // C. Update Breakdown for Extras
@@ -355,8 +355,8 @@
                     ${ticket.snackCount > 0 ? `<div style="display:flex; justify-content:space-between; width:58mm;"><span>+ Snacks (${ticket.snackCount})</span><span>${formatCurrency(ticket.snackCount * SNACK_PRICE)}</span></div>` : ''}
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="display:flex; justify-content:space-between; width:58mm; font-weight:bold;"><span>TOTAL:</span><span>${formatCurrency(ticket.price)}</span></div>
-                    ${payment.method === 'CARD' ? 
-                        `<div style="text-align:center; margin-top:5px; font-style:italic;">Cargo a Tarjeta</div>` : 
+                    ${payment.method === 'CARD' ?
+                        `<div style="text-align:center; margin-top:5px; font-style:italic;">Cargo a Tarjeta</div>` :
                         `<div style="display:flex; justify-content:space-between; width:58mm;"><span>Recibido:</span><span>${formatCurrency(payment.mxn + (payment.usd * payment.rate))}</span></div>
                          <div style="display:flex; justify-content:space-between; width:58mm;"><span>Cambio:</span><span>${formatCurrency(payment.change)}</span></div>`
                     }
@@ -626,11 +626,11 @@
                     setIsSubmitting(false);
                 }
             };
-            
+
             const processCardPayment = async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-                
+
                 setIsSubmitting(true);
                 try {
                     const win = PrintService.open();
@@ -1052,7 +1052,7 @@
 
             const printNomina = () => {
                 const win = PrintService.open();
-                
+
                 let html = `<html><head><title>Nomina</title>
                 <style>
                     body { font-family: sans-serif; padding: 20px; color: #333; }
@@ -1103,7 +1103,7 @@
                             </tr>
                         </thead>
                         <tbody>`;
-                    
+
                     SERVICES.forEach(svc => {
                         const rowCounts = SIZES.map(sz => p.serviceGrid[svc.id][sz.id] || 0);
                         // Only show rows that have data
@@ -1119,12 +1119,12 @@
                     // 2. Multipliers (Breakdown) - REMOVED
                     // 3. Deductions (Renamed to Varios)
                     if (p.deductionTotal > 0) {
-                         html += `<div style="margin-top: 15px; border-top: 1px dotted #ccc; padding-top: 5px; display: flex; justify-content: space-between; font-size: 12px; color: #cc0000;">
+                        html += `<div style="margin-top: 15px; border-top: 1px dotted #ccc; padding-top: 5px; display: flex; justify-content: space-between; font-size: 12px; color: #cc0000;">
                             <span>Varios</span>
                             <span>-${formatCurrency(p.deductionTotal)}</span>
                          </div>`;
                     }
-                    
+
                     // 4. Legal Text & Signature
                     html += `
                         <div style="margin-top: 30px; font-size: 10px; text-align: justify;">
@@ -1135,7 +1135,7 @@
                             Firma
                         </div>
                     `;
-                    
+
                     html += `<hr class="page-break" />`;
                 });
                 html += `</body></html>`;
