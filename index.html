@@ -165,7 +165,7 @@
             };
         };
 
-        const calculatePayroll = (employees, history, deductions) => {
+        const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
             const payroll = {};
 
             // Initialize structure
@@ -195,17 +195,30 @@
 
                 const washerCount = washersList.length;
 
-                // 1. Calculate Extras Commission Share
+                // 1. Calculate Extras Commission Share (Dynamic Lookup)
                 let extrasCommissionTotal = 0;
                 const extrasShares = (item.extras || []).map(ex => {
-                    const share = (ex.commission || 0) / washerCount;
-                    extrasCommissionTotal += (ex.commission || 0);
+                    // Try to find the current commission from DB settings
+                    const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
+                    const commissionValue = dbExtra ? (dbExtra.commission || 0) : (ex.commission || 0);
+
+                    const share = commissionValue / washerCount;
+                    extrasCommissionTotal += commissionValue;
                     return { label: ex.label, share };
                 });
 
-                // 2. Calculate Base Service Commission Share
-                const totalStoredCommission = item.commission || 0;
-                const baseCommissionTotal = totalStoredCommission - extrasCommissionTotal;
+                // 2. Calculate Base Service Commission Share (Dynamic Lookup)
+                let baseCommissionTotal = 0;
+                if (item.service && item.size && currentCommissions && currentCommissions[item.service.id]) {
+                    // Use DB value
+                    baseCommissionTotal = currentCommissions[item.service.id][item.size.id] || 0;
+                } else {
+                    // Fallback to stored if DB lookup fails (e.g. service ID changed or offline)
+                    const totalStoredCommission = item.commission || 0;
+                    const storedExtrasTotal = (item.extras || []).reduce((acc, e) => acc + (e.commission || 0), 0);
+                    baseCommissionTotal = Math.max(0, totalStoredCommission - storedExtrasTotal);
+                }
+
                 const baseShare = baseCommissionTotal / washerCount;
 
                 washersList.forEach(washerName => {
@@ -213,7 +226,9 @@
 
                     const p = payroll[washerName];
                     p.count += 1;
-                    p.total += (totalStoredCommission / washerCount);
+                    // Add shares: Base + Sum of Extras shares
+                    const totalTicketCommissionForWasher = baseShare + (extrasCommissionTotal / washerCount);
+                    p.total += totalTicketCommissionForWasher;
 
                     // A. Update Matrix Grid (Counts only)
                     if (item.service && item.size) {
@@ -1053,7 +1068,7 @@
 
             const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
             const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
-            const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions);
+            const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
 
             const printNomina = () => {
                 const win = PrintService.open();
