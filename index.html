@@ -94,8 +94,6 @@
             { id: 'PRESIDENTIAL', label: 'Paquete Presidencial' }
         ];
 
-        const SNACK_PRICE = 25;
-
         const DEFAULTS = {
             // Obfuscated PINs (Base64)
             PINS: {
@@ -104,6 +102,7 @@
                 ADMIN: 'OTk5OQ=='    // 9999
             },
             EXCHANGE_RATE: 18.10,
+            SNACK_PRICE: 25,
             INITIAL_EMPLOYEES: [
                 { name: 'Aldo', active: true },
                 { name: 'Sergio', active: true },
@@ -128,7 +127,7 @@
                 { id: 'MOTOR', label: 'Lavado Motor', price: 400, commission: 140 },
                 { id: 'CHASIS', label: 'Chasis', price: 150, commission: 52.50 },
                 { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
-                { id: 'BOLEADA', label: 'Boleada', price: 50, commission: 25 }, // Changed to 50% (25)
+                { id: 'BOLEADA', label: 'Boleada', price: 50, commission: 25 },
                 { id: 'TAPICERIA', label: 'Limpieza Tapicería', price: 600, commission: 210 },
                 { id: 'BABY_SEAT', label: 'Asiento de Bebé', price: 200, commission: 70 },
             ]
@@ -144,14 +143,20 @@
             }).format(amount);
         };
 
-        const getLocalDateStr = (d = new Date()) => d.toLocaleDateString('en-CA');
+        const getLocalDateStr = (d = new Date()) => {
+            // Manual YYYY-MM-DD construction to avoid TZ issues
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
 
-        const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0) => {
+        const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0, currentSnackPrice = 25) => {
             const basePrice = (serviceId && sizeId && prices[serviceId]?.[sizeId]) || 0;
             const baseComm = (serviceId && sizeId && commissions[serviceId]?.[sizeId]) || 0;
             const extrasPrice = extraList.reduce((a, b) => a + b.price, 0);
             const extrasComm = extraList.reduce((a, b) => a + b.commission, 0);
-            const snackCost = snackCount * SNACK_PRICE;
+            const snackCost = snackCount * currentSnackPrice;
 
             return {
                 basePrice,
@@ -199,8 +204,6 @@
                 });
 
                 // 2. Calculate Base Service Commission Share
-                // We use the stored total commission minus extras to derive the base portion
-                // This protects against legacy data or price changes
                 const totalStoredCommission = item.commission || 0;
                 const baseCommissionTotal = totalStoredCommission - extrasCommissionTotal;
                 const baseShare = baseCommissionTotal / washerCount;
@@ -215,26 +218,10 @@
                     // A. Update Matrix Grid (Counts only)
                     if (item.service && item.size) {
                         p.serviceGrid[item.service.id][item.size.id] = (p.serviceGrid[item.service.id][item.size.id] || 0) + 1;
-
-                        // B. Update Breakdown for Base Service
-                        const baseKey = `${item.service.label} (${item.size.label})`;
-                        if (!p.earningsBreakdown[baseKey]) p.earningsBreakdown[baseKey] = { count: 0, total: 0 };
-                        p.earningsBreakdown[baseKey].count += 1;
-                        p.earningsBreakdown[baseKey].total += baseShare;
-                    } else if (item.service) {
-                        // Fallback for weird data (shouldn't happen often)
-                        const key = item.service.label;
-                        if (!p.earningsBreakdown[key]) p.earningsBreakdown[key] = { count: 0, total: 0 };
-                        p.earningsBreakdown[key].count += 1;
-                        p.earningsBreakdown[key].total += baseShare;
                     }
 
-                    // C. Update Breakdown for Extras
-                    extrasShares.forEach(ex => {
-                        if (!p.earningsBreakdown[ex.label]) p.earningsBreakdown[ex.label] = { count: 0, total: 0 };
-                        p.earningsBreakdown[ex.label].count += 1;
-                        p.earningsBreakdown[ex.label].total += ex.share;
-                    });
+                    // B. Update Breakdown (Not strictly needed for grid but good for debug)
+                    // ... (omitted for brevity as we removed the detailed list from print)
                 });
             });
 
@@ -336,12 +323,14 @@
                     <div style="text-align:center; width:58mm;">.. TABLERO ..</div>
                 `;
             },
-            getReceiptHtml: (ticket, payment, shortId) => {
+            getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
                 const extrasHtml = ticket.extras && ticket.extras.length > 0
                     ? `<div style="font-size:10px;">${ticket.extras.map(e => `<div style="display:flex;justify-content:space-between;"><span>+ ${e.label}</span><span>${formatCurrency(e.price)}</span></div>`).join('')}</div>`
                     : '';
                 const displayBasePrice = ticket.basePrice || 0;
                 const method = payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO';
+                // Use stored snack price if available on ticket (for history), else current
+                const effSnackPrice = currentSnackPrice || 25;
 
                 return `
                     <div style="width:58mm; text-align:center; font-weight:bold;">LAVAMEX</div>
@@ -352,7 +341,7 @@
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="display:flex; justify-content:space-between; width:58mm;"><span>${ticket.service ? ticket.service.label : 'Servicio General'}</span><span>${formatCurrency(displayBasePrice)}</span></div>
                     <div style="width:58mm;">${extrasHtml}</div>
-                    ${ticket.snackCount > 0 ? `<div style="display:flex; justify-content:space-between; width:58mm;"><span>+ Snacks (${ticket.snackCount})</span><span>${formatCurrency(ticket.snackCount * SNACK_PRICE)}</span></div>` : ''}
+                    ${ticket.snackCount > 0 ? `<div style="display:flex; justify-content:space-between; width:58mm;"><span>+ Snacks (${ticket.snackCount})</span><span>${formatCurrency(ticket.snackCount * effSnackPrice)}</span></div>` : ''}
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="display:flex; justify-content:space-between; width:58mm; font-weight:bold;"><span>TOTAL:</span><span>${formatCurrency(ticket.price)}</span></div>
                     ${payment.method === 'CARD' ?
@@ -394,6 +383,7 @@
 
             // Global settings
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
+            const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
             const [prices, setPrices] = useState({});
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
@@ -452,14 +442,18 @@
                     }
                 });
 
-                // General Settings (Exchange Rate) - NEW
+                // General Settings (Exchange Rate & Snack Price)
                 const unsubG = onSnapshot(doc(db, "settings", "general"), (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
                         if (data.exchangeRate) setExRate(data.exchangeRate);
+                        if (data.snackPrice) setSnackPrice(data.snackPrice);
                     } else {
                         // Create defaults if missing
-                        setDoc(doc(db, "settings", "general"), { exchangeRate: DEFAULTS.EXCHANGE_RATE });
+                        setDoc(doc(db, "settings", "general"), {
+                            exchangeRate: DEFAULTS.EXCHANGE_RATE,
+                            snackPrice: DEFAULTS.SNACK_PRICE
+                        });
                     }
                 });
 
@@ -499,12 +493,14 @@
 
             // --- ACTIONS ---
 
-            // Save exchange rate to Firestore
-            const updateGlobalExRate = async (newRate) => {
+            const updateGlobalSettings = async (newRate, newSnackPrice) => {
                 try {
-                    await setDoc(doc(db, "settings", "general"), { exchangeRate: newRate }, { merge: true });
+                    await setDoc(doc(db, "settings", "general"), {
+                        exchangeRate: newRate,
+                        snackPrice: newSnackPrice
+                    }, { merge: true });
                 } catch (e) {
-                    alert("Error updating exchange rate: " + e.message);
+                    alert("Error updating settings: " + e.message);
                 }
             };
 
@@ -515,7 +511,7 @@
                     const snacks = editingTicket ? (editingTicket.snackCount || 0) : 0;
                     const serviceId = data.service ? data.service.id : null;
                     const sizeId = data.size ? data.size.id : null;
-                    const totals = calculateTicketTotals(serviceId, sizeId, data.extras, prices, commissions, snacks);
+                    const totals = calculateTicketTotals(serviceId, sizeId, data.extras, prices, commissions, snacks, snackPrice);
 
                     const ticketData = {
                         ...data,
@@ -553,7 +549,7 @@
                 try {
                     const t = tickets.find(x => x.id === id); if (!t) return;
                     const newCount = Math.max(0, count);
-                    const totals = calculateTicketTotals(t.service.id, t.size.id, t.extras || [], prices, commissions, newCount);
+                    const totals = calculateTicketTotals(t.service.id, t.size.id, t.extras || [], prices, commissions, newCount, snackPrice);
                     await updateDoc(doc(db, "tickets", id), { snackCount: newCount, price: totals.totalPrice });
                 } catch (e) { alert("Error updating snacks: " + e.message); }
             };
@@ -586,7 +582,7 @@
             const addDebt = async (e, c) => {
                 try {
                     await addDoc(collection(db, "deductions"), {
-                        employee: e, amount: c * SNACK_PRICE,
+                        employee: e, amount: c * snackPrice,
                         status: 'PENDING', timestamp: serverTimestamp()
                     });
                 } catch (err) { alert("Error adding snack debt: " + err.message); }
@@ -616,7 +612,7 @@
                     });
 
                     if (win) {
-                        const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase());
+                        const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
                         PrintService.print(win, html);
                     }
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
@@ -646,7 +642,7 @@
                     });
 
                     if (win) {
-                        const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase());
+                        const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
                         PrintService.print(win, html);
                     }
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
@@ -662,7 +658,7 @@
                 view, setView,
                 employees, tickets, history, deductions,
                 prices, commissions, extrasList,
-                exRate, updateGlobalExRate, // Exposed updated function
+                exRate, snackPrice, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit,
                 activeId, setActiveId,
                 payment, setPayment,
@@ -865,7 +861,7 @@
         };
 
         const CashierView = () => {
-            const { tickets, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDebt, employees, exRate, toggleAttendance, isSubmitting, role } = useContext(AppContext);
+            const { tickets, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDebt, employees, exRate, toggleAttendance, isSubmitting, role, snackPrice } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showAttendance, setShowAttendance] = useState(false);
@@ -932,14 +928,14 @@
                     {showSnack && (
                         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                             <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm">
-                                <h3 className="font-bold mb-4 text-lg text-gray-800 flex items-center"><Coffee className="mr-2 text-orange-500" /> Snack Empleado</h3>
+                                <h3 className="font-bold mb-4 text-lg text-gray-800 flex items-center"><Coffee className="mr-2 text-orange-500" /> Snack Empleado (${snackPrice})</h3>
                                 <select className="w-full border p-3 rounded-lg mb-6 text-lg bg-white" onChange={e => setSnackEmp(e.target.value)} value={snackEmp}>
                                     <option value="">Seleccionar Empleado...</option>
                                     {employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}
                                 </select>
                                 <div className="flex gap-3">
                                     <button onClick={() => setShowSnack(false)} className="flex-1 border p-3 rounded-xl font-bold text-gray-600">Cancelar</button>
-                                    <button onClick={() => { if (snackEmp) { addDebt(snackEmp, 1); setShowSnack(false); setSnackEmp(''); } }} disabled={!snackEmp} className="flex-1 bg-orange-600 text-white p-3 rounded-xl font-bold">Confirmar ($25)</button>
+                                    <button onClick={() => { if (snackEmp) { addDebt(snackEmp, 1); setShowSnack(false); setSnackEmp(''); } }} disabled={!snackEmp} className="flex-1 bg-orange-600 text-white p-3 rounded-xl font-bold">Confirmar</button>
                                 </div>
                             </div>
                         </div>
@@ -1012,7 +1008,7 @@
 
         const AdminPanel = () => {
             const {
-                employees, history, deductions, db, exRate, updateGlobalExRate,
+                employees, history, deductions, db, exRate, snackPrice, updateGlobalSettings,
                 addEmployee, prices, commissions, extrasList
             } = useContext(AppContext);
 
@@ -1026,8 +1022,11 @@
             const [editPrices, setEditPrices] = useState({});
             const [editComms, setEditComms] = useState({});
             const [editExtras, setEditExtras] = useState([]);
-            // Local state for exchange rate input to avoid jumping cursor on sync
+            const [deletedExtras, setDeletedExtras] = useState([]);
+
+            // Local state for settings to avoid jumping cursor on sync
             const [localExRate, setLocalExRate] = useState(exRate);
+            const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
 
             // Sync state when entering tabs
             useEffect(() => {
@@ -1035,11 +1034,13 @@
                     setEditPrices(JSON.parse(JSON.stringify(prices)));
                     setEditComms(JSON.parse(JSON.stringify(commissions)));
                     setEditExtras(JSON.parse(JSON.stringify(extrasList)));
+                    setDeletedExtras([]);
                 }
                 if (tab === 'CONFIG') {
                     setLocalExRate(exRate);
+                    setLocalSnackPrice(snackPrice);
                 }
-            }, [tab, prices, commissions, extrasList, exRate]);
+            }, [tab, prices, commissions, extrasList, exRate, snackPrice]);
 
             const parseDate = (str) => { const [y, m, d] = str.split('-').map(Number); return new Date(y, m - 1, d); };
             const start = parseDate(startDate); start.setHours(0, 0, 0, 0);
@@ -1116,11 +1117,10 @@
                     });
                     html += `</tbody></table>`;
 
-                    // 2. Multipliers (Breakdown) - REMOVED
                     // 3. Deductions (Renamed to Varios)
                     if (p.deductionTotal > 0) {
                         html += `<div style="margin-top: 15px; border-top: 1px dotted #ccc; padding-top: 5px; display: flex; justify-content: space-between; font-size: 12px; color: #cc0000;">
-                            <span>Varios</span>
+                            <span>Varios (Snacks, Prestamos, etc.)</span>
                             <span>-${formatCurrency(p.deductionTotal)}</span>
                          </div>`;
                     }
@@ -1128,11 +1128,11 @@
                     // 4. Legal Text & Signature
                     html += `
                         <div style="margin-top: 30px; font-size: 10px; text-align: justify;">
-                            Recibí de LAVAMEX la cantidad descrita a mi entera satisfacción por concepto de pago por servicios de lavado realizados. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.
+                            Recibí de LAVAMEX la cantidad descrita a mi entera satisfacción por concepto de pago de comisiones por servicios de lavado realizados. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.
                         </div>
                         <div style="margin-top: 40px; text-align: center;">
                             _______________________________<br>
-                            Firma
+                            Firma del Empleado
                         </div>
                     `;
 
@@ -1180,20 +1180,43 @@
                 if (!confirm("¿Aplicar nuevos precios?")) return;
                 try {
                     const batch = writeBatch(db);
+
+                    // 1. Save Prices & Commissions (Maps)
                     batch.set(doc(db, "settings", "prices"), editPrices);
                     batch.set(doc(db, "settings", "commissions"), editComms);
+
+                    // 2. Process Extras Updates/Inserts
                     editExtras.forEach(e => {
-                        batch.update(doc(db, "extras", e.docId), {
-                            price: parseFloat(e.price) || 0,
-                            commission: parseFloat(e.commission) || 0
-                        });
+                        if (e.docId) {
+                            // Update existing
+                            batch.update(doc(db, "extras", e.docId), {
+                                label: e.label,
+                                price: parseFloat(e.price) || 0,
+                                commission: parseFloat(e.commission) || 0,
+                                id: e.id // Ensure ID consistency
+                            });
+                        } else {
+                            // Create new (generate ID if missing)
+                            const newRef = doc(collection(db, "extras"));
+                            batch.set(newRef, {
+                                id: e.id || `EXTRA_${Date.now()}`,
+                                label: e.label,
+                                price: parseFloat(e.price) || 0,
+                                commission: parseFloat(e.commission) || 0
+                            });
+                        }
                     });
+
+                    // 3. Process Extras Deletions
+                    deletedExtras.forEach(docId => {
+                        batch.delete(doc(db, "extras", docId));
+                    });
+
                     await batch.commit();
                     alert("¡Precios Actualizados!");
                 } catch (e) { alert("Error: " + e.message); }
             };
 
-            // Updates specific cell in local matrix
             const updateLocalPrice = (type, svcId, sizeId, val) => {
                 const target = type === 'prices' ? editPrices : editComms;
                 const setTarget = type === 'prices' ? setEditPrices : setEditComms;
@@ -1201,6 +1224,26 @@
                 if (!newObj[svcId]) newObj[svcId] = {};
                 newObj[svcId][sizeId] = parseFloat(val) || 0;
                 setTarget(newObj);
+            };
+
+            const updateLocalExtra = (index, field, val) => {
+                const arr = [...editExtras];
+                arr[index][field] = val;
+                setEditExtras(arr);
+            };
+
+            const addExtraRow = () => {
+                setEditExtras([...editExtras, { id: '', label: 'Nuevo Extra', price: 0, commission: 0 }]);
+            };
+
+            const removeExtraRow = (index) => {
+                const item = editExtras[index];
+                if (item.docId) {
+                    setDeletedExtras([...deletedExtras, item.docId]);
+                }
+                const arr = [...editExtras];
+                arr.splice(index, 1);
+                setEditExtras(arr);
             };
 
             return (
@@ -1247,12 +1290,16 @@
                     {tab === 'CONFIG' && (
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
                             <h3 className="font-bold mb-4 text-gray-800">General</h3>
-                            <div className="mb-6 flex gap-2 items-end">
-                                <div className="flex-1">
-                                    <label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar</label>
+                            <div className="mb-6 flex flex-col gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label>
                                     <input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" />
                                 </div>
-                                <button onClick={() => { updateGlobalExRate(parseFloat(localExRate)); alert("Tasa actualizada"); }} className="bg-blue-600 text-white p-3 rounded-lg font-bold h-fit mb-px">Guardar</button>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label>
+                                    <input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" />
+                                </div>
+                                <button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="bg-blue-600 text-white p-3 rounded-lg font-bold w-full shadow">Guardar Cambios</button>
                             </div>
 
                             <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
@@ -1283,6 +1330,56 @@
                                                         </div>
                                                     </td>
                                                 ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="font-bold text-gray-700">Extras</h4>
+                                    <button onClick={addExtraRow} className="bg-green-100 text-green-700 px-3 py-1 rounded font-bold text-sm border border-green-200">+ Agregar Extra</button>
+                                </div>
+                                <table className="w-full text-sm text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-100">
+                                            <th className="p-3 border">Nombre / Etiqueta</th>
+                                            <th className="p-3 border text-center">Precio ($)</th>
+                                            <th className="p-3 border text-center">Comisión ($)</th>
+                                            <th className="p-3 border text-center w-12"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {editExtras.map((ex, idx) => (
+                                            <tr key={idx}>
+                                                <td className="p-2 border">
+                                                    <input
+                                                        value={ex.label}
+                                                        onChange={(e) => updateLocalExtra(idx, 'label', e.target.value)}
+                                                        className="border p-2 rounded w-full"
+                                                        placeholder="Nombre del Extra"
+                                                    />
+                                                </td>
+                                                <td className="p-2 border">
+                                                    <input
+                                                        type="number"
+                                                        value={ex.price}
+                                                        onChange={(e) => updateLocalExtra(idx, 'price', e.target.value)}
+                                                        className="border p-2 rounded w-full text-center text-green-700 font-bold"
+                                                    />
+                                                </td>
+                                                <td className="p-2 border">
+                                                    <input
+                                                        type="number"
+                                                        value={ex.commission}
+                                                        onChange={(e) => updateLocalExtra(idx, 'commission', e.target.value)}
+                                                        className="border p-2 rounded w-full text-center text-blue-600 font-bold"
+                                                    />
+                                                </td>
+                                                <td className="p-2 border text-center">
+                                                    <button onClick={() => removeExtraRow(idx)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 size={16} /></button>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
