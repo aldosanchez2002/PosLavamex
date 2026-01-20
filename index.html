@@ -181,7 +181,7 @@
                     count: 0,
                     total: 0,
                     serviceGrid,
-                    earningsBreakdown: {}, // Key: "Label", Value: { count, total }
+                    extrasData: {}, // Key: "Label", Value: { count, total }
                     deductionTotal: 0,
                     deductionDetails: [],
                     netPay: 0
@@ -220,8 +220,12 @@
                         p.serviceGrid[item.service.id][item.size.id] = (p.serviceGrid[item.service.id][item.size.id] || 0) + 1;
                     }
 
-                    // B. Update Breakdown (Not strictly needed for grid but good for debug)
-                    // ... (omitted for brevity as we removed the detailed list from print)
+                    // C. Update Breakdown for Extras
+                    extrasShares.forEach(ex => {
+                        if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
+                        p.extrasData[ex.label].count += 1;
+                        p.extrasData[ex.label].total += ex.share;
+                    });
                 });
             });
 
@@ -1116,6 +1120,24 @@
                         }
                     });
                     html += `</tbody></table>`;
+
+                    // 2. Extras
+                    const extraKeys = Object.keys(p.extrasData).sort();
+                    if (extraKeys.length > 0) {
+                        html += `<h4>Extras</h4>`;
+                        html += `<table class="multiplier-list" style="width:100%; border-collapse:collapse; font-size:11px;">
+                            <thead><tr style="background:#f3f4f6;"><th style="text-align:left; padding:4px;">Concepto</th><th style="text-align:center; padding:4px;">Cant.</th><th style="text-align:right; padding:4px;">Total</th></tr></thead>
+                            <tbody>`;
+                        extraKeys.forEach(label => {
+                            const item = p.extrasData[label];
+                            html += `<tr>
+                                <td style="padding:4px; border-bottom:1px solid #eee;">${label}</td>
+                                <td style="text-align:center; padding:4px; border-bottom:1px solid #eee;">${item.count}</td>
+                                <td style="text-align:right; padding:4px; border-bottom:1px solid #eee;">${formatCurrency(item.total)}</td>
+                            </tr>`;
+                        });
+                        html += `</tbody></table>`;
+                    }
 
                     // 3. Deductions (Renamed to Varios)
                     if (p.deductionTotal > 0) {
