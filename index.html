@@ -984,7 +984,7 @@
                     if (p.count === 0 && p.deductionTotal === 0) return;
                     html += `<h3>${name}</h3><table><tr><th>Servicio</th><th>Pago</th></tr>`;
                     p.details.forEach(d => html += `<tr><td>${d.service}</td><td>${formatCurrency(d.amount)}</td></tr>`);
-                    if (p.deductionTotal > 0) html += `<tr><td>Deducciones</td><td>-${formatCurrency(p.deductionTotal)}</td></tr>`;
+                    if (p.deductionTotal > 0) html += `<tr><td>Varios</td><td>-${formatCurrency(p.deductionTotal)}</td></tr>`;
                     html += `<tr><td><b>TOTAL</b></td><td><b>${formatCurrency(p.netPay)}</b></td></tr></table><hr/>`;
                 });
                 html += `</body></html>`;
