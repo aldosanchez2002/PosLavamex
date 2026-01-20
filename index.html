@@ -427,19 +427,6 @@
         };
 
         // ------------------------------------------------------------------
-        // SECTION 6: UNIT TESTS (Brief)
-        // ------------------------------------------------------------------
-        const TestRunner = {
-            runDbTest: async () => {
-                try {
-                    const ref = await addDoc(collection(db, "_diagnostics"), { t: serverTimestamp() });
-                    await deleteDoc(doc(db, "_diagnostics", ref.id));
-                    return { passed: true, details: 'Write/Read/Delete Successful' };
-                } catch (e) { return { passed: false, details: e.message }; }
-            }
-        };
-
-        // ------------------------------------------------------------------
         // SECTION 7: CONTEXT & PROVIDER
         // ------------------------------------------------------------------
         const AppContext = createContext();
@@ -1201,7 +1188,7 @@
 
             // Sync state when entering tabs
             useEffect(() => {
-                if (tab === 'PRICES') {
+                if (tab === 'PRECIOS') {
                     setEditPrices(JSON.parse(JSON.stringify(prices)));
                     setEditComms(JSON.parse(JSON.stringify(commissions)));
                     setEditExtras(JSON.parse(JSON.stringify(extrasList)));
@@ -1760,7 +1747,6 @@
                             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-6">
                                 <div className="flex justify-between items-center mb-4">
                                     <h4 className="font-bold text-gray-700">Extras</h4>
-                                    <button onClick={addExtraRow} className="bg-green-100 text-green-700 px-3 py-1 rounded font-bold text-sm border border-green-200">+ Agregar Extra</button>
                                 </div>
                                 <table className="w-full text-sm text-left border-collapse">
                                     <thead>
@@ -1768,19 +1754,13 @@
                                             <th className="p-3 border">Nombre / Etiqueta</th>
                                             <th className="p-3 border text-center">Precio ($)</th>
                                             <th className="p-3 border text-center">Comisión ($)</th>
-                                            <th className="p-3 border text-center w-12"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {editExtras.map((ex, idx) => (
                                             <tr key={idx}>
-                                                <td className="p-2 border">
-                                                    <input
-                                                        value={ex.label}
-                                                        onChange={(e) => updateLocalExtra(idx, 'label', e.target.value)}
-                                                        className="border p-2 rounded w-full"
-                                                        placeholder="Nombre del Extra"
-                                                    />
+                                                <td className="p-3 border font-bold text-gray-700 bg-gray-50">
+                                                    {ex.label}
                                                 </td>
                                                 <td className="p-2 border">
                                                     <input
@@ -1797,9 +1777,6 @@
                                                         onChange={(e) => updateLocalExtra(idx, 'commission', e.target.value)}
                                                         className="border p-2 rounded w-full text-center text-blue-600 font-bold"
                                                     />
-                                                </td>
-                                                <td className="p-2 border text-center">
-                                                    <button onClick={() => removeExtraRow(idx)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 size={16} /></button>
                                                 </td>
                                             </tr>
                                         ))}
