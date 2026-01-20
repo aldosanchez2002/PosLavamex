@@ -946,7 +946,115 @@
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
             const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
 
-            const printNomina = () => { /* Simplified for brevity, same logic as before */ alert("Print logic preserved."); };
+            const printNomina = () => {
+                const win = PrintService.open();
+
+                let html = `<html><head><title>Nomina</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; color: #333; }
+                    h2, h3 { margin-bottom: 5px; margin-top: 20px; }
+                    
+                    /* Grid Table Styling */
+                    .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 11px; }
+                    .grid-table th, .grid-table td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+                    .grid-table th { background: #f3f4f6; }
+                    .grid-table .svc-label { text-align: left; font-weight: bold; }
+                    
+                    /* Multiplier List Styling */
+                    .multiplier-list { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px; }
+                    .multiplier-list td { padding: 2px 0; border-bottom: 1px dotted #eee; }
+                    .total-row { font-weight: bold; font-size: 14px; border-top: 1px solid #000; margin-top: 10px; padding-top: 5px; }
+                    .deductions { color: #cc0000; }
+                    
+                    .page-break { page-break-after: always; }
+                    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px; }
+                </style>
+                </head><body>`;
+
+                Object.keys(payroll).forEach(name => {
+                    const p = payroll[name];
+                    if (p.count === 0 && p.deductionTotal === 0) return;
+
+                    // Header
+                    html += `
+                        <div class="header">
+                            <div>
+                                <h2 style="margin:0">${name}</h2>
+                                <small>${startDate} a ${endDate}</small>
+                            </div>
+                            <div style="text-align:right">
+                                <h2 style="margin:0">${formatCurrency(p.netPay)}</h2>
+                                <small>TOTAL A PAGAR</small>
+                            </div>
+                        </div>
+                    `;
+
+                    // 1. Grid (Counts)
+                    html += `<h4>Cantidad de Servicios</h4>`;
+                    html += `<table class="grid-table">
+                        <thead>
+                            <tr>
+                                <th>Servicio</th>
+                                ${SIZES.map(s => `<th>${s.label}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+                    SERVICES.forEach(svc => {
+                        const rowCounts = SIZES.map(sz => p.serviceGrid[svc.id][sz.id] || 0);
+                        // Only show rows that have data
+                        if (rowCounts.some(c => c > 0)) {
+                            html += `<tr>
+                                <td class="svc-label">${svc.label}</td>
+                                ${rowCounts.map(c => `<td style="${c > 0 ? 'font-weight:bold;' : 'color:#ccc'}">${c || '-'}</td>`).join('')}
+                            </tr>`;
+                        }
+                    });
+                    html += `</tbody></table>`;
+
+                    // 2. Extras
+                    const extraKeys = Object.keys(p.extrasData).sort();
+                    if (extraKeys.length > 0) {
+                        html += `<h4>Extras</h4>`;
+                        html += `<table class="multiplier-list" style="width:100%; border-collapse:collapse; font-size:11px;">
+                            <thead><tr style="background:#f3f4f6;"><th style="text-align:left; padding:4px;">Concepto</th><th style="text-align:center; padding:4px;">Cant.</th><th style="text-align:right; padding:4px;">Total</th></tr></thead>
+                            <tbody>`;
+                        extraKeys.forEach(label => {
+                            const item = p.extrasData[label];
+                            html += `<tr>
+                                <td style="padding:4px; border-bottom:1px solid #eee;">${label}</td>
+                                <td style="text-align:center; padding:4px; border-bottom:1px solid #eee;">${item.count}</td>
+                                <td style="text-align:right; padding:4px; border-bottom:1px solid #eee;">${formatCurrency(item.total)}</td>
+                            </tr>`;
+                        });
+                        html += `</tbody></table>`;
+                    }
+
+                    // 3. Deductions (Renamed to Varios)
+                    if (p.deductionTotal > 0) {
+                        html += `<div style="margin-top: 15px; border-top: 1px dotted #ccc; padding-top: 5px; display: flex; justify-content: space-between; font-size: 12px; color: #cc0000;">
+                            <span>Varios (Snacks, Prestamos, etc.)</span>
+                            <span>-${formatCurrency(p.deductionTotal)}</span>
+                         </div>`;
+                    }
+
+                    // 4. Legal Text & Signature
+                    html += `
+                        <div style="margin-top: 30px; font-size: 10px; text-align: justify;">
+                            Recibí de LAVAMEX la cantidad descrita a mi entera satisfacción por concepto de pago por servicios de lavado realizados. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.
+                        </div>
+                        <div style="margin-top: 40px; text-align: center;">
+                            _______________________________<br>
+                            Firma del Empleado
+                        </div>
+                    `;
+
+                    html += `<hr class="page-break" />`;
+                });
+                html += `</body></html>`;
+                PrintService.print(win, html);
+            };
+
             const closeWeek = async () => { if (!confirm("¿Archivar semana?")) return; const batch = writeBatch(db); rangeHistory.forEach(t => batch.update(doc(db, "tickets", t.id), { status: 'ARCHIVED' })); rangeDeductions.forEach(d => batch.update(doc(db, "deductions", d.id), { status: 'ARCHIVED' })); await batch.commit(); alert("Semana Cerrada"); };
 
             return (
