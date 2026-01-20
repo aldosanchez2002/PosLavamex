@@ -52,7 +52,7 @@
             LogOut, Users, Calculator, Printer, Wifi, Lock, Archive, Pencil,
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
             Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
-            TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X
+            TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase
         } from 'lucide-react';
 
         import { initializeApp, getApps, getApp } from 'firebase/app';
@@ -104,6 +104,8 @@
             },
             EXCHANGE_RATE: 18.10,
             SNACK_PRICE: 25,
+            INITIAL_CASH_MXN: 0,
+            INITIAL_CASH_USD: 0,
             INITIAL_EMPLOYEES: [
                 { name: 'Aldo', active: true },
                 { name: 'Sergio', active: true },
@@ -145,11 +147,16 @@
         };
 
         const getLocalDateStr = (d = new Date()) => {
-            // Manual YYYY-MM-DD construction to avoid TZ issues
             const y = d.getFullYear();
             const m = String(d.getMonth() + 1).padStart(2, '0');
             const day = String(d.getDate()).padStart(2, '0');
             return `${y}-${m}-${day}`;
+        };
+
+        const getMonthStr = (d = new Date()) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            return `${y}-${m}`;
         };
 
         const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0, currentSnackPrice = 25) => {
@@ -171,7 +178,6 @@
 
             // Initialize structure
             employees.forEach(emp => {
-                // Initialize Grid (Service x Size)
                 const serviceGrid = {};
                 SERVICES.forEach(svc => {
                     serviceGrid[svc.id] = {};
@@ -182,7 +188,7 @@
                     count: 0,
                     total: 0,
                     serviceGrid,
-                    extrasData: {}, // Key: "Label", Value: { count, total }
+                    extrasData: {},
                     deductionTotal: 0,
                     deductionDetails: [],
                     netPay: 0
@@ -196,25 +202,21 @@
 
                 const washerCount = washersList.length;
 
-                // 1. Calculate Extras Commission Share (Dynamic Lookup)
+                // 1. Calculate Extras Commission Share
                 let extrasCommissionTotal = 0;
                 const extrasShares = (item.extras || []).map(ex => {
-                    // Try to find the current commission from DB settings
                     const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
                     const commissionValue = dbExtra ? (dbExtra.commission || 0) : (ex.commission || 0);
-
                     const share = commissionValue / washerCount;
                     extrasCommissionTotal += commissionValue;
                     return { label: ex.label, share };
                 });
 
-                // 2. Calculate Base Service Commission Share (Dynamic Lookup)
+                // 2. Calculate Base Service Commission Share
                 let baseCommissionTotal = 0;
                 if (item.service && item.size && currentCommissions && currentCommissions[item.service.id]) {
-                    // Use DB value
                     baseCommissionTotal = currentCommissions[item.service.id][item.size.id] || 0;
                 } else {
-                    // Fallback to stored if DB lookup fails (e.g. service ID changed or offline)
                     const totalStoredCommission = item.commission || 0;
                     const storedExtrasTotal = (item.extras || []).reduce((acc, e) => acc + (e.commission || 0), 0);
                     baseCommissionTotal = Math.max(0, totalStoredCommission - storedExtrasTotal);
@@ -223,20 +225,17 @@
                 const baseShare = baseCommissionTotal / washerCount;
 
                 washersList.forEach(washerName => {
-                    if (!payroll[washerName]) return; // Skip if employee deleted
+                    if (!payroll[washerName]) return;
 
                     const p = payroll[washerName];
                     p.count += 1;
-                    // Add shares: Base + Sum of Extras shares
                     const totalTicketCommissionForWasher = baseShare + (extrasCommissionTotal / washerCount);
                     p.total += totalTicketCommissionForWasher;
 
-                    // A. Update Matrix Grid (Counts only)
                     if (item.service && item.size) {
                         p.serviceGrid[item.service.id][item.size.id] = (p.serviceGrid[item.service.id][item.size.id] || 0) + 1;
                     }
 
-                    // C. Update Breakdown for Extras
                     extrasShares.forEach(ex => {
                         if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
                         p.extrasData[ex.label].count += 1;
@@ -349,7 +348,6 @@
                     : '';
                 const displayBasePrice = ticket.basePrice || 0;
                 const method = payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO';
-                // Use stored snack price if available on ticket (for history), else current
                 const effSnackPrice = currentSnackPrice || 25;
 
                 return `
@@ -378,7 +376,7 @@
                 win.document.write(`
                     <html>
                     <head>
-                        <title>Corte Diario</title>
+                        <title>Corte ${data.type}</title>
                         <style>
                             body{font-family:'Courier New', sans-serif;font-size:12px;margin:0;padding:10px; text-align:center;}
                             .line { border-top: 1px dashed #000; margin: 5px 0; }
@@ -387,8 +385,8 @@
                         </style>
                     </head>
                     <body>
-                        <div class="bold">LAVAMEX - CORTE DIARIO</div>
-                        <div>${data.date}</div>
+                        <div class="bold">LAVAMEX - CORTE ${data.type.toUpperCase()}</div>
+                        <div>${data.dateLabel}</div>
                         <div class="line"></div>
                         
                         <div class="row"><span>Ventas Totales:</span><span class="bold">${formatCurrency(data.totals.total)}</span></div>
@@ -396,10 +394,16 @@
                         <div class="line"></div>
                         
                         <div class="bold" style="text-align:left;">DESGLOSE INGRESOS:</div>
-                        <div class="row"><span>Efectivo MXN:</span><span>${formatCurrency(data.totals.cashMxn)}</span></div>
-                        <div class="row"><span>Efectivo USD:</span><span>$${data.totals.cashUsd.toFixed(2)}</span></div>
-                        <div class="row"><span>Tarjeta:</span><span>${formatCurrency(data.totals.card)}</span></div>
+                        <div class="row"><span>Venta Efectivo (Total):</span><span>${formatCurrency(data.totals.cashTotal)}</span></div>
+                        <div class="row"><span>- Efectivo USD (En Caja):</span><span>$${data.totals.cashUsd.toFixed(2)}</span></div>
+                        <div class="row"><span>- Efectivo MXN (Teórico):</span><span>${formatCurrency(data.totals.cashMxn)}</span></div>
+                        <div class="row"><span>Venta Tarjeta:</span><span>${formatCurrency(data.totals.card)}</span></div>
                         
+                        <div class="line"></div>
+                        <div class="bold" style="text-align:left;">FONDO INICIAL:</div>
+                        <div class="row"><span>Fondo MXN:</span><span>${formatCurrency(data.totals.initialMxn)}</span></div>
+                        <div class="row"><span>Fondo USD:</span><span>$${data.totals.initialUsd.toFixed(2)}</span></div>
+
                         ${data.totals.expenses > 0 ? `
                             <div class="line"></div>
                             <div class="bold" style="text-align:left;">GASTOS APROBADOS:</div>
@@ -408,8 +412,9 @@
                         ` : ''}
 
                         <div class="line"></div>
-                        <div class="bold" style="text-align:left;">EN CAJA (Teórico Final):</div>
-                        <div class="row"><span class="bold">Total Efectivo Neto:</span><span class="bold">${formatCurrency(data.totals.cashNet)}</span></div>
+                        <div class="bold" style="text-align:left;">EN CAJA (Final):</div>
+                        <div class="row"><span class="bold">TOTAL NETO MXN:</span><span class="bold">${formatCurrency(data.totals.cashNetMxn)}</span></div>
+                        <div class="row"><span class="bold">TOTAL NETO USD:</span><span class="bold">$${data.totals.cashNetUsd.toFixed(2)}</span></div>
                         <div class="line"></div>
                         <div>Generado: ${new Date().toLocaleTimeString()}</div>
                     </body>
@@ -446,12 +451,13 @@
             const [tickets, setTickets] = useState([]);
             const [history, setHistory] = useState([]);
             const [deductions, setDeductions] = useState([]);
-            const [expenses, setExpenses] = useState([]); // NEW: Expenses
+            const [expenses, setExpenses] = useState([]);
             const [editingTicket, setEditingTicket] = useState(null);
 
             // Global settings
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
+            const [initialCash, setInitialCash] = useState({ mxn: 0, usd: 0 }); // NEW
             const [prices, setPrices] = useState({});
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
@@ -510,17 +516,22 @@
                     }
                 });
 
-                // General Settings (Exchange Rate & Snack Price)
+                // General Settings (Exchange Rate, Snack Price, Initial Cash)
                 const unsubG = onSnapshot(doc(db, "settings", "general"), (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
                         if (data.exchangeRate) setExRate(data.exchangeRate);
                         if (data.snackPrice) setSnackPrice(data.snackPrice);
+                        setInitialCash({
+                            mxn: data.initialCashMxn || 0,
+                            usd: data.initialCashUsd || 0
+                        });
                     } else {
-                        // Create defaults if missing
                         setDoc(doc(db, "settings", "general"), {
                             exchangeRate: DEFAULTS.EXCHANGE_RATE,
-                            snackPrice: DEFAULTS.SNACK_PRICE
+                            snackPrice: DEFAULTS.SNACK_PRICE,
+                            initialCashMxn: DEFAULTS.INITIAL_CASH_MXN,
+                            initialCashUsd: DEFAULTS.INITIAL_CASH_USD
                         });
                     }
                 });
@@ -558,7 +569,6 @@
                     }));
                 });
 
-                // NEW: Listen to expenses
                 const qE = query(collection(db, "expenses"), orderBy("timestamp", "desc"));
                 const unsubE = onSnapshot(qE, (snap) => {
                     setExpenses(snap.docs.map(d => ({
@@ -572,11 +582,13 @@
 
             // --- ACTIONS ---
 
-            const updateGlobalSettings = async (newRate, newSnackPrice) => {
+            const updateGlobalSettings = async (newRate, newSnackPrice, initMxn, initUsd) => {
                 try {
                     await setDoc(doc(db, "settings", "general"), {
                         exchangeRate: newRate,
-                        snackPrice: newSnackPrice
+                        snackPrice: newSnackPrice,
+                        initialCashMxn: initMxn,
+                        initialCashUsd: initUsd
                     }, { merge: true });
                 } catch (e) {
                     alert("Error updating settings: " + e.message);
@@ -680,6 +692,12 @@
                 } catch (e) { alert("Error: " + e.message); }
             };
 
+            const updateExpense = async (id, data) => {
+                try {
+                    await updateDoc(doc(db, "expenses", id), data);
+                } catch (e) { alert("Error: " + e.message); }
+            };
+
             const resolveExpense = async (id, status) => {
                 try {
                     await updateDoc(doc(db, "expenses", id), {
@@ -760,11 +778,13 @@
                 view, setView,
                 employees, tickets, history, deductions, expenses,
                 prices, commissions, extrasList,
-                exRate, snackPrice, updateGlobalSettings,
+                exRate, snackPrice, initialCash, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit,
                 activeId, setActiveId,
                 payment, setPayment,
-                saveTicket, updateSnacks, toggleAttendance, addEmployee, deleteTicket, addDebt, addExpense, resolveExpense, processPayment, processCardPayment,
+                saveTicket, updateSnacks, toggleAttendance, addEmployee, deleteTicket, addDebt,
+                addExpense, updateExpense, resolveExpense,
+                processPayment, processCardPayment,
                 db, isSubmitting
             };
 
@@ -969,13 +989,13 @@
             const [showAttendance, setShowAttendance] = useState(false);
             const [showExpense, setShowExpense] = useState(false);
             const [snackEmp, setSnackEmp] = useState('');
-            
+
             // Expense State
             const [expDesc, setExpDesc] = useState('');
             const [expAmt, setExpAmt] = useState('');
 
             const handleAddExpense = () => {
-                if(!expDesc || !expAmt) return;
+                if (!expDesc || !expAmt) return;
                 addExpense(expDesc, expAmt);
                 setExpDesc('');
                 setExpAmt('');
@@ -1147,8 +1167,8 @@
 
         const AdminPanel = () => {
             const {
-                employees, history, deductions, db, exRate, snackPrice, updateGlobalSettings,
-                addEmployee, prices, commissions, extrasList, tickets, expenses, resolveExpense
+                employees, history, deductions, db, exRate, snackPrice, initialCash, updateGlobalSettings,
+                addEmployee, prices, commissions, extrasList, tickets, expenses, resolveExpense, updateExpense
             } = useContext(AppContext);
 
             const [tab, setTab] = useState('CORTE');
@@ -1156,7 +1176,16 @@
             const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
             const [newEmpName, setNewEmpName] = useState('');
             const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
+
+            // CORTE STATES
+            const [corteMode, setCorteMode] = useState('DAY'); // 'DAY' or 'MONTH'
             const [corteDate, setCorteDate] = useState(getLocalDateStr());
+            const [corteMonth, setCorteMonth] = useState(getMonthStr());
+
+            // Edit Expense States
+            const [editingExpenseId, setEditingExpenseId] = useState(null);
+            const [editExpDesc, setEditExpDesc] = useState('');
+            const [editExpAmt, setEditExpAmt] = useState('');
 
             // Buffered State for Editing
             const [editPrices, setEditPrices] = useState({});
@@ -1167,6 +1196,8 @@
             // Local state for settings to avoid jumping cursor on sync
             const [localExRate, setLocalExRate] = useState(exRate);
             const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
+            const [localInitMxn, setLocalInitMxn] = useState(initialCash.mxn);
+            const [localInitUsd, setLocalInitUsd] = useState(initialCash.usd);
 
             // Sync state when entering tabs
             useEffect(() => {
@@ -1179,8 +1210,10 @@
                 if (tab === 'CONFIG') {
                     setLocalExRate(exRate);
                     setLocalSnackPrice(snackPrice);
+                    setLocalInitMxn(initialCash.mxn);
+                    setLocalInitUsd(initialCash.usd);
                 }
-            }, [tab, prices, commissions, extrasList, exRate, snackPrice]);
+            }, [tab, prices, commissions, extrasList, exRate, snackPrice, initialCash]);
 
             const parseDate = (str) => { const [y, m, d] = str.split('-').map(Number); return new Date(y, m - 1, d); };
             const start = parseDate(startDate); start.setHours(0, 0, 0, 0);
@@ -1190,69 +1223,96 @@
             const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
             const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
-            
+
             // NEW: Calculate Total Payroll
             const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
 
-            // Logic for Corte Diario
+            // Logic for Corte Diario/Mensual
             const allPaidForCorte = history.concat(tickets.filter(t => t.status === 'PAID'));
             const corteTickets = allPaidForCorte.filter(t => {
                 const tDate = t.paidAt ? t.paidAt : t.timestamp;
                 const d = tDate instanceof Date ? tDate : new Date(tDate);
-                return getLocalDateStr(d) === corteDate;
+                if (corteMode === 'DAY') return getLocalDateStr(d) === corteDate;
+                return getMonthStr(d) === corteMonth;
             });
-            
-            // Filter Expenses for today
+
+            // Filter Expenses
             const corteExpenses = expenses.filter(e => {
                 const d = e.timestamp instanceof Date ? e.timestamp : new Date(e.timestamp);
-                return getLocalDateStr(d) === corteDate;
+                if (corteMode === 'DAY') return getLocalDateStr(d) === corteDate;
+                return getMonthStr(d) === corteMonth;
             });
 
             const calculateCorteTotals = () => {
-                let cashMxn = 0, cashUsd = 0, card = 0, total = 0;
+                let revenueCard = 0, revenueCashTickets = 0, collectedUsd = 0;
+
                 corteTickets.forEach(t => {
-                    total += t.price;
-                    if (t.paymentDetails) {
-                        if (t.paymentDetails.method === 'CARD') {
-                            card += t.price;
-                        } else {
-                            // Reconstruct cash intake from payment details if available
-                            cashMxn += (t.paymentDetails.mxn || 0);
-                            cashUsd += (t.paymentDetails.usd || 0);
-                        }
+                    if (t.paymentDetails?.method === 'CARD') {
+                        revenueCard += t.price;
+                    } else {
+                        revenueCashTickets += t.price;
+                        collectedUsd += (t.paymentDetails?.usd || 0);
                     }
                 });
-                
-                const revenueCard = corteTickets.filter(t => t.paymentDetails?.method === 'CARD').reduce((a,b) => a+b.price, 0);
-                const revenueCashTickets = corteTickets.filter(t => !t.paymentDetails || t.paymentDetails.method === 'CASH');
-                const collectedUsd = revenueCashTickets.reduce((a, b) => a + (b.paymentDetails?.usd || 0), 0);
-                const totalCashRevenue = revenueCashTickets.reduce((a,b) => a + b.price, 0);
-                const impliedMxn = totalCashRevenue - (collectedUsd * exRate);
-                
+
+                // Theoretical MXN in cash drawer from sales:
+                // (Total Cash Sales Price) - (USD collected * Exchange Rate)
+                const impliedMxnSales = revenueCashTickets - (collectedUsd * exRate);
+
                 // Expenses
-                const approvedExpensesTotal = corteExpenses.filter(e => e.status === 'APPROVED').reduce((a,b) => a + (b.amount || 0), 0);
+                const approvedExpensesTotal = corteExpenses.filter(e => e.status === 'APPROVED').reduce((a, b) => a + (b.amount || 0), 0);
+
+                // Initial Cash (Add only, don't multiply by days, just the current float)
+                const initMxn = parseFloat(initialCash.mxn) || 0;
+                const initUsd = parseFloat(initialCash.usd) || 0;
 
                 return {
-                    total: revenueCard + totalCashRevenue,
+                    total: revenueCard + revenueCashTickets,
                     card: revenueCard,
-                    cashTotal: totalCashRevenue, // Gross Cash
-                    cashMxn: impliedMxn, // Theoretical MXN in drawer before expenses
+                    cashTotal: revenueCashTickets, // Gross Cash Sales
+
+                    // Components
+                    cashMxn: impliedMxnSales,
                     cashUsd: collectedUsd,
                     expenses: approvedExpensesTotal,
-                    cashNet: totalCashRevenue - approvedExpensesTotal // Net Cash in drawer after expenses
+
+                    // Initial
+                    initialMxn: initMxn,
+                    initialUsd: initUsd,
+
+                    // Final Net in Box
+                    cashNetMxn: (impliedMxnSales + initMxn) - approvedExpensesTotal,
+                    cashNetUsd: collectedUsd + initUsd
                 };
             };
-            
+
             const corteTotals = calculateCorteTotals();
 
             const printCorte = () => {
-                 const win = PrintService.open();
-                 PrintService.printCorte(win, {
-                     date: corteDate,
-                     totals: corteTotals,
-                     tickets: corteTickets,
-                     expenses: corteExpenses.filter(e => e.status === 'APPROVED')
-                 });
+                const win = PrintService.open();
+                PrintService.printCorte(win, {
+                    type: corteMode === 'DAY' ? 'Diario' : 'Mensual',
+                    dateLabel: corteMode === 'DAY' ? corteDate : corteMonth,
+                    totals: corteTotals,
+                    tickets: corteTickets,
+                    expenses: corteExpenses.filter(e => e.status === 'APPROVED')
+                });
+            };
+
+            const startEditExpense = (exp) => {
+                setEditingExpenseId(exp.id);
+                setEditExpDesc(exp.description);
+                setEditExpAmt(exp.amount);
+            };
+
+            const saveEditedExpense = () => {
+                if (editingExpenseId) {
+                    updateExpense(editingExpenseId, {
+                        description: editExpDesc,
+                        amount: parseFloat(editExpAmt) || 0
+                    });
+                    setEditingExpenseId(null);
+                }
             };
 
             const printNomina = () => {
@@ -1471,7 +1531,7 @@
             return (
                 <div className="p-4 md:p-6 h-full overflow-y-auto">
                     <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
-                        {['CORTE', 'NOMINA', 'CONFIG', 'PRICES', 'REPORT'].map(t => (
+                        {['CORTE', 'NOMINA', 'CONFIG', 'PRECIOS', 'ASISTENCIA'].map(t => (
                             <button key={t} onClick={() => setTab(t)}
                                 className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === t ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>
                                 {t}
@@ -1481,35 +1541,46 @@
 
                     {tab === 'CORTE' && (
                         <div className="max-w-4xl mx-auto space-y-6">
-                            <div className="bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center">
-                                <div><label className="text-xs font-bold text-gray-500 block">Fecha del Corte</label><input type="date" value={corteDate} onChange={e => setCorteDate(e.target.value)} className="font-bold text-lg bg-transparent outline-none" /></div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4">
+                                <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+                                    <button onClick={() => setCorteMode('DAY')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'DAY' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Día</button>
+                                    <button onClick={() => setCorteMode('MONTH')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'MONTH' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Mes</button>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {corteMode === 'DAY' ? (
+                                        <input type="date" value={corteDate} onChange={e => setCorteDate(e.target.value)} className="font-bold text-lg bg-transparent outline-none border p-2 rounded" />
+                                    ) : (
+                                        <input type="month" value={corteMonth} onChange={e => setCorteMonth(e.target.value)} className="font-bold text-lg bg-transparent outline-none border p-2 rounded" />
+                                    )}
+                                </div>
                                 <button onClick={printCorte} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-700"><Printer size={18} /> IMPRIMIR</button>
                             </div>
-                            
+
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg">
-                                    <div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18}/> Venta Total</div>
+                                    <div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div>
                                     <div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div>
                                     <div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div>
                                 </div>
                                 <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-                                    <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18}/> En Caja (Neto)</div>
-                                    <div className="text-3xl font-bold text-gray-800">{formatCurrency(corteTotals.cashNet)}</div>
-                                    <div className="text-xs text-gray-400 mt-1">Desc. Gastos: {formatCurrency(corteTotals.expenses)}</div>
+                                    <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja (Neto MXN)</div>
+                                    <div className="text-3xl font-bold text-gray-800">{formatCurrency(corteTotals.cashNetMxn)}</div>
+                                    <div className="text-xs text-gray-400 mt-1">Incluye Fondo Inicial</div>
                                 </div>
                                 <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-                                    <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><DollarSign size={18}/> Dólares (Bills)</div>
-                                    <div className="text-3xl font-bold text-green-700">${corteTotals.cashUsd.toFixed(2)}</div>
+                                    <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><DollarSign size={18} /> Dólares (Neto)</div>
+                                    <div className="text-3xl font-bold text-green-700">${corteTotals.cashNetUsd.toFixed(2)}</div>
+                                    <div className="text-xs text-gray-400 mt-1">Incluye Fondo Inicial</div>
                                 </div>
                                 <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-                                    <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><CreditCard size={18}/> Tarjeta</div>
+                                    <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><CreditCard size={18} /> Tarjeta</div>
                                     <div className="text-3xl font-bold text-blue-600">{formatCurrency(corteTotals.card)}</div>
                                 </div>
                             </div>
-                            
+
                             <div className="bg-white rounded-xl shadow border overflow-hidden">
                                 <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
-                                    <span>Gastos del Día ({corteDate})</span>
+                                    <span>Gastos ({corteMode === 'DAY' ? corteDate : corteMonth})</span>
                                     <span className="text-sm text-red-500 font-bold">Total Aprobado: {formatCurrency(corteTotals.expenses)}</span>
                                 </div>
                                 <div className="overflow-x-auto">
@@ -1517,21 +1588,35 @@
                                         <thead className="bg-gray-50 text-gray-500"><tr><th className="p-3">Concepto</th><th className="p-3">Monto</th><th className="p-3">Estado</th><th className="p-3 text-right">Acción</th></tr></thead>
                                         <tbody>
                                             {corteExpenses.length === 0 ? <tr><td colSpan="4" className="p-4 text-center text-gray-400">Sin gastos registrados</td></tr> :
-                                            corteExpenses.map(e => (
-                                                <tr key={e.id} className="border-t hover:bg-gray-50">
-                                                    <td className="p-3">{e.description}</td>
-                                                    <td className="p-3 font-bold text-red-600">-{formatCurrency(e.amount)}</td>
-                                                    <td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${e.status === 'APPROVED' ? 'bg-green-100 text-green-700' : (e.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`}>{e.status}</span></td>
-                                                    <td className="p-3 text-right">
-                                                        {e.status === 'PENDING' && (
-                                                            <div className="flex justify-end gap-2">
-                                                                <button onClick={() => resolveExpense(e.id, 'APPROVED')} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><Check size={16}/></button>
-                                                                <button onClick={() => resolveExpense(e.id, 'REJECTED')} className="bg-red-100 text-red-700 p-1 rounded hover:bg-red-200"><X size={16}/></button>
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                                corteExpenses.map(e => (
+                                                    <tr key={e.id} className="border-t hover:bg-gray-50">
+                                                        <td className="p-3">
+                                                            {editingExpenseId === e.id ? <input value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} className="border p-1 rounded w-full" /> : e.description}
+                                                        </td>
+                                                        <td className="p-3 font-bold text-red-600">
+                                                            {editingExpenseId === e.id ? <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} className="border p-1 rounded w-24" /> : `-${formatCurrency(e.amount)}`}
+                                                        </td>
+                                                        <td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${e.status === 'APPROVED' ? 'bg-green-100 text-green-700' : (e.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`}>{e.status}</span></td>
+                                                        <td className="p-3 text-right">
+                                                            {editingExpenseId === e.id ? (
+                                                                <div className="flex justify-end gap-2">
+                                                                    <button onClick={saveEditedExpense} className="bg-blue-100 text-blue-700 p-1 rounded hover:bg-blue-200"><Save size={16} /></button>
+                                                                    <button onClick={() => setEditingExpenseId(null)} className="bg-gray-100 text-gray-700 p-1 rounded hover:bg-gray-200"><X size={16} /></button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex justify-end gap-2 items-center">
+                                                                    {e.status === 'APPROVED' && <button onClick={() => startEditExpense(e)} className="text-gray-400 hover:text-blue-500"><Pencil size={14} /></button>}
+                                                                    {e.status === 'PENDING' && (
+                                                                        <>
+                                                                            <button onClick={() => resolveExpense(e.id, 'APPROVED')} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><Check size={16} /></button>
+                                                                            <button onClick={() => resolveExpense(e.id, 'REJECTED')} className="bg-red-100 text-red-700 p-1 rounded hover:bg-red-200"><X size={16} /></button>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1539,11 +1624,11 @@
 
                             <div className="bg-white rounded-xl shadow border overflow-hidden">
                                 <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">Desglose de Tickets</div>
-                                <div className="overflow-x-auto">
+                                <div className="overflow-x-auto max-h-96 overflow-y-auto">
                                     <table className="w-full text-sm text-left">
-                                        <thead className="bg-gray-50 text-gray-500">
+                                        <thead className="bg-gray-50 text-gray-500 sticky top-0">
                                             <tr>
-                                                <th className="p-3">Hora</th>
+                                                <th className="p-3">Fecha</th>
                                                 <th className="p-3">Ticket</th>
                                                 <th className="p-3">Servicio</th>
                                                 <th className="p-3">Método</th>
@@ -1551,16 +1636,16 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {corteTickets.length === 0 ? <tr><td colSpan="5" className="p-8 text-center text-gray-400">Sin ventas registradas este día</td></tr> :
-                                            corteTickets.map(t => (
-                                                <tr key={t.id} className="border-t hover:bg-gray-50">
-                                                    <td className="p-3 font-mono">{t.paidAt ? new Date(t.paidAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '--:--'}</td>
-                                                    <td className="p-3 font-bold">#{t.id.slice(-4).toUpperCase()}</td>
-                                                    <td className="p-3">{t.service?.label || 'Extras'} <span className="text-xs bg-gray-100 px-1 rounded">{t.size?.label}</span></td>
-                                                    <td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${t.paymentDetails?.method === 'CARD' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{t.paymentDetails?.method === 'CARD' ? 'TARJETA' : 'EFECTIVO'}</span></td>
-                                                    <td className="p-3 text-right font-bold">{formatCurrency(t.price)}</td>
-                                                </tr>
-                                            ))}
+                                            {corteTickets.length === 0 ? <tr><td colSpan="5" className="p-8 text-center text-gray-400">Sin ventas registradas</td></tr> :
+                                                corteTickets.map(t => (
+                                                    <tr key={t.id} className="border-t hover:bg-gray-50">
+                                                        <td className="p-3 font-mono">{t.paidAt ? new Date(t.paidAt).toLocaleDateString() : '--'} {t.paidAt ? new Date(t.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</td>
+                                                        <td className="p-3 font-bold">#{t.id.slice(-4).toUpperCase()}</td>
+                                                        <td className="p-3">{t.service?.label || 'Extras'} <span className="text-xs bg-gray-100 px-1 rounded">{t.size?.label}</span></td>
+                                                        <td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${t.paymentDetails?.method === 'CARD' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{t.paymentDetails?.method === 'CARD' ? 'TARJETA' : 'EFECTIVO'}</span></td>
+                                                        <td className="p-3 text-right font-bold">{formatCurrency(t.price)}</td>
+                                                    </tr>
+                                                ))}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1573,7 +1658,7 @@
                             {/* NEW: Total Payroll Banner */}
                             <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6 rounded-xl shadow-lg mb-6 flex justify-between items-center">
                                 <div>
-                                    <h2 className="text-2xl font-bold m-0 flex items-center gap-2"><Users className="w-6 h-6"/> Total Nómina</h2>
+                                    <h2 className="text-2xl font-bold m-0 flex items-center gap-2"><Users className="w-6 h-6" /> Total Nómina</h2>
                                     <span className="opacity-80 text-sm">Monto total a pagar a empleados</span>
                                 </div>
                                 <div className="text-4xl font-bold">{formatCurrency(totalNomina)}</div>
@@ -1599,7 +1684,7 @@
                         </div>
                     )}
 
-                    {tab === 'REPORT' && (
+                    {tab === 'ASISTENCIA' && (
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
                             <h3 className="font-bold mb-4 text-gray-800 flex items-center"><Calendar className="mr-2" /> Reporte de Asistencia</h3>
                             <div className="mb-4"><label className="block text-sm font-bold text-gray-600 mb-2">Mes</label><input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
@@ -1619,7 +1704,23 @@
                                     <label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label>
                                     <input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" />
                                 </div>
-                                <button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="bg-blue-600 text-white p-3 rounded-lg font-bold w-full shadow">Guardar Cambios</button>
+
+                                <div className="border-t pt-4">
+                                    <h4 className="font-bold text-gray-700 mb-3 flex items-center"><Briefcase className="w-4 h-4 mr-2" /> Fondo de Caja (Inicial)</h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 mb-1">Pesos (MXN)</label>
+                                            <input type="number" value={localInitMxn} onChange={e => setLocalInitMxn(e.target.value)} className="border p-3 rounded-lg w-full text-lg bg-gray-50" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 mb-1">Dólares (USD)</label>
+                                            <input type="number" value={localInitUsd} onChange={e => setLocalInitUsd(e.target.value)} className="border p-3 rounded-lg w-full text-lg bg-gray-50" />
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-2">Este monto se sumará automáticamente al corte diario hasta que se modifique.</p>
+                                </div>
+
+                                <button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice), parseFloat(localInitMxn), parseFloat(localInitUsd)); alert("Ajustes actualizados"); }} className="bg-blue-600 text-white p-3 rounded-lg font-bold w-full shadow mt-2">Guardar Cambios</button>
                             </div>
 
                             <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
@@ -1628,7 +1729,7 @@
                         </div>
                     )}
 
-                    {tab === 'PRICES' && (
+                    {tab === 'PRECIOS' && (
                         <div className="space-y-6">
                             <div className="bg-blue-50 border-blue-200 border p-4 rounded-xl flex justify-between items-center">
                                 <div><h3 className="font-bold text-blue-800">Edición de Precios</h3><p className="text-sm text-blue-600">Edita los valores y guarda para aplicar.</p></div>
