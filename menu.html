@@ -33,13 +33,13 @@
             background-color: #000;
             overflow: hidden; /* Disable scrolling to act like a digital sign */
             width: 100vw;
-            height: 100vh;
+            height: 100dvh; /* Use dynamic height to account for browser bars */
         }
 
         /* --- Rotation Logic for 5:3 Tablet --- */
         #rotation-wrapper {
             width: 100vw;
-            height: 100vh;
+            height: 100dvh;
             position: relative;
             background: #fff;
         }
@@ -47,7 +47,8 @@
         /* If device is portrait (vertical), rotate 90deg to force landscape view */
         @media screen and (orientation: portrait) {
             #rotation-wrapper {
-                width: 100vh; /* Swap width/height for rotation */
+                /* Use dvh (Dynamic Viewport Height) to subtract browser bars (approx 1.5 inches) */
+                width: 100dvh; 
                 height: 100vw;
                 transform: rotate(90deg);
                 transform-origin: top left;
@@ -64,7 +65,7 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between; /* Stretches content to edges */
-            padding: 1.5vh 2vw; /* Dynamic padding */
+            padding: 1.5vmin 2vmax; /* Use vmin/vmax for consistent padding on rotation */
             background-color: white;
         }
 
@@ -73,14 +74,14 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 2vw;
+            gap: 2vmax;
             flex: 0 0 auto; /* Don't stretch header */
-            padding-bottom: 1vh;
+            padding-bottom: 1vmin;
         }
 
         .logo-text {
             color: var(--color-orange);
-            font-size: 8vh; /* Scaled to screen height */
+            font-size: 8vmin; /* vmin ensures it doesn't get huge in portrait */
             font-weight: 900;
             letter-spacing: 1px;
             text-transform: uppercase;
@@ -92,10 +93,10 @@
 
         .droplets {
             color: var(--color-blue);
-            font-size: 4vh;
+            font-size: 4vmin;
             display: flex;
             align-items: flex-end;
-            gap: 0.5vw;
+            gap: 0.5vmax;
         }
 
         .droplet-small { font-size: 0.6em; margin-bottom: 5px; }
@@ -119,14 +120,14 @@
         .pricing-table thead th {
             color: var(--color-navy);
             font-weight: 900;
-            height: 12vh; /* Dynamic height */
+            height: 12vmin; /* Dynamic height */
             vertical-align: bottom;
-            padding-bottom: 0.5vh;
+            padding-bottom: 0.5vmin;
         }
 
         .pricing-table thead th:first-child {
             text-align: left;
-            font-size: 3.5vh;
+            font-size: 3.5vmin;
             text-transform: uppercase;
             width: 28%;
             vertical-align: bottom;
@@ -136,9 +137,9 @@
         .title-underline {
             display: block;
             width: 100%;
-            height: 0.5vh;
+            height: 0.5vmin;
             background-color: var(--color-navy);
-            margin-top: 0.5vh;
+            margin-top: 0.5vmin;
         }
 
         .col-header {
@@ -148,7 +149,7 @@
             justify-content: flex-end;
             height: 100%;
             width: 100%;
-            padding-bottom: 0.5vh;
+            padding-bottom: 0.5vmin;
         }
 
         .col-autos { width: 18%; }
@@ -157,16 +158,16 @@
         .col-suv-gde { width: 18%; }
 
         .header-icon-img {
-            font-size: 5vh; /* Dynamic Icon Size */
+            font-size: 5vmin; /* Dynamic Icon Size */
             color: #333;
-            margin-bottom: 0.5vh;
+            margin-bottom: 0.5vmin;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .header-text {
-            font-size: 1.8vh;
+            font-size: 1.8vmin;
             text-transform: uppercase;
             font-weight: 700;
         }
@@ -180,7 +181,7 @@
             background-color: var(--color-navy);
             color: white;
             text-align: left;
-            padding: 0 1vw; /* Side padding only */
+            padding: 0 1vmax; /* Side padding */
             border-right: 3px solid white;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
@@ -188,7 +189,7 @@
         .service-title {
             display: block;
             font-weight: 800;
-            font-size: 2.2vh;
+            font-size: 2.2vmin;
             text-transform: uppercase;
             line-height: 1.1;
         }
@@ -196,15 +197,15 @@
         .service-desc {
             display: block;
             font-weight: 400;
-            font-size: 1.5vh;
+            font-size: 1.5vmin;
             color: #ccc;
-            margin-top: 0.2vh;
+            margin-top: 0.2vmin;
         }
 
         .pricing-table tbody td:not(:first-child) {
             color: white;
             font-weight: 900;
-            font-size: 4vh; /* Large Prices */
+            font-size: 4vmin; /* Large Prices */
             border-bottom: 2px solid white;
             border-right: 2px solid rgba(255, 255, 255, 0.4);
         }
@@ -218,34 +219,34 @@
 
         /* --- Services Section --- */
         .services-section {
-            margin-top: 1vh;
+            margin-top: 1vmin;
             flex: 0 0 auto;
         }
 
         .services-header {
             color: var(--color-navy);
             font-weight: 900;
-            font-size: 3vh;
-            margin-bottom: 0.5vh;
+            font-size: 3vmin;
+            margin-bottom: 0.5vmin;
             text-transform: uppercase;
-            padding-left: 0.5vw;
+            padding-left: 0.5vmax;
         }
 
         .services-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 0.8vh;
-            margin-bottom: 1vh;
+            gap: 0.8vmin;
+            margin-bottom: 1vmin;
         }
 
         .service-pill {
             border: 2px solid var(--color-navy);
             color: var(--color-navy);
             background: white;
-            padding: 0.8vh 0;
+            padding: 0.8vmin 0;
             border-radius: 50px;
             font-weight: 800;
-            font-size: 1.6vh;
+            font-size: 1.6vmin;
             text-transform: uppercase;
             text-align: center;
             white-space: nowrap;
@@ -258,14 +259,14 @@
             color: white;
             display: flex;
             align-items: center;
-            height: 6vh;
+            height: 6vmin;
             border-radius: 4px;
         }
 
         .strip-item {
-            padding: 0 1vw;
+            padding: 0 1vmax;
             border-right: 2px solid white;
-            font-size: 2vh;
+            font-size: 2vmin;
             height: 100%;
             display: flex;
             align-items: center;
@@ -282,14 +283,14 @@
             display: flex;
             justify-content: space-between;
             width: 100%;
-            font-size: 2vh;
+            font-size: 2vmin;
             font-weight: 700;
         }
 
         .strip-title {
             font-weight: 900;
             text-transform: uppercase;
-            font-size: 2vh;
+            font-size: 2vmin;
             background-color: var(--color-blue);
         }
 
@@ -297,27 +298,27 @@
         .footer-strip {
             background-color: var(--color-orange);
             color: white;
-            padding: 0 2vw;
+            padding: 0 2vmax;
             display: flex;
             justify-content: space-between;
             align-items: center;
             text-transform: uppercase;
             font-weight: 800;
-            font-size: 2.5vh;
-            margin-top: 1vh;
-            height: 6vh;
+            font-size: 2.5vmin;
+            margin-top: 1vmin;
+            height: 6vmin;
             border-radius: 4px;
         }
 
-        .footer-right { display: flex; gap: 2vw; }
+        .footer-right { display: flex; gap: 2vmax; }
 
         .disclaimer {
             text-align: left;
-            font-size: 1.5vh;
+            font-size: 1.5vmin;
             color: #000;
             font-weight: 500;
-            margin-top: 0.5vh;
-            padding-left: 0.5vw;
+            margin-top: 0.5vmin;
+            padding-left: 0.5vmax;
         }
     </style>
 </head>
@@ -402,7 +403,7 @@
                     <tr>
                         <td>
                             <span class="service-title">PAQUETE COMPLETO</span>
-                            <span class="service-desc" style="font-size: 1.2vh;">Lavado General + Alfombra +
+                            <span class="service-desc" style="font-size: 1.2vmin;">Lavado General + Alfombra +
                                 Asientos</span>
                         </td>
                         <td>$840</td>
