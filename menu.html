@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lista de Precios Lavamex</title>
+    <title>Lista de Precios Lavamex - Galaxy Tab A9</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -30,71 +30,57 @@
 
         body {
             font-family: 'Roboto', sans-serif;
-            background-color: #222;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            /* Changed to flex-start for scrolling */
-            min-height: 100vh;
-            padding: 20px;
-            overflow-x: hidden;
+            background-color: #000;
+            overflow: hidden; /* Disable scrolling to act like a digital sign */
+            width: 100vw;
+            height: 100vh;
         }
 
-        /* --- Galaxy A9 & Mobile Rotation Logic --- */
+        /* --- Rotation Logic for 5:3 Tablet --- */
         #rotation-wrapper {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: #fff;
+        }
+
+        /* If device is portrait (vertical), rotate 90deg to force landscape view */
+        @media screen and (orientation: portrait) {
+            #rotation-wrapper {
+                width: 100vh; /* Swap width/height for rotation */
+                height: 100vw;
+                transform: rotate(90deg);
+                transform-origin: top left;
+                position: absolute;
+                top: 0;
+                left: 100vw; /* Move it back into view */
+            }
+        }
+
+        /* Main Container - Full Screen Flexbox */
+        .menu-container {
             width: 100%;
             height: 100%;
             display: flex;
-            justify-content: center;
-        }
-
-        /* Force Landscape on Portrait Devices */
-        @media screen and (orientation: portrait) {
-            #rotation-wrapper {
-                transform: rotate(90deg);
-                transform-origin: bottom left;
-                position: absolute;
-                top: -100vw;
-                left: 0;
-                height: 100vw;
-                width: 100vh;
-                overflow: hidden;
-                align-items: center;
-            }
-
-            /* Hide the scrollbars during rotation to prevent UI glitch */
-            body {
-                overflow: hidden;
-                background-color: #000;
-            }
-        }
-
-        /* Main Container - Scaled for mobile fit */
-        .menu-container {
+            flex-direction: column;
+            justify-content: space-between; /* Stretches content to edges */
+            padding: 1.5vh 2vw; /* Dynamic padding */
             background-color: white;
-            width: 1200px;
-            /* Fixed width design */
-            /* Scale the entire container to fit the viewport width (or height if rotated) */
-            transform-origin: top center;
-            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
-            padding: 20px 30px;
-            position: relative;
         }
 
         /* --- Header Section --- */
         header {
-            text-align: center;
-            margin-bottom: 20px;
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 20px;
-            padding-top: 10px;
+            gap: 2vw;
+            flex: 0 0 auto; /* Don't stretch header */
+            padding-bottom: 1vh;
         }
 
         .logo-text {
             color: var(--color-orange);
-            font-size: 4rem;
+            font-size: 8vh; /* Scaled to screen height */
             font-weight: 900;
             letter-spacing: 1px;
             text-transform: uppercase;
@@ -102,34 +88,25 @@
             text-decoration: none;
         }
 
-        a {
-            text-decoration: none;
-        }
+        a { text-decoration: none; }
 
         .droplets {
             color: var(--color-blue);
-            font-size: 2rem;
+            font-size: 4vh;
             display: flex;
             align-items: flex-end;
-            gap: 8px;
+            gap: 0.5vw;
         }
 
-        .droplet-small {
-            font-size: 0.6em;
-            margin-bottom: 5px;
-        }
-
-        .droplet-med {
-            font-size: 0.8em;
-            margin-bottom: 2px;
-        }
+        .droplet-small { font-size: 0.6em; margin-bottom: 5px; }
+        .droplet-med { font-size: 0.8em; margin-bottom: 2px; }
 
         /* --- Main Pricing Table --- */
         .pricing-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 10px;
             table-layout: fixed;
+            flex-grow: 1; /* This makes the table fill the available vertical space */
         }
 
         .pricing-table th,
@@ -138,18 +115,18 @@
             vertical-align: middle;
         }
 
+        /* Table Headers */
         .pricing-table thead th {
             color: var(--color-navy);
             font-weight: 900;
-            height: 120px;
-            /* Slightly Reduced */
+            height: 12vh; /* Dynamic height */
             vertical-align: bottom;
-            padding-bottom: 5px;
+            padding-bottom: 0.5vh;
         }
 
         .pricing-table thead th:first-child {
             text-align: left;
-            font-size: 1.8rem;
+            font-size: 3.5vh;
             text-transform: uppercase;
             width: 28%;
             vertical-align: bottom;
@@ -159,9 +136,9 @@
         .title-underline {
             display: block;
             width: 100%;
-            height: 4px;
+            height: 0.5vh;
             background-color: var(--color-navy);
-            margin-top: 5px;
+            margin-top: 0.5vh;
         }
 
         .col-header {
@@ -171,54 +148,39 @@
             justify-content: flex-end;
             height: 100%;
             width: 100%;
-            padding-bottom: 8px;
+            padding-bottom: 0.5vh;
         }
 
-        /* Column Widths */
-        .col-autos {
-            width: 18%;
-        }
+        .col-autos { width: 18%; }
+        .col-suv-chica { width: 18%; }
+        .col-pickup { width: 18%; }
+        .col-suv-gde { width: 18%; }
 
-        .col-suv-chica {
-            width: 18%;
-        }
-
-        .col-pickup {
-            width: 18%;
-        }
-
-        .col-suv-gde {
-            width: 18%;
-        }
-
-        /* Icon Styling (Using FontAwesome for preview, kept layout) */
         .header-icon-img {
-            font-size: 3.5rem;
-            /* Icon size */
+            font-size: 5vh; /* Dynamic Icon Size */
             color: #333;
-            margin-bottom: 10px;
+            margin-bottom: 0.5vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 60px;
         }
 
         .header-text {
-            font-size: 1rem;
+            font-size: 1.8vh;
             text-transform: uppercase;
             font-weight: 700;
         }
 
-        /* Table Body */
+        /* Table Rows */
         .pricing-table tbody tr {
-            height: 55px;
+            /* Height is handled by table flex-grow, but we set a min for structure */
         }
 
         .pricing-table tbody td:first-child {
             background-color: var(--color-navy);
             color: white;
             text-align: left;
-            padding: 5px 15px;
+            padding: 0 1vw; /* Side padding only */
             border-right: 3px solid white;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
@@ -226,7 +188,7 @@
         .service-title {
             display: block;
             font-weight: 800;
-            font-size: 1.2rem;
+            font-size: 2.2vh;
             text-transform: uppercase;
             line-height: 1.1;
         }
@@ -234,85 +196,60 @@
         .service-desc {
             display: block;
             font-weight: 400;
-            font-size: 0.8rem;
+            font-size: 1.5vh;
             color: #ccc;
-            margin-top: 2px;
+            margin-top: 0.2vh;
         }
 
         .pricing-table tbody td:not(:first-child) {
             color: white;
             font-weight: 900;
-            font-size: 1.8rem;
+            font-size: 4vh; /* Large Prices */
             border-bottom: 2px solid white;
             border-right: 2px solid rgba(255, 255, 255, 0.4);
         }
 
         /* Column Colors */
-        .pricing-table tbody td:nth-child(2) {
-            background-color: var(--col-autos);
-        }
+        .pricing-table tbody td:nth-child(2) { background-color: var(--col-autos); }
+        .pricing-table tbody td:nth-child(3) { background-color: var(--col-suv-chica); }
+        .pricing-table tbody td:nth-child(4) { background-color: var(--col-pickup); }
+        .pricing-table tbody td:nth-child(5) { background-color: var(--col-suv-gde); border-right: none; }
+        .pricing-table tbody tr:last-child td { border-bottom: none; }
 
-        .pricing-table tbody td:nth-child(3) {
-            background-color: var(--col-suv-chica);
-        }
-
-        .pricing-table tbody td:nth-child(4) {
-            background-color: var(--col-pickup);
-        }
-
-        .pricing-table tbody td:nth-child(5) {
-            background-color: var(--col-suv-gde);
-            border-right: none;
-        }
-
-        .pricing-table tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        /* --- Services Section (UPDATED: Smaller Text) --- */
+        /* --- Services Section --- */
         .services-section {
-            margin-bottom: 10px;
-            margin-top: 10px;
+            margin-top: 1vh;
+            flex: 0 0 auto;
         }
 
         .services-header {
             color: var(--color-navy);
             font-weight: 900;
-            font-size: 1.6rem;
-            margin-bottom: 8px;
+            font-size: 3vh;
+            margin-bottom: 0.5vh;
             text-transform: uppercase;
-            padding-left: 5px;
+            padding-left: 0.5vw;
         }
 
         .services-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            /* Reduced gap */
-            margin-bottom: 15px;
-        }
-
-        /* Adjusted specifically for grid layout of items */
-        .services-grid> :nth-last-child(-n+3) {
-            /* Target last 3 items to span differently if needed, or keep uniform */
+            gap: 0.8vh;
+            margin-bottom: 1vh;
         }
 
         .service-pill {
             border: 2px solid var(--color-navy);
             color: var(--color-navy);
             background: white;
-            padding: 6px 0;
-            /* Reduced padding */
+            padding: 0.8vh 0;
             border-radius: 50px;
             font-weight: 800;
-            font-size: 0.85rem;
-            /* REDUCED from 1.1rem */
+            font-size: 1.6vh;
             text-transform: uppercase;
             text-align: center;
             white-space: nowrap;
             box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         /* Blue Strip Bar */
@@ -321,16 +258,14 @@
             color: white;
             display: flex;
             align-items: center;
-            height: 50px;
-            /* Slightly smaller height */
-            padding: 0;
+            height: 6vh;
+            border-radius: 4px;
         }
 
         .strip-item {
-            padding: 0 20px;
+            padding: 0 1vw;
             border-right: 2px solid white;
-            font-size: 1.1rem;
-            /* Slightly smaller */
+            font-size: 2vh;
             height: 100%;
             display: flex;
             align-items: center;
@@ -340,23 +275,21 @@
 
         .strip-item:last-child {
             border-right: none;
-            width: 100%;
-            padding: 0 20px;
+            flex-grow: 1;
         }
 
         .zone-list {
             display: flex;
             justify-content: space-between;
             width: 100%;
-            font-size: 1.1rem;
-            /* Reduced to fit */
+            font-size: 2vh;
             font-weight: 700;
         }
 
         .strip-title {
             font-weight: 900;
             text-transform: uppercase;
-            font-size: 1.1rem;
+            font-size: 2vh;
             background-color: var(--color-blue);
         }
 
@@ -364,29 +297,27 @@
         .footer-strip {
             background-color: var(--color-orange);
             color: white;
-            padding: 8px 25px;
+            padding: 0 2vw;
             display: flex;
             justify-content: space-between;
             align-items: center;
             text-transform: uppercase;
             font-weight: 800;
-            font-size: 1.2rem;
-            margin-bottom: 5px;
-            height: 50px;
+            font-size: 2.5vh;
+            margin-top: 1vh;
+            height: 6vh;
+            border-radius: 4px;
         }
 
-        .footer-right {
-            display: flex;
-            gap: 30px;
-        }
+        .footer-right { display: flex; gap: 2vw; }
 
         .disclaimer {
             text-align: left;
-            font-size: 0.75rem;
+            font-size: 1.5vh;
             color: #000;
             font-weight: 500;
-            margin-top: 5px;
-            padding-left: 5px;
+            margin-top: 0.5vh;
+            padding-left: 0.5vw;
         }
     </style>
 </head>
@@ -422,28 +353,24 @@
                         </th>
                         <th class="col-autos">
                             <div class="col-header">
-                                <!-- Icon: Car -->
                                 <div class="header-icon-img icon-auto"><i class="fa-solid fa-car-side"></i></div>
                                 <span class="header-text">AUTOS</span>
                             </div>
                         </th>
                         <th class="col-suv-chica">
                             <div class="col-header">
-                                <!-- Icon: Compact SUV -->
                                 <div class="header-icon-img icon-suv-chica"><i class="fa-solid fa-car"></i></div>
                                 <span class="header-text">SUV CHICA</span>
                             </div>
                         </th>
                         <th class="col-pickup">
                             <div class="col-header">
-                                <!-- Icon: Pickup -->
                                 <div class="header-icon-img icon-pickup"><i class="fa-solid fa-truck-pickup"></i></div>
                                 <span class="header-text">PICK-UP/SUV MD</span>
                             </div>
                         </th>
                         <th class="col-suv-gde">
                             <div class="col-header">
-                                <!-- Icon: Large SUV -->
                                 <div class="header-icon-img icon-suv-gde"><i class="fa-solid fa-truck-monster"></i>
                                 </div>
                                 <span class="header-text">SUV GDE.</span>
@@ -475,7 +402,7 @@
                     <tr>
                         <td>
                             <span class="service-title">PAQUETE COMPLETO</span>
-                            <span class="service-desc" style="font-size: 0.75rem;">Lavado General + Alfombra +
+                            <span class="service-desc" style="font-size: 1.2vh;">Lavado General + Alfombra +
                                 Asientos</span>
                         </td>
                         <td>$840</td>
@@ -518,7 +445,6 @@
                     <div class="service-pill">BRILLO EXTRA: $40</div>
                     <div class="service-pill">ASPIRADO CAJUELA: $40</div>
                     <div class="service-pill">AROMA: $20</div>
-                    <!-- Empty div to keep grid balance if needed -->
                     <div class="service-pill" style="visibility: hidden;">Spacer</div>
                 </div>
 
@@ -526,7 +452,7 @@
                     <div class="strip-item strip-title">
                         LIMPIEZA POR ZONA $200 c/u
                     </div>
-                    <div class="strip-item" style="flex-grow: 1;">
+                    <div class="strip-item">
                         <div class="zone-list">
                             <span>Cinturones</span>
                             <span>Cajuela</span>
@@ -539,7 +465,7 @@
             </div>
 
             <!-- Footer Section -->
-            <div class="footer-strip" style="margin-top: 15px;">
+            <div class="footer-strip">
                 <div class="footer-left">VEHÍCULOS RECREATIVOS</div>
                 <div class="footer-right">
                     <span>RAZER CHICO: $640</span>
