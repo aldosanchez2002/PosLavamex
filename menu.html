@@ -3,34 +3,21 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Lista de Precios Lavamex</title>
-    <!-- Importing Roboto to match the clean sans-serif look -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         :root {
             --color-orange: #E86C24;
-            /* Branding Orange */
             --color-navy: #0F2D4A;
-            /* Deep Navy */
             --color-blue: #3A6894;
-            /* Branding Blue */
             --color-white: #ffffff;
-
-            /* Specific Column Colors (RGB) */
             --col-autos: rgb(66, 197, 245);
             --col-suv-chica: rgb(61, 89, 125);
             --col-pickup: rgb(204, 103, 42);
             --col-suv-gde: rgb(245, 123, 66);
-
-            /* Icon Image Links - Relative paths for local folder 'icons' */
-            --url-icon-auto: url('icons/auto.png');
-            --url-icon-suv-chica: url('icons/suv-chica.png');
-            --url-icon-pickup: url('icons/pickup.png');
-            --url-icon-suv-gde: url('icons/suv-gde.png');
         }
 
         * {
@@ -43,33 +30,59 @@
 
         body {
             font-family: 'Roboto', sans-serif;
-            background-color: #333;
-            /* Dark background to pop the paper */
+            background-color: #222;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start; /* Changed to flex-start for scrolling */
             min-height: 100vh;
             padding: 20px;
+            overflow-x: hidden;
         }
 
-        /* Main Container - Fixed size to resemble the printed menu */
+        /* --- Galaxy A9 & Mobile Rotation Logic --- */
+        #rotation-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Force Landscape on Portrait Devices */
+        @media screen and (orientation: portrait) {
+            #rotation-wrapper {
+                transform: rotate(90deg);
+                transform-origin: bottom left;
+                position: absolute;
+                top: -100vw;
+                left: 0;
+                height: 100vw;
+                width: 100vh;
+                overflow: hidden;
+                align-items: center;
+            }
+            
+            /* Hide the scrollbars during rotation to prevent UI glitch */
+            body {
+                overflow: hidden; 
+                background-color: #000;
+            }
+        }
+
+        /* Main Container - Scaled for mobile fit */
         .menu-container {
             background-color: white;
-            width: 100%;
-            max-width: 1200px;
-            /* Aspect ratio approx landscape */
-            padding: 20px 40px;
+            width: 1200px; /* Fixed width design */
+            /* Scale the entire container to fit the viewport width (or height if rotated) */
+            transform-origin: top center;
             box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            padding: 20px 30px;
             position: relative;
-            overflow: hidden;
         }
 
         /* --- Header Section --- */
         header {
             text-align: center;
             margin-bottom: 20px;
-            position: relative;
-            z-index: 1;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -84,8 +97,10 @@
             letter-spacing: 1px;
             text-transform: uppercase;
             line-height: 1;
-            text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.1);
+            text-decoration: none;
         }
+        
+        a { text-decoration: none; }
 
         .droplets {
             color: var(--color-blue);
@@ -95,25 +110,15 @@
             gap: 8px;
         }
 
-        .droplet-small {
-            font-size: 0.6em;
-            margin-bottom: 5px;
-        }
-
-        .droplet-med {
-            font-size: 0.8em;
-            margin-bottom: 2px;
-        }
+        .droplet-small { font-size: 0.6em; margin-bottom: 5px; }
+        .droplet-med { font-size: 0.8em; margin-bottom: 2px; }
 
         /* --- Main Pricing Table --- */
         .pricing-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 15px;
-            position: relative;
-            z-index: 1;
+            margin-bottom: 10px;
             table-layout: fixed;
-            /* Ensures even columns */
         }
 
         .pricing-table th,
@@ -122,35 +127,23 @@
             vertical-align: middle;
         }
 
-        /* Header Row Styles */
         .pricing-table thead th {
             color: var(--color-navy);
-            /* Changed from white to Navy */
             font-weight: 900;
-            height: 135px;
-            /* Reduced height to remove empty space above icons */
-            position: relative;
+            height: 120px; /* Slightly Reduced */
             vertical-align: bottom;
-            /* Align cell content to bottom */
-            padding-bottom: 0;
-            /* Remove default padding to let flexbox handle it */
+            padding-bottom: 5px;
         }
 
-        /* Column 1 Header: Title */
         .pricing-table thead th:first-child {
-            background-color: white;
-            color: var(--color-navy);
             text-align: left;
             font-size: 1.8rem;
             text-transform: uppercase;
-            padding-left: 0;
             width: 28%;
             vertical-align: bottom;
-            padding-bottom: 10px;
             line-height: 0.9;
         }
 
-        /* The thin underline for the title */
         .title-underline {
             display: block;
             width: 100%;
@@ -159,80 +152,31 @@
             margin-top: 5px;
         }
 
-        /* Column Headers Styling */
         .col-header {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: flex-end;
-            /* Align content to the bottom */
             height: 100%;
             width: 100%;
             padding-bottom: 8px;
-            /* Small padding from the bottom edge */
         }
 
-        .col-autos {
-            width: 18%;
-        }
+        /* Column Widths */
+        .col-autos { width: 18%; }
+        .col-suv-chica { width: 18%; }
+        .col-pickup { width: 18%; }
+        .col-suv-gde { width: 18%; }
 
-        .col-suv-chica {
-            width: 18%;
-        }
-
-        .col-pickup {
-            width: 18%;
-        }
-
-        .col-suv-gde {
-            width: 18%;
-        }
-
-        /* Updated Icon Styling for Imported Images */
+        /* Icon Styling (Using FontAwesome for preview, kept layout) */
         .header-icon-img {
-            width: 150px;
-            /* Base width for standard icons (SUV GDE) */
-            height: 90px;
-            /* Base height for standard icons (SUV GDE) */
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: bottom center;
-            margin-bottom: 2px;
-            display: block;
-            /* Force icons to be black for contrast against white background */
-            filter: grayscale(100%) brightness(0);
-        }
-
-        /* Classes to apply the variables */
-        .icon-auto {
-            background-image: var(--url-icon-auto);
-            width: 173px;
-            /* Scaled up ~15% from 150px */
-            height: 104px;
-            /* Scaled up ~15% from 90px */
-        }
-
-        .icon-suv-chica {
-            background-image: var(--url-icon-suv-chica);
-            width: 173px;
-            /* Scaled up ~15% */
-            height: 104px;
-            /* Scaled up ~15% */
-        }
-
-        .icon-pickup {
-            background-image: var(--url-icon-pickup);
-            width: 173px;
-            /* Scaled up ~15% */
-            height: 104px;
-            /* Scaled up ~15% */
-            transform: scaleX(-1);
-            /* Flips the icon horizontally */
-        }
-
-        .icon-suv-gde {
-            background-image: var(--url-icon-suv-gde);
-            /* Stays at base size 150x90 defined in .header-icon-img */
+            font-size: 3.5rem; /* Icon size */
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 60px;
         }
 
         .header-text {
@@ -241,19 +185,14 @@
             font-weight: 700;
         }
 
-        /* Data Rows Styling */
+        /* Table Body */
+        .pricing-table tbody tr { height: 55px; }
 
-        /* Row Height Control */
-        .pricing-table tbody tr {
-            height: 60px;
-        }
-
-        /* First Column: Descriptions */
         .pricing-table tbody td:first-child {
             background-color: var(--color-navy);
             color: white;
             text-align: left;
-            padding: 8px 15px;
+            padding: 5px 15px;
             border-right: 3px solid white;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
@@ -261,7 +200,7 @@
         .service-title {
             display: block;
             font-weight: 800;
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             text-transform: uppercase;
             line-height: 1.1;
         }
@@ -269,100 +208,68 @@
         .service-desc {
             display: block;
             font-weight: 400;
-            font-size: 0.85rem;
-            color: #ddd;
+            font-size: 0.8rem;
+            color: #ccc;
             margin-top: 2px;
         }
 
-        /* Price Columns */
         .pricing-table tbody td:not(:first-child) {
             color: white;
             font-weight: 900;
             font-size: 1.8rem;
             border-bottom: 2px solid white;
-            /* Thick white divider */
-            font-family: 'Roboto', sans-serif;
-            letter-spacing: -0.5px;
-        }
-
-        .pricing-table tbody td:nth-child(2) {
-            background-color: var(--col-autos);
             border-right: 2px solid rgba(255, 255, 255, 0.4);
         }
 
-        .pricing-table tbody td:nth-child(3) {
-            background-color: var(--col-suv-chica);
-            border-right: 2px solid rgba(255, 255, 255, 0.4);
-        }
+        /* Column Colors */
+        .pricing-table tbody td:nth-child(2) { background-color: var(--col-autos); }
+        .pricing-table tbody td:nth-child(3) { background-color: var(--col-suv-chica); }
+        .pricing-table tbody td:nth-child(4) { background-color: var(--col-pickup); }
+        .pricing-table tbody td:nth-child(5) { background-color: var(--col-suv-gde); border-right: none; }
+        
+        .pricing-table tbody tr:last-child td { border-bottom: none; }
 
-        .pricing-table tbody td:nth-child(4) {
-            background-color: var(--col-pickup);
-            border-right: 2px solid rgba(255, 255, 255, 0.4);
-        }
-
-        .pricing-table tbody td:nth-child(5) {
-            background-color: var(--col-suv-gde);
-            border-right: 2px solid rgba(255, 255, 255, 0.4);
-        }
-
-        .pricing-table tbody td:last-child {
-            border-right: none;
-        }
-
-        /* Remove bottom border for last row */
-        .pricing-table tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        /* --- Services Section --- */
+        /* --- Services Section (UPDATED: Smaller Text) --- */
         .services-section {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             margin-top: 10px;
         }
 
         .services-header {
             color: var(--color-navy);
             font-weight: 900;
-            font-size: 1.8rem;
-            margin-bottom: 10px;
+            font-size: 1.6rem;
+            margin-bottom: 8px;
             text-transform: uppercase;
             padding-left: 5px;
         }
 
         .services-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            /* 4 columns for top row, adjust for bottom */
-            gap: 15px;
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 10px; /* Reduced gap */
             margin-bottom: 15px;
         }
-
-        .services-row-1 {
-            display: flex;
-            justify-content: space-between;
-            gap: 15px;
-            margin-bottom: 10px;
-        }
-
-        .services-row-2 {
-            display: flex;
-            justify-content: space-between;
-            gap: 15px;
+        
+        /* Adjusted specifically for grid layout of items */
+        .services-grid > :nth-last-child(-n+3) {
+             /* Target last 3 items to span differently if needed, or keep uniform */
         }
 
         .service-pill {
             border: 2px solid var(--color-navy);
             color: var(--color-navy);
             background: white;
-            padding: 8px 0;
+            padding: 6px 0; /* Reduced padding */
             border-radius: 50px;
             font-weight: 800;
-            font-size: 1.1rem;
+            font-size: 0.85rem; /* REDUCED from 1.1rem */
             text-transform: uppercase;
             text-align: center;
-            flex: 1;
             white-space: nowrap;
-            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.05);
+            box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         /* Blue Strip Bar */
@@ -371,84 +278,58 @@
             color: white;
             display: flex;
             align-items: center;
+            height: 50px; /* Slightly smaller height */
             padding: 0;
-            height: 60px;
-            /* Increased height */
         }
 
         .strip-item {
-            padding: 0 25px;
-            /* Increased horizontal padding */
+            padding: 0 20px;
             border-right: 2px solid white;
-            font-size: 1.25rem;
-            /* Increased font size */
+            font-size: 1.1rem; /* Slightly smaller */
             height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
             white-space: nowrap;
-            /* Prevent wrapping */
         }
 
         .strip-item:last-child {
             border-right: none;
-            justify-content: center;
-            /* Center the container */
-            padding-left: 30px;
-            padding-right: 30px;
             width: 100%;
-            /* Ensures it takes available space */
+            padding: 0 20px;
         }
 
-        /* Style for the list of items to replace commas with spacing */
         .zone-list {
             display: flex;
             justify-content: space-between;
-            /* Dynamic spacing instead of fixed gap */
             width: 100%;
-            /* fill the container */
-            font-size: 1.45rem;
-            /* Slightly adjusted to ensure fit */
+            font-size: 1.1rem; /* Reduced to fit */
             font-weight: 700;
-            /* Bold for visibility */
         }
 
         .strip-title {
             font-weight: 900;
             text-transform: uppercase;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             background-color: var(--color-blue);
-            white-space: nowrap;
-        }
-
-        .strip-price {
-            font-weight: 900;
-            margin-left: 5px;
         }
 
         /* --- Footer Section --- */
         .footer-strip {
             background-color: var(--color-orange);
             color: white;
-            padding: 10px 25px;
+            padding: 8px 25px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             text-transform: uppercase;
             font-weight: 800;
-            font-size: 1.4rem;
+            font-size: 1.2rem;
             margin-bottom: 5px;
-            height: 55px;
+            height: 50px;
         }
 
-        .footer-left {
-            text-align: left;
-        }
-
-        .footer-right {
-            display: flex;
-            gap: 40px;
-        }
+        .footer-right { display: flex; gap: 30px; }
 
         .disclaimer {
             text-align: left;
@@ -458,178 +339,207 @@
             margin-top: 5px;
             padding-left: 5px;
         }
-
-        /* Utilities */
-        .text-small {
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-
-        .text-navy {
-            color: var(--color-navy);
-        }
     </style>
 </head>
 
 <body>
 
-    <div class="menu-container">
-        <!-- Header -->
-        <header>
-            <div class="droplets">
-                <i class="fa-solid fa-droplet droplet-small" style="transform: rotate(15deg);"></i>
-                <i class="fa-solid fa-droplet droplet-med" style="transform: rotate(0deg);"></i>
-                <i class="fa-solid fa-droplet" style="transform: rotate(-15deg);"></i>
-            </div>
-            <a href="https://lavamex.work">
-                <div class="logo-text">LAVAMEX</div>
-            </a>
-            <div class="droplets">
-                <i class="fa-solid fa-droplet" style="transform: rotate(15deg);"></i>
-                <i class="fa-solid fa-droplet droplet-med" style="transform: rotate(0deg);"></i>
-                <i class="fa-solid fa-droplet droplet-small" style="transform: rotate(-15deg);"></i>
-            </div>
-        </header>
-
-        <!-- Main Pricing Table -->
-        <table class="pricing-table">
-            <thead>
-                <tr>
-                    <!-- Title Column -->
-                    <th>
-                        PAQUETES DE LAVADO
-                        <span class="title-underline"></span>
-                    </th>
-                    <!-- Headers -->
-                    <th class="col-autos">
-                        <div class="col-header">
-                            <!-- Autos (Sedan) -->
-                            <div class="header-icon-img icon-auto" role="img" aria-label="Auto"></div>
-                            <span class="header-text">AUTOS</span>
-                        </div>
-                    </th>
-                    <th class="col-suv-chica">
-                        <div class="col-header">
-                            <!-- SUV Chica (Crossover/Hatchback) -->
-                            <div class="header-icon-img icon-suv-chica" role="img" aria-label="SUV Chica"></div>
-                            <span class="header-text">SUV CHICA</span>
-                        </div>
-                    </th>
-                    <th class="col-pickup">
-                        <div class="col-header">
-                            <!-- Pick-up -->
-                            <div class="header-icon-img icon-pickup" role="img" aria-label="Pick-up"></div>
-                            <span class="header-text">PICK-UP/SUV MD</span>
-                        </div>
-                    </th>
-                    <th class="col-suv-gde">
-                        <div class="col-header">
-                            <!-- SUV Grande (Large SUV) -->
-                            <div class="header-icon-img icon-suv-gde" role="img" aria-label="SUV Grande"></div>
-                            <span class="header-text">SUV GDE.</span>
-                        </div>
-                    </th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>
-                        <span class="service-title">LAVADO GENERAL</span>
-                        <span class="service-desc">Exterior, Limpieza Interior, Brillo</span>
-                    </td>
-                    <td>$200</td>
-                    <td>$240</td>
-                    <td>$360</td>
-                    <td>$360</td>
-                </tr>
-                <tr>
-                    <td>
-                        <span class="service-title">LAVADO + CERA</span>
-                        <span class="service-desc">Lavado General + Cera</span>
-                    </td>
-                    <td>$540</td>
-                    <td>$640</td>
-                    <td>$820</td>
-                    <td>$820</td>
-                </tr>
-                <tr>
-                    <td>
-                        <span class="service-title">PAQUETE COMPLETO</span>
-                        <span class="service-desc" style="font-size: 0.75rem;">Lavado General + Alfombra +
-                            Asientos</span>
-                    </td>
-                    <td>$840</td>
-                    <td>$1,040</td>
-                    <td>$1,160</td>
-                    <td>$1,640</td>
-                </tr>
-                <tr>
-                    <td>
-                        <span class="service-title">PAQUETE PREMIUM</span>
-                        <span class="service-desc">Lavado General + Alfombra + Asientos + Cera</span>
-                    </td>
-                    <td>$1,180</td>
-                    <td>$1,440</td>
-                    <td>$1,620</td>
-                    <td>$2,100</td>
-                </tr>
-                <tr>
-                    <td>
-                        <span class="service-title">PAQUETE PRESIDENCIAL</span>
-                        <span class="service-desc">Lavado General + Cera + Polish</span>
-                    </td>
-                    <td>$1,540</td>
-                    <td>$1,940</td>
-                    <td>$2,320</td>
-                    <td>$2,320</td>
-                </tr>
-            </tbody>
-        </table>
-
-        <!-- Services Section -->
-        <div class="services-section">
-            <h2 class="services-header">SERVICIOS</h2>
-
-            <div class="services-grid">
-                <div class="service-pill">LAVADO DE MOTOR: $400</div>
-                <div class="service-pill">LAVADO DE CHASIS: $400</div>
-                <div class="service-pill">LIMPIEZA DE FOCOS: $340</div>
-                <div class="service-pill">BOLEADA: $60</div>
-                <div class="service-pill">BRILLO EXTRA: $40</div>
-                <div class="service-pill">ASPIRADO CAJUELA: $40</div>
-                <div class="service-pill">AROMA: $20</div>
-            </div>
-
-            <div class="blue-info-strip">
-                <div class="strip-item strip-title">
-                    LIMPIEZA POR ZONA $200 c/u
+    <div id="rotation-wrapper">
+        <div class="menu-container" id="menu">
+            <!-- Header -->
+            <header>
+                <div class="droplets">
+                    <i class="fa-solid fa-droplet droplet-small" style="transform: rotate(15deg);"></i>
+                    <i class="fa-solid fa-droplet droplet-med" style="transform: rotate(0deg);"></i>
+                    <i class="fa-solid fa-droplet" style="transform: rotate(-15deg);"></i>
                 </div>
-                <div class="strip-item" style="flex-grow: 1;">
-                    <div class="zone-list">
-                        <span>Cinturones</span>
-                        <span>Cajuela</span>
-                        <span>Cielo</span>
-                        <span>Plásticos</span>
-                        <span>Silla de bebe</span>
+                <a href="https://lavamex.work">
+                    <div class="logo-text">LAVAMEX</div>
+                </a>
+                <div class="droplets">
+                    <i class="fa-solid fa-droplet" style="transform: rotate(15deg);"></i>
+                    <i class="fa-solid fa-droplet droplet-med" style="transform: rotate(0deg);"></i>
+                    <i class="fa-solid fa-droplet droplet-small" style="transform: rotate(-15deg);"></i>
+                </div>
+            </header>
+
+            <!-- Main Pricing Table -->
+            <table class="pricing-table">
+                <thead>
+                    <tr>
+                        <th>
+                            PAQUETES DE LAVADO
+                            <span class="title-underline"></span>
+                        </th>
+                        <th class="col-autos">
+                            <div class="col-header">
+                                <!-- Icon: Car -->
+                                <div class="header-icon-img icon-auto"><i class="fa-solid fa-car-side"></i></div>
+                                <span class="header-text">AUTOS</span>
+                            </div>
+                        </th>
+                        <th class="col-suv-chica">
+                            <div class="col-header">
+                                <!-- Icon: Compact SUV -->
+                                <div class="header-icon-img icon-suv-chica"><i class="fa-solid fa-car"></i></div>
+                                <span class="header-text">SUV CHICA</span>
+                            </div>
+                        </th>
+                        <th class="col-pickup">
+                            <div class="col-header">
+                                <!-- Icon: Pickup -->
+                                <div class="header-icon-img icon-pickup"><i class="fa-solid fa-truck-pickup"></i></div>
+                                <span class="header-text">PICK-UP/SUV MD</span>
+                            </div>
+                        </th>
+                        <th class="col-suv-gde">
+                            <div class="col-header">
+                                <!-- Icon: Large SUV -->
+                                <div class="header-icon-img icon-suv-gde"><i class="fa-solid fa-truck-monster"></i></div>
+                                <span class="header-text">SUV GDE.</span>
+                            </div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <span class="service-title">LAVADO GENERAL</span>
+                            <span class="service-desc">Exterior, Limpieza Interior, Brillo</span>
+                        </td>
+                        <td>$200</td>
+                        <td>$240</td>
+                        <td>$360</td>
+                        <td>$360</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="service-title">LAVADO + CERA</span>
+                            <span class="service-desc">Lavado General + Cera</span>
+                        </td>
+                        <td>$540</td>
+                        <td>$640</td>
+                        <td>$820</td>
+                        <td>$820</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="service-title">PAQUETE COMPLETO</span>
+                            <span class="service-desc" style="font-size: 0.75rem;">Lavado General + Alfombra + Asientos</span>
+                        </td>
+                        <td>$840</td>
+                        <td>$1,040</td>
+                        <td>$1,160</td>
+                        <td>$1,640</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="service-title">PAQUETE PREMIUM</span>
+                            <span class="service-desc">Lavado General + Alfombra + Asientos + Cera</span>
+                        </td>
+                        <td>$1,180</td>
+                        <td>$1,440</td>
+                        <td>$1,620</td>
+                        <td>$2,100</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="service-title">PAQUETE PRESIDENCIAL</span>
+                            <span class="service-desc">Lavado General + Cera + Polish</span>
+                        </td>
+                        <td>$1,540</td>
+                        <td>$1,940</td>
+                        <td>$2,320</td>
+                        <td>$2,320</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Services Section -->
+            <div class="services-section">
+                <h2 class="services-header">SERVICIOS</h2>
+
+                <div class="services-grid">
+                    <div class="service-pill">LAVADO DE MOTOR: $400</div>
+                    <div class="service-pill">LAVADO DE CHASIS: $400</div>
+                    <div class="service-pill">LIMPIEZA DE FOCOS: $340</div>
+                    <div class="service-pill">BOLEADA: $60</div>
+                    <div class="service-pill">BRILLO EXTRA: $40</div>
+                    <div class="service-pill">ASPIRADO CAJUELA: $40</div>
+                    <div class="service-pill">AROMA: $20</div>
+                    <!-- Empty div to keep grid balance if needed -->
+                    <div class="service-pill" style="visibility: hidden;">Spacer</div>
+                </div>
+
+                <div class="blue-info-strip">
+                    <div class="strip-item strip-title">
+                        LIMPIEZA POR ZONA $200 c/u
+                    </div>
+                    <div class="strip-item" style="flex-grow: 1;">
+                        <div class="zone-list">
+                            <span>Cinturones</span>
+                            <span>Cajuela</span>
+                            <span>Cielo</span>
+                            <span>Plásticos</span>
+                            <span>Silla de bebe</span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Footer Section -->
-        <div class="footer-strip" style="margin-top: 15px;">
-            <div class="footer-left">VEHÍCULOS RECREATIVOS</div>
-            <div class="footer-right">
-                <span>RAZER CHICO: $640</span>
-                <span>RAZER GRANDE: $800</span>
+            <!-- Footer Section -->
+            <div class="footer-strip" style="margin-top: 15px;">
+                <div class="footer-left">VEHÍCULOS RECREATIVOS</div>
+                <div class="footer-right">
+                    <span>RAZER CHICO: $640</span>
+                    <span>RAZER GRANDE: $800</span>
+                </div>
             </div>
-        </div>
 
-        <div class="disclaimer">
-            * Precios no incluyen IVA. Los precios pueden variar según el vehiculo.
+            <div class="disclaimer">
+                * Precios no incluyen IVA. Los precios pueden variar según el vehiculo.
+            </div>
         </div>
     </div>
 
-</body>
+    <script>
+        // Script to scale the menu to fit the screen width exactly
+        function scaleMenu() {
+            const menu = document.querySelector('.menu-container');
+            const wrapper = document.getElementById('rotation-wrapper');
+            const menuWidth = 1200; // The fixed width of the design
+            
+            // Check orientation
+            const isPortrait = window.innerHeight > window.innerWidth;
+            
+            // Available width depends on orientation because of our CSS rotation
+            const availableWidth = isPortrait ? window.innerHeight : window.innerWidth;
+            const availableHeight = isPortrait ? window.innerWidth : window.innerHeight;
 
+            // Calculate scale
+            // We leave a small margin (20px) so it doesn't touch edges perfectly
+            let scale = (availableWidth - 20) / menuWidth;
+            
+            // Apply scale
+            menu.style.transform = `scale(${scale})`;
+            
+            // Adjust wrapper height to accommodate the scaled menu (removes excess scrolling)
+            const scaledHeight = menu.offsetHeight * scale;
+            
+            // Center it vertically if there is space
+            if(scaledHeight < availableHeight) {
+                if (isPortrait) {
+                     // In portrait (rotated), centering logic is handled by flexbox in CSS, 
+                     // but we need to ensure the wrapper width matches the scaled content
+                     // wrapper.style.width = `${scaledHeight}px`; 
+                } else {
+                     wrapper.style.height = `${scaledHeight}px`;
+                }
+            }
+        }
+
+        window.addEventListener('load', scaleMenu);
+        window.addEventListener('resize', scaleMenu);
+    </script>
+</body>
 </html>
