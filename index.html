@@ -300,13 +300,13 @@
             // SHARED HEADER FOR RECEIPT AND TICKET
             // Includes styling for tight spacing (line-height)
             getReceiptHeader: () => `
-                <div style="text-align:center; font-weight:bold; font-size: 14px; line-height: 1.2;">
-                    <div>CARWASH LAVAMEX</div>
-                    <div>WATERFILL 216 CP 32553</div>
-                    <div>CD. JUAREZ CHIH.</div>
-                    <div>RFC. CACN760904AN7</div>
+                <div style="text-align:center; font-weight:bold; font-size: 14px; line-height: 1; white-space: pre-line;">
+CARWASH LAVAMEX
+WATERFILL 216 CP 32553
+CD. JUAREZ CHIH.
+RFC. CACN760904AN7
+--------------------------------
                 </div>
-                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
             `,
 
             // SPANISH DATE FORMAT
@@ -320,33 +320,41 @@
 
             getJobTicketHtml: (ticket, shortId) => {
                 const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
-                const extrasHtml = ticket.extras && ticket.extras.length > 0
-                    ? ticket.extras.map(e => `<div>+ ${e.label}</div>`).join('')
+                // Generate extras string with newlines
+                const extrasText = ticket.extras && ticket.extras.length > 0
+                    ? ticket.extras.map(e => `+ ${e.label}`).join('\n')
                     : '';
 
-                // Using specific line-height and margin:0 to reduce paper waste
                 return `
-            <div style="font-family: monospace; line-height: 1.1; color: #000;">
-                ${PrintService.getReceiptHeader()}
-                <div style="font-size:18px; margin: 2px 0;"><b>TICKET: #${shortId}</b></div>
-                <div style="font-size:18px; margin: 2px 0;">${washers}</div>
-                <div style="font-size:16px; margin: 2px 0;">${ticket.size ? ticket.size.label : ''}</div>
-                <div style="font-size:16px; margin: 2px 0;">${ticket.service ? ticket.service.label : 'Extras Only'}</div>
-                <div style="margin: 2px 0;">${extrasHtml}</div>
-                ${ticket.vehicleDesc ? `<div style="margin: 2px 0;">(${ticket.vehicleDesc})</div>` : ''}
-                <div style="text-align:center; margin: 5px 0;">--------------------------------</div>
+            ${PrintService.getReceiptHeader()}
+            <div style="font-family: monospace; line-height: 1; color: #000; white-space: pre-line;">
+TICKET: #${shortId}
+${washers}
+${ticket.size ? ticket.size.label : ''}
+${ticket.service ? ticket.service.label : 'Extras Only'}
+${extrasText}
+${ticket.vehicleDesc ? `(${ticket.vehicleDesc})` : ''}
+--------------------------------
             </div>
         `;
             },
 
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
-                const extrasHtml = ticket.extras && ticket.extras.length > 0
-                    ? ticket.extras.map(e => `<div style="margin: 1px 0;">+ ${e.label} $${e.price}</div>`).join('')
+                const effSnackPrice = currentSnackPrice || 25;
+                const method = payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO';
+
+                // Build text blocks
+                const extrasText = ticket.extras && ticket.extras.length > 0
+                    ? ticket.extras.map(e => `+ ${e.label} $${e.price}`).join('\n')
                     : '';
 
-                const displayBasePrice = ticket.basePrice || 0;
-                const method = payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO';
-                const effSnackPrice = currentSnackPrice || 25;
+                const snackText = ticket.snackCount > 0
+                    ? `+ Snacks (${ticket.snackCount}) $${ticket.snackCount * effSnackPrice}`
+                    : '';
+
+                const paymentText = payment.method === 'CASH'
+                    ? `Recibido: $${(payment.mxn + (payment.usd * payment.rate)).toFixed(2)}\nCambio: $${payment.change.toFixed(2)}`
+                    : '';
 
                 const carAscii = `
   ______
@@ -355,46 +363,47 @@
 =\`-(_)--(_)-'  hjw
 `;
 
-                // Using specific line-height and margin:0 to reduce paper waste
                 return `
-            <div style="font-family: monospace; line-height: 1.1; color: #000;">
-                ${PrintService.getReceiptHeader()}
-                <div style="margin: 1px 0;">Ticket: #${shortId}</div>
-                <div style="margin: 1px 0;">Fecha: ${PrintService.getFormattedDate()}</div>
-                <div style="margin: 1px 0;">Metodo: ${method}</div>
-                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
-                <div style="font-weight:bold; margin: 1px 0;">${ticket.service ? ticket.service.label : 'General'} $${displayBasePrice}</div>
-                ${extrasHtml}
-                ${ticket.snackCount > 0 ? `<div style="margin: 1px 0;">+ Snacks (${ticket.snackCount}) $${ticket.snackCount * effSnackPrice}</div>` : ''}
-                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
-                <div style="font-size:18px; font-weight:bold; margin: 4px 0;">TOTAL: $${ticket.price}</div>
-                ${payment.method === 'CASH' ? `<div style="margin: 1px 0;">Recibido: $${(payment.mxn + (payment.usd * payment.rate)).toFixed(2)}</div><div style="margin: 1px 0;">Cambio: $${payment.change.toFixed(2)}</div>` : ''}
-                <div style="text-align:center; margin-top:8px; margin-bottom: 2px;">Gracias por su preferencia</div>
-                <div style="font-family: monospace; white-space: pre; text-align: center; line-height: 10px; font-size: 10px; overflow: hidden; font-weight: bold;">${carAscii}</div>
+            ${PrintService.getReceiptHeader()}
+            <div style="font-family: monospace; line-height: 1; color: #000; white-space: pre-line;">
+Ticket: #${shortId}
+Fecha: ${PrintService.getFormattedDate()}
+Metodo: ${method}
+--------------------------------
+${ticket.service ? ticket.service.label : 'General'} $${ticket.basePrice || 0}
+${extrasText}
+${snackText}
+--------------------------------
+TOTAL: $${ticket.price}
+${paymentText}
+Gracias por su preferencia
+            </div>
+            <div style="font-family: monospace; white-space: pre; text-align: center; line-height: 10px; font-size: 10px; font-weight: bold;">
+${carAscii}
             </div>
         `;
             },
 
             getCorteHtml: (data) => {
                 return `
-            <div style="font-family: monospace; line-height: 1.1; color: #000;">
-                ${PrintService.getReceiptHeader()}
-                <div style="font-size:16px; font-weight:bold; text-align:center; margin: 2px 0;">CORTE ${data.type}</div>
-                <div style="text-align:center; margin: 2px 0;">${data.dateLabel}</div>
-                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
-                <div style="margin: 2px 0;"><b>Ventas: $${data.totals.total}</b></div>
-                <div style="margin: 2px 0;">Tickets: ${data.tickets.length}</div>
-                <br>
-                <div style="margin: 2px 0;"><b>Efectivo: $${data.totals.cashTotal}</b></div>
-                <div style="margin: 2px 0;">(USD Caja: $${data.totals.cashUsd.toFixed(2)})</div>
-                <div style="margin: 2px 0;">(MXN Calc: $${data.totals.cashMxn.toFixed(2)})</div>
-                <div style="margin: 2px 0;"><b>Tarjeta: $${data.totals.card}</b></div>
-                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
-                <div style="margin: 2px 0;"><b>NETO EN CAJA:</b></div>
-                <div style="margin: 2px 0;">MXN: $${data.totals.cashNetMxn.toFixed(2)}</div>
-                <div style="margin: 2px 0;">USD: $${data.totals.cashNetUsd.toFixed(2)}</div>
-                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
-                ${data.totals.expenses > 0 ? `<div style="margin: 2px 0;">Gastos: -$${data.totals.expenses}</div>` : ''}
+            ${PrintService.getReceiptHeader()}
+            <div style="font-family: monospace; line-height: 1; color: #000; white-space: pre-line;">
+CORTE ${data.type}
+${data.dateLabel}
+--------------------------------
+Ventas: $${data.totals.total}
+Tickets: ${data.tickets.length}
+
+Efectivo: $${data.totals.cashTotal}
+(USD Caja: $${data.totals.cashUsd.toFixed(2)})
+(MXN Calc: $${data.totals.cashMxn.toFixed(2)})
+Tarjeta: $${data.totals.card}
+--------------------------------
+NETO EN CAJA:
+MXN: $${data.totals.cashNetMxn.toFixed(2)}
+USD: $${data.totals.cashNetUsd.toFixed(2)}
+--------------------------------
+${data.totals.expenses > 0 ? `Gastos: -$${data.totals.expenses}` : ''}
             </div>
         `;
             }
