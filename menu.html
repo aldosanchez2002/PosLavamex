@@ -124,12 +124,16 @@
 
         /* Header Row Styles */
         .pricing-table thead th {
-            color: var(--color-navy); /* Changed from white to Navy */
+            color: var(--color-navy);
+            /* Changed from white to Navy */
             font-weight: 900;
-            height: 135px; /* Reduced height to remove empty space above icons */
+            height: 135px;
+            /* Reduced height to remove empty space above icons */
             position: relative;
-            vertical-align: bottom; /* Align cell content to bottom */
-            padding-bottom: 0; /* Remove default padding to let flexbox handle it */
+            vertical-align: bottom;
+            /* Align cell content to bottom */
+            padding-bottom: 0;
+            /* Remove default padding to let flexbox handle it */
         }
 
         /* Column 1 Header: Title */
@@ -160,10 +164,12 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-end; /* Align content to the bottom */
+            justify-content: flex-end;
+            /* Align content to the bottom */
             height: 100%;
             width: 100%;
-            padding-bottom: 8px; /* Small padding from the bottom edge */
+            padding-bottom: 8px;
+            /* Small padding from the bottom edge */
         }
 
         .col-autos {
@@ -184,8 +190,10 @@
 
         /* Updated Icon Styling for Imported Images */
         .header-icon-img {
-            width: 150px; /* Base width for standard icons (SUV GDE) */
-            height: 90px; /* Base height for standard icons (SUV GDE) */
+            width: 150px;
+            /* Base width for standard icons (SUV GDE) */
+            height: 90px;
+            /* Base height for standard icons (SUV GDE) */
             background-size: contain;
             background-repeat: no-repeat;
             background-position: bottom center;
@@ -198,21 +206,28 @@
         /* Classes to apply the variables */
         .icon-auto {
             background-image: var(--url-icon-auto);
-            width: 173px; /* Scaled up ~15% from 150px */
-            height: 104px; /* Scaled up ~15% from 90px */
+            width: 173px;
+            /* Scaled up ~15% from 150px */
+            height: 104px;
+            /* Scaled up ~15% from 90px */
         }
 
         .icon-suv-chica {
             background-image: var(--url-icon-suv-chica);
-            width: 173px; /* Scaled up ~15% */
-            height: 104px; /* Scaled up ~15% */
+            width: 173px;
+            /* Scaled up ~15% */
+            height: 104px;
+            /* Scaled up ~15% */
         }
 
         .icon-pickup {
             background-image: var(--url-icon-pickup);
-            width: 173px; /* Scaled up ~15% */
-            height: 104px; /* Scaled up ~15% */
-            transform: scaleX(-1); /* Flips the icon horizontally */
+            width: 173px;
+            /* Scaled up ~15% */
+            height: 104px;
+            /* Scaled up ~15% */
+            transform: scaleX(-1);
+            /* Flips the icon horizontally */
         }
 
         .icon-suv-gde {
@@ -357,35 +372,45 @@
             display: flex;
             align-items: center;
             padding: 0;
-            height: 60px; /* Increased height */
+            height: 60px;
+            /* Increased height */
         }
 
         .strip-item {
-            padding: 0 25px; /* Increased horizontal padding */
+            padding: 0 25px;
+            /* Increased horizontal padding */
             border-right: 2px solid white;
-            font-size: 1.25rem; /* Increased font size */
+            font-size: 1.25rem;
+            /* Increased font size */
             height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            white-space: nowrap; /* Prevent wrapping */
+            white-space: nowrap;
+            /* Prevent wrapping */
         }
 
         .strip-item:last-child {
             border-right: none;
-            justify-content: center; /* Center the container */
+            justify-content: center;
+            /* Center the container */
             padding-left: 30px;
             padding-right: 30px;
-            width: 100%; /* Ensures it takes available space */
+            width: 100%;
+            /* Ensures it takes available space */
         }
 
         /* Style for the list of items to replace commas with spacing */
         .zone-list {
             display: flex;
-            justify-content: space-between; /* Dynamic spacing instead of fixed gap */
-            width: 100%; /* fill the container */
-            font-size: 1.45rem; /* Slightly adjusted to ensure fit */
-            font-weight: 700; /* Bold for visibility */
+            justify-content: space-between;
+            /* Dynamic spacing instead of fixed gap */
+            width: 100%;
+            /* fill the container */
+            font-size: 1.45rem;
+            /* Slightly adjusted to ensure fit */
+            font-weight: 700;
+            /* Bold for visibility */
         }
 
         .strip-title {
@@ -456,7 +481,9 @@
                 <i class="fa-solid fa-droplet droplet-med" style="transform: rotate(0deg);"></i>
                 <i class="fa-solid fa-droplet" style="transform: rotate(-15deg);"></i>
             </div>
-            <div class="logo-text">LAVAMEX</div>
+            <a href="https://lavamex.work">
+                <div class="logo-text">LAVAMEX</div>
+            </a>
             <div class="droplets">
                 <i class="fa-solid fa-droplet" style="transform: rotate(15deg);"></i>
                 <i class="fa-solid fa-droplet droplet-med" style="transform: rotate(0deg);"></i>
@@ -528,7 +555,8 @@
                 <tr>
                     <td>
                         <span class="service-title">PAQUETE COMPLETO</span>
-                        <span class="service-desc" style="font-size: 0.75rem;">Lavado General + Alfombra + Asientos</span>
+                        <span class="service-desc" style="font-size: 0.75rem;">Lavado General + Alfombra +
+                            Asientos</span>
                     </td>
                     <td>$840</td>
                     <td>$1,040</td>
