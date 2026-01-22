@@ -301,10 +301,10 @@
             // Includes styling for tight spacing (line-height)
             getReceiptHeader: () => `
                 <div style="text-align:center; font-weight:bold; font-size: 14px; line-height: 1.2;">
-                    CARWASH LAVAMEX<br>
-                    WATERFILL 216 CP 32553<br>
-                    CD. JUAREZ CHIH.<br>
-                    RFC. CACN760904AN7
+                    <div>CARWASH LAVAMEX</div>
+                    <div>WATERFILL 216 CP 32553</div>
+                    <div>CD. JUAREZ CHIH.</div>
+                    <div>RFC. CACN760904AN7</div>
                 </div>
                 <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
             `,
@@ -321,7 +321,7 @@
             getJobTicketHtml: (ticket, shortId) => {
                 const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
                 const extrasHtml = ticket.extras && ticket.extras.length > 0
-                    ? `<br>+ ${ticket.extras.map(e => e.label).join('<br>+ ')}`
+                    ? ticket.extras.map(e => `<div>+ ${e.label}</div>`).join('')
                     : '';
 
                 // Using specific line-height and margin:0 to reduce paper waste
@@ -349,10 +349,10 @@
                 const effSnackPrice = currentSnackPrice || 25;
 
                 const carAscii = `
-      .--------.
- ____/_____|___ \___
-O    _   - |   _   ,*
- '--(_)-------(_)--'  
+  ______
+ /|_||_\\\`.__
+(   _    _ _\\
+=\`-(_)--(_)-'  hjw
 `;
 
                 // Using specific line-height and margin:0 to reduce paper waste
