@@ -772,8 +772,8 @@
                                 })}
                             </div>
                             <div className="mt-4 border-t pt-2">
-                                <h3 className="font-bold mb-2 text-gray-700 text-sm">Varios</h3>
-                                <div className="flex gap-2 mb-2"><input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Desc" className="w-full p-2 border rounded text-sm" /><input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" /><Button onClick={addVarios} className="py-2 px-3"><PlusCircle size={16} /></Button></div>
+                                <h3 className="font-bold mb-2 text-gray-700 text-sm">Varios (Costo Extra)</h3>
+                                <div className="flex gap-2 mb-2"><input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Motivo" className="w-full p-2 border rounded text-sm" /><input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" /><Button onClick={addVarios} className="py-2 px-3"><PlusCircle size={16} /></Button></div>
                                 {extras.filter(e => e.id.startsWith('VARIOS')).map(e => (
                                     <div key={e.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 border rounded mb-1"><span>{e.label}</span><div className="flex items-center gap-2"><span className="font-bold">${e.price}</span><button onClick={() => setExtras(prev => prev.filter(x => x.id !== e.id))} className="text-red-500"><Trash2 size={14} /></button></div></div>
                                 ))}
@@ -781,11 +781,16 @@
                         </div>
                         <div className="md:col-span-2 bg-white p-4 rounded-xl shadow border flex flex-col h-full">
                             <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 3. Lavadores ({washers.length}/2)</h3>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4 flex-1 content-start">
                                 {employees.filter(e => e.active).map(e => <button key={e.name} onClick={() => toggle(e.name)} className={`p-4 rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>{e.name}</button>)}
                             </div>
                             <div className="mt-auto pt-4 border-t">
-                                <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción (Opcional)" className="w-full p-3 border rounded-lg mb-4 text-lg" />
+                                <input
+                                    value={desc}
+                                    onChange={e => setDesc(e.target.value)}
+                                    placeholder="DESCRIPCIÓN"
+                                    className="w-full p-4 border-4 border-blue-600 rounded-xl mb-4 text-xl font-bold bg-blue-50 text-blue-900 placeholder-blue-400 focus:bg-white transition-colors text-center"
+                                />
                                 <Button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className={`w-full py-5 text-xl shadow-lg ${!canSubmit ? 'bg-gray-300' : ''}`}>
                                     {isSubmitting ? <Loader2 className="animate-spin" /> : (editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR ORDEN</>)}
                                 </Button>
