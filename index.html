@@ -277,99 +277,59 @@
         // ------------------------------------------------------------------
         const PrintService = {
             print: async (content) => {
-                // 1. Format content exactly as the App requires
-                const str = "<HTML>" + content;
-
-                // 2. Use the System Share Menu (Equivalent to Intent.ACTION_SEND)
                 if (navigator.share) {
                     try {
                         await navigator.share({
-                            text: str
+                            text: "<HTML>" + content
                         });
                     } catch (err) {
-                        // User cancelled share or error
                         console.error("Share failed:", err);
                     }
                 } else {
-                    // Fallback for desktops or unsupported browsers
                     alert("Tu navegador no soporta compartir. Copia el texto manualmente.");
-                    console.log(str);
+                    console.log("<HTML>" + content);
                 }
             },
 
-            // SHARED HEADER FOR RECEIPT AND TICKET
-            // Includes styling for tight spacing (line-height)
-            getReceiptHeader: () => `
+            getJobTicketHtml: (ticket, shortId) => {
+                return `<div style="white-space: pre; font-family: monospace;">
 CARWASH LAVAMEX
 WATERFILL 216 CP 32553
 CD. JUAREZ CHIH.
 RFC. CACN760904AN7
---------------------------------`,
-
-            // SPANISH DATE FORMAT
-            getFormattedDate: () => {
-                return new Intl.DateTimeFormat('es-MX', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                }).format(new Date());
-            },
-
-            getJobTicketHtml: (ticket, shortId) => {
-                const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
-                // Generate extras string with newlines
-                const extrasText = ticket.extras && ticket.extras.length > 0
-                    ? ticket.extras.map(e => `+ ${e.label}`).join('\n')
-                    : '';
-
-                return `
-            ${PrintService.getReceiptHeader()}
+--------------------------------
 TICKET: #${shortId}
-${washers}
+${ticket.washers ? ticket.washers.join(', ') : ticket.washer}
 ${ticket.size ? ticket.size.label : ''}
 ${ticket.service ? ticket.service.label : 'Extras Only'}
-${extrasText}
+${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label}`).join('\n') : ''}
 ${ticket.vehicleDesc ? `(${ticket.vehicleDesc})` : ''}
---------------------------------`;
+--------------------------------</div>`;
             },
 
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
-                const effSnackPrice = currentSnackPrice || 25;
-                const method = payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO';
-
-                // Build text blocks
-                const extrasText = ticket.extras && ticket.extras.length > 0
-                    ? ticket.extras.map(e => `+ ${e.label} $${e.price}`).join('\n')
-                    : '';
-
-                const snackText = ticket.snackCount > 0
-                    ? `+ Snacks (${ticket.snackCount}) $${ticket.snackCount * effSnackPrice}`
-                    : '';
-
-                const paymentText = payment.method === 'CASH'
-                    ? `Recibido: $${(payment.mxn + (payment.usd * payment.rate)).toFixed(2)}\nCambio: $${payment.change.toFixed(2)}`
-                    : '';
-
-                const carAscii = `  ______
- /|_||_\\\`.__
-(   _    _ _\\
-=\`-(_)--(_)-'  
-`;
-
-                return `${PrintService.getReceiptHeader()}
+                return `<div style="white-space: pre; font-family: monospace;">
+CARWASH LAVAMEX
+WATERFILL 216 CP 32553
+CD. JUAREZ CHIH.
+RFC. CACN760904AN7
+--------------------------------
 Ticket: #${shortId}
-Fecha: ${PrintService.getFormattedDate()}
-Metodo: ${method}
+Fecha: ${new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
+Metodo: ${payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO'}
 --------------------------------
 ${ticket.service ? ticket.service.label : 'General'} $${ticket.basePrice || 0}
-${extrasText}
-${snackText}
+${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label} $${e.price}`).join('\n') : ''}
+${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount}) $${ticket.snackCount * (currentSnackPrice || 25)}` : ''}
 --------------------------------
 TOTAL: $${ticket.price}
-${paymentText}
+${payment.method === 'CASH' ? `Recibido: $${(payment.mxn + (payment.usd * payment.rate)).toFixed(2)}\nCambio: $${payment.change.toFixed(2)}` : ''}
 Gracias por su preferencia
-${carAscii} `;
-            },
+      .--------.
+ ____/_____|___ \___
+O    _   - |   _   ,*
+ '--(_)-------(_)--' </div>`;
+            }
 
             getCorteHtml: (data) => {
                 return `
