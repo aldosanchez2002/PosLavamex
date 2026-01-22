@@ -273,131 +273,12 @@
         };
 
         // ------------------------------------------------------------------
-        // SECTION 5: BLUETOOTH PRINT SERVICE (New Implementation)
-        // ------------------------------------------------------------------
-        const BluetoothPrintService = {
-            // Converts JSON object to Base64 and triggers the app scheme
-            sendToApp: (jsonArray) => {
-                try {
-                    // 1. Convert to JSON string
-                    const jsonStr = JSON.stringify(jsonArray);
-                    
-                    // 2. Base64 encode (Unicode Safe)
-                    // btoa alone fails with Spanish characters like 'ñ' or accents
-                    const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
-                    
-                    // 3. Construct Data URI
-                    // Note: If the Bluetooth Print app requires a strict http:// URL, this might need
-                    // a backend to host the JSON. However, many apps support data URIs or local fetching.
-                    const responseUrl = `data:application/json;base64,${base64}`;
-                    
-                    // 4. Trigger Scheme
-                    const scheme = `my.bluetoothprint.scheme://${responseUrl}`;
-                    console.log("Launching Printer App:", scheme);
-                    window.location.href = scheme;
-                } catch (e) {
-                    console.error("Bluetooth Print Error:", e);
-                    alert("Error generando datos para impresora bluetooth.");
-                }
-            },
-
-            // Generates JSON for the "Ticket" (Entrada)
-            printTicket: (ticket, shortId) => {
-                const cmds = [];
-                // Header
-                cmds.push({ type: 0, content: 'LAVAMEX - ORDEN', bold: 1, align: 1, format: 1 }); // Double Height
-                cmds.push({ type: 0, content: '--------------------------------', bold: 0, align: 1 });
-                
-                // Info
-                cmds.push({ type: 0, content: `TICKET: #${shortId}`, bold: 1, align: 0 });
-                cmds.push({ type: 0, content: `FECHA: ${new Date().toLocaleDateString()}`, bold: 0, align: 0 });
-                
-                // Washers
-                const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
-                cmds.push({ type: 0, content: `LAVADORES: ${washers}`, bold: 1, align: 1 });
-                
-                // Service & Size
-                cmds.push({ type: 0, content: '--------------------------------', bold: 0, align: 1 });
-                cmds.push({ type: 0, content: `${ticket.service?.label || 'Extras'}`, bold: 1, align: 1, format: 1 });
-                if(ticket.size) cmds.push({ type: 0, content: `(${ticket.size.label})`, bold: 1, align: 1 });
-
-                // Extras
-                if (ticket.extras && ticket.extras.length > 0) {
-                     cmds.push({ type: 0, content: 'EXTRAS:', bold: 0, align: 0 });
-                     ticket.extras.forEach(e => {
-                         cmds.push({ type: 0, content: `+ ${e.label}`, bold: 1, align: 0 });
-                     });
-                }
-                
-                // Vehicle Desc
-                if (ticket.vehicleDesc) {
-                     cmds.push({ type: 0, content: '--------------------------------', bold: 0, align: 1 });
-                     cmds.push({ type: 0, content: `AUTO: ${ticket.vehicleDesc}`, bold: 1, align: 1 });
-                }
-                
-                // Footer Padding
-                cmds.push({ type: 0, content: '\n\n', bold: 0, align: 1 });
-                
-                BluetoothPrintService.sendToApp(cmds);
-            },
-
-            // Generates JSON for the "Receipt" (Caja)
-            printReceipt: (ticket, payment, shortId, snackPrice) => {
-                const cmds = [];
-                const effSnackPrice = snackPrice || 25;
-
-                // Header
-                cmds.push({ type: 0, content: 'LAVAMEX', bold: 1, align: 1, format: 1 });
-                cmds.push({ type: 0, content: '--------------------------------', bold: 0, align: 1 });
-                
-                // Meta
-                cmds.push({ type: 0, content: `Ticket: #${shortId}`, bold: 0, align: 0 });
-                cmds.push({ type: 0, content: `Fecha: ${new Date().toLocaleString()}`, bold: 0, align: 0 });
-                cmds.push({ type: 0, content: `Metodo: ${payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO'}`, bold: 0, align: 0 });
-                cmds.push({ type: 0, content: '--------------------------------', bold: 0, align: 1 });
-
-                // Items (Simulating tabular data with spacing is hard in variable width fonts, so we use list format)
-                const basePriceStr = `$${(ticket.basePrice || 0).toFixed(2)}`;
-                cmds.push({ type: 0, content: `${ticket.service?.label || 'General'}`, bold: 1, align: 0 });
-                cmds.push({ type: 0, content: `Precio: ${basePriceStr}`, bold: 0, align: 2 }); // Right align
-
-                if (ticket.extras) {
-                    ticket.extras.forEach(e => {
-                        cmds.push({ type: 0, content: `+ ${e.label}`, bold: 0, align: 0 });
-                        cmds.push({ type: 0, content: `$${e.price.toFixed(2)}`, bold: 0, align: 2 });
-                    });
-                }
-                
-                if (ticket.snackCount > 0) {
-                     const snackTotal = ticket.snackCount * effSnackPrice;
-                     cmds.push({ type: 0, content: `+ Snacks (${ticket.snackCount})`, bold: 0, align: 0 });
-                     cmds.push({ type: 0, content: `$${snackTotal.toFixed(2)}`, bold: 0, align: 2 });
-                }
-
-                // Total
-                cmds.push({ type: 0, content: '--------------------------------', bold: 0, align: 1 });
-                cmds.push({ type: 0, content: `TOTAL: $${ticket.price.toFixed(2)}`, bold: 1, align: 2, format: 1 });
-
-                // Payment Details
-                if (payment.method === 'CASH') { // Cash
-                     const totalReceived = payment.mxn + (payment.usd * payment.rate);
-                     cmds.push({ type: 0, content: `Recibido: $${totalReceived.toFixed(2)}`, bold: 0, align: 2 });
-                     cmds.push({ type: 0, content: `Cambio: $${payment.change.toFixed(2)}`, bold: 0, align: 2 });
-                } else {
-                    cmds.push({ type: 0, content: `(Cargo a Tarjeta)`, bold: 0, align: 1 });
-                }
-
-                cmds.push({ type: 0, content: '\nGracias por su preferencia\n\n', bold: 0, align: 1 });
-                
-                BluetoothPrintService.sendToApp(cmds);
-            }
-        };
-
-        // ------------------------------------------------------------------
-        // SECTION 6: NORMAL PRINT SERVICE (PDF Fallback)
+        // SECTION 5: PRINTING SERVICE
         // ------------------------------------------------------------------
         const PrintService = {
+            // Modified: Uses hidden iframe for Android/Mobile stability
             print: (content, landscape = false) => {
+                // Remove existing frame if present
                 const existingFrame = document.getElementById('print-frame');
                 if (existingFrame) {
                     document.body.removeChild(existingFrame);
@@ -428,6 +309,7 @@
                 `);
                 doc.close();
 
+                // Wait for content to render then print
                 setTimeout(() => {
                     iframe.contentWindow.focus();
                     try {
@@ -453,6 +335,33 @@
                     ${ticket.vehicleDesc ? `<div style="text-align:center; width:58mm;">(${ticket.vehicleDesc})</div>` : ''}
                     <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
                     <div style="text-align:center; width:58mm;">.. TABLERO ..</div>
+                `;
+            },
+            getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
+                const extrasHtml = ticket.extras && ticket.extras.length > 0
+                    ? `<div style="font-size:10px;">${ticket.extras.map(e => `<div style="display:flex;justify-content:space-between;"><span>+ ${e.label}</span><span>${formatCurrency(e.price)}</span></div>`).join('')}</div>`
+                    : '';
+                const displayBasePrice = ticket.basePrice || 0;
+                const method = payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO';
+                const effSnackPrice = currentSnackPrice || 25;
+                return `
+                    <div style="width:58mm; text-align:center; font-weight:bold;">LAVAMEX</div>
+                    <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
+                    <div style="display:flex; justify-content:space-between; width:58mm;"><span>Ticket:</span><span>#${shortId}</span></div>
+                    <div style="display:flex; justify-content:space-between; width:58mm;"><span>Fecha:</span><span>${new Date().toLocaleDateString()}</span></div>
+                    <div style="display:flex; justify-content:space-between; width:58mm;"><span>Metodo:</span><span>${method}</span></div>
+                    <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
+                    <div style="display:flex; justify-content:space-between; width:58mm;"><span>${ticket.service ? ticket.service.label : 'Servicio General'}</span><span>${formatCurrency(displayBasePrice)}</span></div>
+                    <div style="width:58mm;">${extrasHtml}</div>
+                    ${ticket.snackCount > 0 ? `<div style="display:flex; justify-content:space-between; width:58mm;"><span>+ Snacks (${ticket.snackCount})</span><span>${formatCurrency(ticket.snackCount * effSnackPrice)}</span></div>` : ''}
+                    <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
+                    <div style="display:flex; justify-content:space-between; width:58mm; font-weight:bold;"><span>TOTAL:</span><span>${formatCurrency(ticket.price)}</span></div>
+                    ${payment.method === 'CARD' ?
+                        `<div style="text-align:center; margin-top:5px; font-style:italic;">Cargo a Tarjeta</div>` :
+                        `<div style="display:flex; justify-content:space-between; width:58mm;"><span>Recibido:</span><span>${formatCurrency(payment.mxn + (payment.usd * payment.rate))}</span></div>
+                         <div style="display:flex; justify-content:space-between; width:58mm;"><span>Cambio:</span><span>${formatCurrency(payment.change)}</span></div>`
+                    }
+                    <div style="text-align:center; margin-top:10px; width:58mm;">¡Gracias!</div>
                 `;
             },
             getCorteHtml: (data) => {
@@ -650,16 +559,8 @@
                         if (role === 'CASHIER') setView('CASHIER');
                     } else {
                         const ref = await addDoc(collection(db, "tickets"), ticketData);
-                        const shortId = ref.id.slice(-4).toUpperCase();
-                        
-                        // LOGIC: Use Bluetooth if Greeter/Entrada, else PDF
-                        // The user requested bluetooth for "Entrada users".
-                        if (role === 'GREETER' || role === 'ADMIN') {
-                            BluetoothPrintService.printTicket({ ...ticketData, timestamp: new Date() }, shortId);
-                        } else {
-                            const html = PrintService.getJobTicketHtml({ ...ticketData, timestamp: new Date() }, shortId);
-                            PrintService.print(html);
-                        }
+                        const html = PrintService.getJobTicketHtml({ ...ticketData, timestamp: new Date() }, ref.id.slice(-4).toUpperCase());
+                        PrintService.print(html);
                     }
                 } finally { setIsSubmitting(false); }
             });
@@ -716,15 +617,8 @@
                     const details = { mxn: parseFloat(payment.mxn) || 0, usd: parseFloat(payment.usd) || 0, rate: exRate, change: total - t.price, method: 'CASH' };
                     await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
 
-                    const shortId = t.id.slice(-4).toUpperCase();
-                    
-                    // LOGIC: Use Bluetooth for Caja/Cashier
-                    if (role === 'CASHIER' || role === 'ADMIN') {
-                        BluetoothPrintService.printReceipt(t, details, shortId, snackPrice);
-                    } else {
-                        const html = PrintService.getReceiptHtml(t, details, shortId, snackPrice);
-                        PrintService.print(html);
-                    }
+                    const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
+                    PrintService.print(html);
 
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
                 } finally { setIsSubmitting(false); }
@@ -738,15 +632,8 @@
                     const details = { mxn: t.price, usd: 0, rate: exRate, change: 0, method: 'CARD' };
                     await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
 
-                    const shortId = t.id.slice(-4).toUpperCase();
-
-                     // LOGIC: Use Bluetooth for Caja/Cashier
-                    if (role === 'CASHIER' || role === 'ADMIN') {
-                        BluetoothPrintService.printReceipt(t, details, shortId, snackPrice);
-                    } else {
-                        const html = PrintService.getReceiptHtml(t, details, shortId, snackPrice);
-                        PrintService.print(html);
-                    }
+                    const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
+                    PrintService.print(html);
 
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
                 } finally { setIsSubmitting(false); }
@@ -1163,7 +1050,7 @@
                         html += `<div style="margin-top: 15px; border-top: 1px dotted #ccc; padding-top: 5px; display: flex; justify-content: space-between; font-size: 12px; color: #cc0000;">
                             <span>Varios (Snacks, Prestamos, etc.)</span>
                             <span>-${formatCurrency(p.deductionTotal)}</span>
-                          </div>`;
+                         </div>`;
                     }
 
                     // 4. Legal Text & Signature
