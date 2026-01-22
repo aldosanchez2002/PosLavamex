@@ -300,14 +300,11 @@
             // SHARED HEADER FOR RECEIPT AND TICKET
             // Includes styling for tight spacing (line-height)
             getReceiptHeader: () => `
-                <div style="text-align:center; font-weight:bold; font-size: 14px; line-height: 1; white-space: pre-line;">
 CARWASH LAVAMEX
 WATERFILL 216 CP 32553
 CD. JUAREZ CHIH.
 RFC. CACN760904AN7
---------------------------------
-                </div>
-            `,
+--------------------------------`,
 
             // SPANISH DATE FORMAT
             getFormattedDate: () => {
@@ -327,16 +324,13 @@ RFC. CACN760904AN7
 
                 return `
             ${PrintService.getReceiptHeader()}
-            <div style="font-family: monospace; line-height: 1; color: #000; white-space: pre-line;">
 TICKET: #${shortId}
 ${washers}
 ${ticket.size ? ticket.size.label : ''}
 ${ticket.service ? ticket.service.label : 'Extras Only'}
 ${extrasText}
 ${ticket.vehicleDesc ? `(${ticket.vehicleDesc})` : ''}
---------------------------------
-            </div>
-        `;
+--------------------------------`;
             },
 
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
@@ -356,16 +350,13 @@ ${ticket.vehicleDesc ? `(${ticket.vehicleDesc})` : ''}
                     ? `Recibido: $${(payment.mxn + (payment.usd * payment.rate)).toFixed(2)}\nCambio: $${payment.change.toFixed(2)}`
                     : '';
 
-                const carAscii = `
-  ______
+                const carAscii = `  ______
  /|_||_\\\`.__
 (   _    _ _\\
-=\`-(_)--(_)-'  hjw
+=\`-(_)--(_)-'  
 `;
 
-                return `
-            ${PrintService.getReceiptHeader()}
-            <div style="font-family: monospace; line-height: 1; color: #000; white-space: pre-line;">
+                return `${PrintService.getReceiptHeader()}
 Ticket: #${shortId}
 Fecha: ${PrintService.getFormattedDate()}
 Metodo: ${method}
@@ -377,11 +368,7 @@ ${snackText}
 TOTAL: $${ticket.price}
 ${paymentText}
 Gracias por su preferencia
-            </div>
-            <div style="font-family: monospace; white-space: pre; text-align: center; line-height: 10px; font-size: 10px; font-weight: bold;">
-${carAscii}
-            </div>
-        `;
+${carAscii} `;
             },
 
             getCorteHtml: (data) => {
