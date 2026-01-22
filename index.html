@@ -273,10 +273,6 @@
         };
 
         // ------------------------------------------------------------------
-        // SECTION 5: PRINTING SERVICE
-        // ------------------------------------------------------------------
-
-        // ------------------------------------------------------------------
         // SECTION 5: PRINTING SERVICE (WEB SHARE API)
         // ------------------------------------------------------------------
         const PrintService = {
@@ -301,208 +297,108 @@
                 }
             },
 
-            // ... (Keep getJobTicketHtml, getReceiptHtml, getCorteHtml exactly as they were in the previous response) ...
+            // SHARED HEADER FOR RECEIPT AND TICKET
+            // Includes styling for tight spacing (line-height)
+            getReceiptHeader: () => `
+                <div style="text-align:center; font-weight:bold; font-size: 14px; line-height: 1.2;">
+                    CARWASH LAVAMEX<br>
+                    WATERFILL 216 CP 32553<br>
+                    CD. JUAREZ CHIH.<br>
+                    RFC. CACN760904AN7
+                </div>
+                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
+            `,
+
+            // SPANISH DATE FORMAT
+            getFormattedDate: () => {
+                return new Intl.DateTimeFormat('es-MX', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                }).format(new Date());
+            },
+
             getJobTicketHtml: (ticket, shortId) => {
                 const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
                 const extrasHtml = ticket.extras && ticket.extras.length > 0
                     ? `<br>+ ${ticket.extras.map(e => e.label).join('<br>+ ')}`
                     : '';
 
+                // Using specific line-height and margin:0 to reduce paper waste
                 return `
-            <div style="font-size:20px; font-weight:bold; text-align:center;">LAVAMEX</div>
-            <div style="text-align:center;">--------------------------------</div>
-            <div style="font-size:18px;"><b>TICKET: #${shortId}</b></div>
-            <div style="font-size:18px;">${washers}</div>
-            <div style="font-size:16px;">${ticket.size ? ticket.size.label : ''}</div>
-            <div style="font-size:16px;">${ticket.service ? ticket.service.label : 'Extras Only'}</div>
-            <div>${extrasHtml}</div>
-            ${ticket.vehicleDesc ? `<div>(${ticket.vehicleDesc})</div>` : ''}
-            <div style="text-align:center;">--------------------------------</div>
+            <div style="font-family: monospace; line-height: 1.1; color: #000;">
+                ${PrintService.getReceiptHeader()}
+                <div style="font-size:18px; margin: 2px 0;"><b>TICKET: #${shortId}</b></div>
+                <div style="font-size:18px; margin: 2px 0;">${washers}</div>
+                <div style="font-size:16px; margin: 2px 0;">${ticket.size ? ticket.size.label : ''}</div>
+                <div style="font-size:16px; margin: 2px 0;">${ticket.service ? ticket.service.label : 'Extras Only'}</div>
+                <div style="margin: 2px 0;">${extrasHtml}</div>
+                ${ticket.vehicleDesc ? `<div style="margin: 2px 0;">(${ticket.vehicleDesc})</div>` : ''}
+                <div style="text-align:center; margin: 5px 0;">--------------------------------</div>
+            </div>
         `;
             },
 
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
                 const extrasHtml = ticket.extras && ticket.extras.length > 0
-                    ? ticket.extras.map(e => `<div>+ ${e.label} $${e.price}</div>`).join('')
+                    ? ticket.extras.map(e => `<div style="margin: 1px 0;">+ ${e.label} $${e.price}</div>`).join('')
                     : '';
 
                 const displayBasePrice = ticket.basePrice || 0;
                 const method = payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO';
                 const effSnackPrice = currentSnackPrice || 25;
 
+                const carAscii = `
+    .--------.
+ ____/_____|___ \___
+O    _   - |   _   ,*
+ '--(_)-------(_)--'  
+`;
+
+                // Using specific line-height and margin:0 to reduce paper waste
                 return `
-            <div style="font-size:20px; font-weight:bold; text-align:center;">LAVAMEX</div>
-            <div style="text-align:center;">--------------------------------</div>
-            <div>Ticket: #${shortId}</div>
-            <div>Fecha: ${new Date().toLocaleDateString()}</div>
-            <div>Metodo: ${method}</div>
-            <div style="text-align:center;">--------------------------------</div>
-            <div style="font-weight:bold;">${ticket.service ? ticket.service.label : 'General'} $${displayBasePrice}</div>
-            ${extrasHtml}
-            ${ticket.snackCount > 0 ? `<div>+ Snacks (${ticket.snackCount}) $${ticket.snackCount * effSnackPrice}</div>` : ''}
-            <div style="text-align:center;">--------------------------------</div>
-            <div style="font-size:18px; font-weight:bold;">TOTAL: $${ticket.price}</div>
-            ${payment.method === 'CASH' ? `<div>Recibido: $${(payment.mxn + (payment.usd * payment.rate)).toFixed(2)}</div><div>Cambio: $${payment.change.toFixed(2)}</div>` : ''}
-            <div style="text-align:center; margin-top:10px;">Gracias por su preferencia</div>
+            <div style="font-family: monospace; line-height: 1.1; color: #000;">
+                ${PrintService.getReceiptHeader()}
+                <div style="margin: 1px 0;">Ticket: #${shortId}</div>
+                <div style="margin: 1px 0;">Fecha: ${PrintService.getFormattedDate()}</div>
+                <div style="margin: 1px 0;">Metodo: ${method}</div>
+                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
+                <div style="font-weight:bold; margin: 1px 0;">${ticket.service ? ticket.service.label : 'General'} $${displayBasePrice}</div>
+                ${extrasHtml}
+                ${ticket.snackCount > 0 ? `<div style="margin: 1px 0;">+ Snacks (${ticket.snackCount}) $${ticket.snackCount * effSnackPrice}</div>` : ''}
+                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
+                <div style="font-size:18px; font-weight:bold; margin: 4px 0;">TOTAL: $${ticket.price}</div>
+                ${payment.method === 'CASH' ? `<div style="margin: 1px 0;">Recibido: $${(payment.mxn + (payment.usd * payment.rate)).toFixed(2)}</div><div style="margin: 1px 0;">Cambio: $${payment.change.toFixed(2)}</div>` : ''}
+                <div style="text-align:center; margin-top:8px; margin-bottom: 2px;">Gracias por su preferencia</div>
+                <div style="font-family: monospace; white-space: pre; text-align: center; line-height: 10px; font-size: 10px; overflow: hidden; font-weight: bold;">${carAscii}</div>
+            </div>
         `;
             },
 
             getCorteHtml: (data) => {
                 return `
-            <div style="font-size:20px; font-weight:bold; text-align:center;">CORTE ${data.type}</div>
-            <div style="text-align:center;">${data.dateLabel}</div>
-            <div style="text-align:center;">--------------------------------</div>
-            <div><b>Ventas: $${data.totals.total}</b></div>
-            <div>Tickets: ${data.tickets.length}</div>
-            <br>
-            <div><b>Efectivo: $${data.totals.cashTotal}</b></div>
-            <div>(USD Caja: $${data.totals.cashUsd.toFixed(2)})</div>
-            <div>(MXN Calc: $${data.totals.cashMxn.toFixed(2)})</div>
-            <div><b>Tarjeta: $${data.totals.card}</b></div>
-            <div style="text-align:center;">--------------------------------</div>
-            <div><b>NETO EN CAJA:</b></div>
-            <div>MXN: $${data.totals.cashNetMxn.toFixed(2)}</div>
-            <div>USD: $${data.totals.cashNetUsd.toFixed(2)}</div>
-            <div style="text-align:center;">--------------------------------</div>
-            ${data.totals.expenses > 0 ? `<div>Gastos: -$${data.totals.expenses}</div>` : ''}
+            <div style="font-family: monospace; line-height: 1.1; color: #000;">
+                ${PrintService.getReceiptHeader()}
+                <div style="font-size:16px; font-weight:bold; text-align:center; margin: 2px 0;">CORTE ${data.type}</div>
+                <div style="text-align:center; margin: 2px 0;">${data.dateLabel}</div>
+                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
+                <div style="margin: 2px 0;"><b>Ventas: $${data.totals.total}</b></div>
+                <div style="margin: 2px 0;">Tickets: ${data.tickets.length}</div>
+                <br>
+                <div style="margin: 2px 0;"><b>Efectivo: $${data.totals.cashTotal}</b></div>
+                <div style="margin: 2px 0;">(USD Caja: $${data.totals.cashUsd.toFixed(2)})</div>
+                <div style="margin: 2px 0;">(MXN Calc: $${data.totals.cashMxn.toFixed(2)})</div>
+                <div style="margin: 2px 0;"><b>Tarjeta: $${data.totals.card}</b></div>
+                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
+                <div style="margin: 2px 0;"><b>NETO EN CAJA:</b></div>
+                <div style="margin: 2px 0;">MXN: $${data.totals.cashNetMxn.toFixed(2)}</div>
+                <div style="margin: 2px 0;">USD: $${data.totals.cashNetUsd.toFixed(2)}</div>
+                <div style="text-align:center; margin: 4px 0; line-height: 1;">--------------------------------</div>
+                ${data.totals.expenses > 0 ? `<div style="margin: 2px 0;">Gastos: -$${data.totals.expenses}</div>` : ''}
+            </div>
         `;
             }
         };
-
-        // const PrintService = {
-        //     // Modified: Uses hidden iframe for Android/Mobile stability
-        //     print: (content, landscape = false) => {
-        //         // Remove existing frame if present
-        //         const existingFrame = document.getElementById('print-frame');
-        //         if (existingFrame) {
-        //             document.body.removeChild(existingFrame);
-        //         }
-
-        //         const iframe = document.createElement('iframe');
-        //         iframe.id = 'print-frame';
-        //         iframe.style.position = 'fixed';
-        //         iframe.style.right = '0';
-        //         iframe.style.bottom = '0';
-        //         iframe.style.width = '0';
-        //         iframe.style.height = '0';
-        //         iframe.style.border = '0';
-        //         document.body.appendChild(iframe);
-
-        //         const doc = iframe.contentWindow.document;
-        //         const orientation = landscape ? '@page { size: landscape; }' : '';
-
-        //         doc.open();
-        //         doc.write(`
-        //             <html>
-        //                 <head>
-        //                     <title>Print</title>
-        //                     <style>${orientation} body{font-family:'Courier New', sans-serif;font-size:12px;margin:0;padding:5px;}</style>
-        //                 </head>
-        //                 <body>${content}</body>
-        //             </html>
-        //         `);
-        //         doc.close();
-
-        //         // Wait for content to render then print
-        //         setTimeout(() => {
-        //             iframe.contentWindow.focus();
-        //             try {
-        //                 iframe.contentWindow.print();
-        //             } catch (e) {
-        //                 console.error("Print error:", e);
-        //                 alert("Error al enviar a impresora. Intente nuevamente.");
-        //             }
-        //         }, 500);
-        //     },
-        //     getJobTicketHtml: (ticket, shortId) => {
-        //         const washers = ticket.washers ? ticket.washers.join(', ') : ticket.washer;
-        //         const extrasHtml = ticket.extras && ticket.extras.length > 0
-        //             ? `<div style="text-align:center;font-size:12px; margin-top:5px; font-weight:bold;">+ ${ticket.extras.map(e => e.label).join('<br>+ ')}</div>`
-        //             : '';
-        //         return `
-        //             <div style="width:58mm; text-align:center; font-weight:bold;">LAVAMEX - ORDEN</div>
-        //             <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
-        //             <div style="display:flex; justify-content:space-between; width:58mm;"><span>TICKET:</span><b>#${shortId}</b></div>
-        //             <div style="text-align:center; font-weight:bold; font-size:16px; margin:10px 0; width:58mm;">${washers}</div>
-        //             <div style="text-align:center; font-weight:bold; font-size:14px; width:58mm;">${ticket.size ? ticket.size.label : ''}<br>${ticket.service ? ticket.service.label : 'Extras Only'}</div>
-        //             <div style="width:58mm;">${extrasHtml}</div>
-        //             ${ticket.vehicleDesc ? `<div style="text-align:center; width:58mm;">(${ticket.vehicleDesc})</div>` : ''}
-        //             <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
-        //             <div style="text-align:center; width:58mm;">.. TABLERO ..</div>
-        //         `;
-        //     },
-        //     getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
-        //         const extrasHtml = ticket.extras && ticket.extras.length > 0
-        //             ? `<div style="font-size:10px;">${ticket.extras.map(e => `<div style="display:flex;justify-content:space-between;"><span>+ ${e.label}</span><span>${formatCurrency(e.price)}</span></div>`).join('')}</div>`
-        //             : '';
-        //         const displayBasePrice = ticket.basePrice || 0;
-        //         const method = payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO';
-        //         const effSnackPrice = currentSnackPrice || 25;
-        //         return `
-        //             <div style="width:58mm; text-align:center; font-weight:bold;">LAVAMEX</div>
-        //             <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
-        //             <div style="display:flex; justify-content:space-between; width:58mm;"><span>Ticket:</span><span>#${shortId}</span></div>
-        //             <div style="display:flex; justify-content:space-between; width:58mm;"><span>Fecha:</span><span>${new Date().toLocaleDateString()}</span></div>
-        //             <div style="display:flex; justify-content:space-between; width:58mm;"><span>Metodo:</span><span>${method}</span></div>
-        //             <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
-        //             <div style="display:flex; justify-content:space-between; width:58mm;"><span>${ticket.service ? ticket.service.label : 'Servicio General'}</span><span>${formatCurrency(displayBasePrice)}</span></div>
-        //             <div style="width:58mm;">${extrasHtml}</div>
-        //             ${ticket.snackCount > 0 ? `<div style="display:flex; justify-content:space-between; width:58mm;"><span>+ Snacks (${ticket.snackCount})</span><span>${formatCurrency(ticket.snackCount * effSnackPrice)}</span></div>` : ''}
-        //             <div style="width:58mm; border-top:1px dashed #000; margin:5px 0;"></div>
-        //             <div style="display:flex; justify-content:space-between; width:58mm; font-weight:bold;"><span>TOTAL:</span><span>${formatCurrency(ticket.price)}</span></div>
-        //             ${payment.method === 'CARD' ?
-        //                 `<div style="text-align:center; margin-top:5px; font-style:italic;">Cargo a Tarjeta</div>` :
-        //                 `<div style="display:flex; justify-content:space-between; width:58mm;"><span>Recibido:</span><span>${formatCurrency(payment.mxn + (payment.usd * payment.rate))}</span></div>
-        //                  <div style="display:flex; justify-content:space-between; width:58mm;"><span>Cambio:</span><span>${formatCurrency(payment.change)}</span></div>`
-        //             }
-        //             <div style="text-align:center; margin-top:10px; width:58mm;">¡Gracias!</div>
-        //         `;
-        //     },
-        //     getCorteHtml: (data) => {
-        //         return `
-        //             <html>
-        //             <head>
-        //                 <title>Corte ${data.type}</title>
-        //                 <style>
-        //                     body{font-family:'Courier New', sans-serif;font-size:12px;margin:0;padding:10px; text-align:center;}
-        //                     .line { border-top: 1px dashed #000; margin: 5px 0; }
-        //                     .row { display: flex; justify-content: space-between; }
-        //                     .bold { font-weight: bold; }
-        //                 </style>
-        //             </head>
-        //             <body>
-        //                 <div class="bold">LAVAMEX - CORTE ${data.type.toUpperCase()}</div>
-        //                 <div>${data.dateLabel}</div>
-        //                 <div class="line"></div>
-        //                 <div class="row"><span>Ventas Totales:</span><span class="bold">${formatCurrency(data.totals.total)}</span></div>
-        //                 <div class="row"><span>Tickets:</span><span>${data.tickets.length}</span></div>
-        //                 <div class="line"></div>
-        //                 <div class="bold" style="text-align:left;">DESGLOSE INGRESOS:</div>
-        //                 <div class="row"><span>Venta Efectivo (Total):</span><span>${formatCurrency(data.totals.cashTotal)}</span></div>
-        //                 <div class="row"><span>- Efectivo USD (En Caja):</span><span>$${data.totals.cashUsd.toFixed(2)}</span></div>
-        //                 <div class="row"><span>- Efectivo MXN (Teórico):</span><span>${formatCurrency(data.totals.cashMxn)}</span></div>
-        //                 <div class="row"><span>Venta Tarjeta:</span><span>${formatCurrency(data.totals.card)}</span></div>
-        //                 <div class="line"></div>
-        //                 <div class="bold" style="text-align:left;">FONDO INICIAL:</div>
-        //                 <div class="row"><span>Fondo MXN:</span><span>${formatCurrency(data.totals.initialMxn)}</span></div>
-        //                 <div class="row"><span>Fondo USD:</span><span>$${data.totals.initialUsd.toFixed(2)}</span></div>
-        //                 ${data.totals.expenses > 0 ? `
-        //                     <div class="line"></div>
-        //                     <div class="bold" style="text-align:left;">GASTOS APROBADOS:</div>
-        //                     ${data.expenses.map(e => `<div class="row" style="font-size:10px;"><span>${e.description}</span><span>-${formatCurrency(e.amount)}</span></div>`).join('')}
-        //                     <div class="row bold" style="margin-top:2px;"><span>Total Gastos:</span><span>-${formatCurrency(data.totals.expenses)}</span></div>
-        //                 ` : ''}
-        //                 <div class="line"></div>
-        //                 <div class="bold" style="text-align:left;">EN CAJA (Final):</div>
-        //                 <div class="row"><span class="bold">TOTAL NETO MXN:</span><span class="bold">${formatCurrency(data.totals.cashNetMxn)}</span></div>
-        //                 <div class="row"><span class="bold">TOTAL NETO USD:</span><span class="bold">$${data.totals.cashNetUsd.toFixed(2)}</span></div>
-        //                 <div class="line"></div>
-        //                 <div>Generado: ${new Date().toLocaleTimeString()}</div>
-        //             </body>
-        //             </html>
-        //         `;
-        //     }
-        // };
 
         // ------------------------------------------------------------------
         // SECTION 7: CONTEXT & PROVIDER
