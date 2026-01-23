@@ -309,6 +309,9 @@ ${ticket.vehicleDesc ? `(${ticket.vehicleDesc})` : ''}
             },
 
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
+                const hasUsd = payment.usd > 0;
+                const changeUsd = hasUsd ? (payment.change / payment.rate).toFixed(2) : '0.00';
+                
                 return `<div style="white-space: pre; font-family: monospace;">
 CARWASH LAVAMEX
 WATERFILL 216 CP 32553
@@ -324,7 +327,9 @@ ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.labe
 ${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount}) $${ticket.snackCount * (currentSnackPrice || 25)}` : ''}
 --------------------------------
 TOTAL: $${ticket.price}
-${payment.method === 'CASH' ? `Recibido: $${(payment.mxn + (payment.usd * payment.rate)).toFixed(2)}\nCambio: $${payment.change.toFixed(2)}` : ''}
+${payment.method === 'CASH' ? `Recibido: $${payment.mxn.toFixed(2)} MXN / $${payment.usd.toFixed(2)} USD
+Cambio: $${payment.change.toFixed(2)} MXN
+${hasUsd ? `Cambio USD: $${changeUsd}` : ''}` : ''}
 Gracias por su preferencia
       .--------.
  ____/_____|___ \___
@@ -1043,6 +1048,10 @@ O    _    - |   _    ,*
                 }
             };
 
+            // Calculate change variables for display
+            const changeVal = t ? calculateChange(payment.mxn, payment.usd, exRate, t.price) : 0;
+            const changeUsdVal = parseFloat(payment.usd) > 0 ? (changeVal / exRate) : 0;
+
             return (
                 <div className="flex flex-col md:flex-row h-full gap-4 p-4 overflow-hidden">
                     <div className="w-full md:w-1/3 bg-white rounded-xl shadow border overflow-hidden flex flex-col h-1/3 md:h-full shrink-0">
@@ -1081,7 +1090,8 @@ O    _    - |   _    ,*
                                     <div><label className="text-xs font-bold text-gray-500 mb-1 block">USD (Rate: {exRate})</label><input type="number" inputMode="decimal" value={payment.usd} onChange={e => setPayment({ ...payment, usd: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
                                 </div>
                                 <div className="text-center font-bold mb-6 text-xl bg-gray-50 p-3 rounded-lg border">
-                                    Cambio: <span className={calculateChange(payment.mxn, payment.usd, exRate, t.price) < 0 ? 'text-red-500' : 'text-green-600'}>{formatCurrency(calculateChange(payment.mxn, payment.usd, exRate, t.price))}</span>
+                                    <div>Cambio: <span className={changeVal < 0 ? 'text-red-500' : 'text-green-600'}>{formatCurrency(changeVal)} MXN</span></div>
+                                    {parseFloat(payment.usd) > 0 && changeVal > 0 && <div className="text-blue-600 text-lg mt-1">Cambio USD: ${changeUsdVal.toFixed(2)}</div>}
                                 </div>
                                 <div className="flex gap-3">
                                     {role !== 'CASHIER' && <Button onClick={() => deleteTicket(t.id)} variant="danger" title="Borrar"><Trash2 className="w-6 h-6" /></Button>}
