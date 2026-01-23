@@ -360,7 +360,7 @@ O    _    - |   _    ,*
                     doc.setFontSize(12);
                     doc.text("TOTAL A PAGAR", 165, 26, { align: 'center' });
                     doc.setFontSize(16);
-                    doc.setTextColor(0, 100, 0);
+                    doc.setTextColor(0, 0, 0);
                     doc.text(formatCurrency(p.netPay), 165, 35, { align: 'center' });
                     doc.setTextColor(0);
 
@@ -379,8 +379,8 @@ O    _    - |   _    ,*
                         head: head,
                         body: body,
                         theme: 'grid',
-                        headStyles: { fillColor: [41, 128, 185], fontSize: 8 },
-                        bodyStyles: { fontSize: 8 }
+                        headStyles: { fillColor: [0, 0, 0], fontSize: 8, textColor: [255, 255, 255] },
+                        bodyStyles: { fontSize: 8, textColor: [0, 0, 0] }
                     });
 
                     let currentY = doc.lastAutoTable.finalY + 10;
@@ -402,9 +402,34 @@ O    _    - |   _    ,*
                     }
 
                     // Deductions
-                    if (p.deductionTotal > 0) {
+                    if (p.deductionDetails && p.deductionDetails.length > 0) {
+                        doc.text("Deducciones / Varios", 14, currentY);
+                        const dedBody = p.deductionDetails.map(d => [
+                            d.desc || 'Varios',
+                            formatCurrency(d.amount)
+                        ]);
+
+                        autoTable(doc, {
+                            startY: currentY + 2,
+                            head: [['Concepto', 'Monto']],
+                            body: dedBody,
+                            theme: 'striped',
+                            headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0] }, // Light gray header
+                            bodyStyles: { textColor: [200, 0, 0] }, // Red text for values
+                            margin: { right: 100 }
+                        });
+                        currentY = doc.lastAutoTable.finalY + 5;
+
+                        doc.setFontSize(10);
                         doc.setTextColor(200, 0, 0);
-                        doc.text(`Deducciones / Varios: -${formatCurrency(p.deductionTotal)}`, 14, currentY);
+                        doc.text(`Total Deducciones: -${formatCurrency(p.deductionTotal)}`, 14, currentY + 5);
+                        doc.setTextColor(0);
+                        doc.setFontSize(10);
+                        currentY += 15;
+                    } else if (p.deductionTotal > 0) {
+                        // Fallback for legacy data without details
+                        doc.setTextColor(0, 0, 0);
+                        doc.text(`Deducciones: -${formatCurrency(p.deductionTotal)}`, 14, currentY);
                         doc.setTextColor(0);
                         currentY += 10;
                     }
@@ -694,8 +719,8 @@ O    _    - |   _    ,*
                 }
             });
 
-            const addDebt = (e, c) => handleDbAction(() => addDoc(collection(db, "deductions"), {
-                employee: e, amount: c * snackPrice, status: 'PENDING', timestamp: serverTimestamp()
+            const addDeduction = (employee, amount, description) => handleDbAction(() => addDoc(collection(db, "deductions"), {
+                employee: employee, amount: parseFloat(amount), description: description, status: 'PENDING', timestamp: serverTimestamp()
             }));
 
             const addExpense = (desc, amount) => handleDbAction(async () => {
@@ -751,7 +776,7 @@ O    _    - |   _    ,*
                 role, login, logout, view, setView, employees, tickets, history, deductions, expenses,
                 prices, commissions, extrasList, exRate, snackPrice, initialCash, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
-                saveTicket, updateSnacks, toggleAttendance, addEmployee, deleteTicket, addDebt,
+                saveTicket, updateSnacks, toggleAttendance, addEmployee, deleteTicket, addDeduction,
                 addExpense, updateExpense, resolveExpense, processPayment, processCardPayment,
                 db, isSubmitting
             };
@@ -907,16 +932,44 @@ O    _    - |   _    ,*
         };
 
         const CashierView = () => {
-            const { tickets, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDebt, addExpense, employees, exRate, toggleAttendance, isSubmitting, role, snackPrice } = useContext(AppContext);
+            const { tickets, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, toggleAttendance, isSubmitting, role, snackPrice } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
+            const [showVarios, setShowVarios] = useState(false);
             const [showAttendance, setShowAttendance] = useState(false);
             const [showExpense, setShowExpense] = useState(false);
+
+            // Snack State
             const [snackEmp, setSnackEmp] = useState('');
+
+            // Varios State
+            const [variosEmp, setVariosEmp] = useState('');
+            const [variosDesc, setVariosDesc] = useState('');
+            const [variosAmt, setVariosAmt] = useState('');
+
+            // Expense State
             const [expDesc, setExpDesc] = useState('');
             const [expAmt, setExpAmt] = useState('');
 
             const handleAddExpense = () => { if (!expDesc || !expAmt) return; addExpense(expDesc, expAmt); setExpDesc(''); setExpAmt(''); setShowExpense(false); };
+
+            const handleAddSnack = () => {
+                if (snackEmp) {
+                    addDeduction(snackEmp, snackPrice, 'Snack');
+                    setShowSnack(false);
+                    setSnackEmp('');
+                }
+            };
+
+            const handleAddVarios = () => {
+                if (variosEmp && variosDesc && variosAmt) {
+                    addDeduction(variosEmp, variosAmt, variosDesc);
+                    setShowVarios(false);
+                    setVariosEmp('');
+                    setVariosDesc('');
+                    setVariosAmt('');
+                }
+            };
 
             return (
                 <div className="flex flex-col md:flex-row h-full gap-4 p-4 overflow-hidden">
@@ -924,9 +977,10 @@ O    _    - |   _    ,*
                         <div className="p-3 bg-gray-50 font-bold border-b flex justify-between items-center shrink-0">
                             <span className="text-gray-700">Tickets ({tickets.length})</span>
                             <div className="flex gap-1">
-                                <Button onClick={() => setShowAttendance(true)} variant="blueLight" className="text-xs px-3 py-1 h-auto rounded-full">Asistencia</Button>
-                                <Button onClick={() => setShowSnack(true)} variant="orangeLight" className="text-xs px-3 py-1 h-auto rounded-full">Snack</Button>
-                                <Button onClick={() => setShowExpense(true)} variant="danger" className="text-xs px-3 py-1 h-auto rounded-full">Gasto</Button>
+                                <Button onClick={() => setShowAttendance(true)} variant="blueLight" className="text-xs px-2 py-1 h-auto rounded-full">Asist</Button>
+                                <Button onClick={() => setShowSnack(true)} variant="orangeLight" className="text-xs px-2 py-1 h-auto rounded-full">Snack</Button>
+                                <Button onClick={() => setShowVarios(true)} variant="secondary" className="text-xs px-2 py-1 h-auto rounded-full text-purple-700 border-purple-200 bg-purple-50 hover:bg-purple-100">Varios</Button>
+                                <Button onClick={() => setShowExpense(true)} variant="danger" className="text-xs px-2 py-1 h-auto rounded-full">Gasto</Button>
                             </div>
                         </div>
                         <div className="overflow-y-auto flex-1 p-2 space-y-2">
@@ -967,7 +1021,17 @@ O    _    - |   _    ,*
                         ) : <div className="text-gray-400 flex flex-col items-center"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
                     </div>
 
-                    {showSnack && <Modal title={`Snack Empleado ($${snackPrice})`} icon={Coffee} onClose={() => setShowSnack(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowSnack(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={() => { if (snackEmp) { addDebt(snackEmp, 1); setShowSnack(false); setSnackEmp(''); } }} disabled={!snackEmp} variant="warning" className="flex-1">Confirmar</Button></div>}><select className="w-full border p-3 rounded-lg mb-6 text-lg bg-white" onChange={e => setSnackEmp(e.target.value)} value={snackEmp}><option value="">Seleccionar Empleado...</option>{employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}</select></Modal>}
+                    {showSnack && <Modal title={`Snack Empleado ($${snackPrice})`} icon={Coffee} onClose={() => setShowSnack(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowSnack(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddSnack} disabled={!snackEmp} variant="warning" className="flex-1">Confirmar</Button></div>}><select className="w-full border p-3 rounded-lg mb-6 text-lg bg-white" onChange={e => setSnackEmp(e.target.value)} value={snackEmp}><option value="">Seleccionar Empleado...</option>{employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}</select></Modal>}
+
+                    {showVarios && (
+                        <Modal title="Varios / Deducción" icon={Briefcase} onClose={() => setShowVarios(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowVarios(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddVarios} disabled={!variosEmp || !variosDesc || !variosAmt} variant="primary" className="flex-1 bg-purple-600 hover:bg-purple-700">Guardar</Button></div>}>
+                            <div className="space-y-3">
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Empleado</label><select className="w-full border p-3 rounded-lg bg-white" onChange={e => setVariosEmp(e.target.value)} value={variosEmp}><option value="">Seleccionar...</option>{employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}</select></div>
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Descripción</label><input value={variosDesc} onChange={e => setVariosDesc(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Toalla, Esponja" /></div>
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={variosAmt} onChange={e => setVariosAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" /></div>
+                            </div>
+                        </Modal>
+                    )}
 
                     {showAttendance && <Modal title="Asistencia" icon={UserCheck} onClose={() => setShowAttendance(false)} footer={<Button onClick={() => setShowAttendance(false)} variant="secondary" className="w-full">Cerrar</Button>}><div className="max-h-80 overflow-y-auto space-y-2">{employees.map(e => <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span className="font-medium text-lg">{e.name}</span><button onClick={() => toggleAttendance(e.id, e.name, !e.active)} className={`px-4 py-2 rounded-lg font-bold ${e.active ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>{e.active ? 'PRESENTE' : 'AUSENTE'}</button></div>)}</div></Modal>}
 
@@ -988,9 +1052,9 @@ O    _    - |   _    ,*
                         </div>
                     </div>
                     <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
-                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center"><span>Snacks Empleados</span><Coffee className="w-4 h-4 text-orange-500" /></div>
+                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center"><span>Deducciones (Snacks/Varios)</span><Coffee className="w-4 h-4 text-orange-500" /></div>
                         <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
-                            <table className="w-full text-sm text-left"><thead className="bg-orange-50 font-bold text-orange-800 sticky top-0"><tr><th className="p-3">Fecha</th><th className="p-3">Empleado</th><th className="p-3 text-right">Monto</th></tr></thead><tbody>{deductions.filter(d => d.amount > 0).map(d => <tr key={d.id} className="border-t hover:bg-orange-50"><td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleDateString() : '...'}</td><td className="p-3 font-bold">{d.employee}</td><td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td></tr>)}</tbody></table>
+                            <table className="w-full text-sm text-left"><thead className="bg-orange-50 font-bold text-orange-800 sticky top-0"><tr><th className="p-3">Fecha</th><th className="p-3">Empleado</th><th className="p-3">Detalle</th><th className="p-3 text-right">Monto</th></tr></thead><tbody>{deductions.filter(d => d.amount > 0).map(d => <tr key={d.id} className="border-t hover:bg-orange-50"><td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleDateString() : '...'}</td><td className="p-3 font-bold">{d.employee}</td><td className="p-3 text-gray-600 italic">{d.description || 'Snack'}</td><td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td></tr>)}</tbody></table>
                         </div>
                     </div>
                 </div>
@@ -1021,6 +1085,7 @@ O    _    - |   _    ,*
             };
             const corteTotals = calculateCorteTotals();
 
+            // Updated to use PdfService
             const printCorte = () => {
                 const data = {
                     type: corteMode === 'DAY' ? 'Diario' : 'Mensual',
@@ -1074,6 +1139,7 @@ O    _    - |   _    ,*
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
             const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
 
+            // Updated to use PdfService
             const printNomina = () => {
                 PdfService.generateNomina(payroll, startDate, endDate);
             };
@@ -1118,6 +1184,7 @@ O    _    - |   _    ,*
                 snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
 
                 const daysInMonth = new Date(reportMonth.split('-')[0], reportMonth.split('-')[1], 0).getDate();
+                // Updated to use PdfService
                 PdfService.generateAttendance(reportMonth, employees, attendanceData, daysInMonth);
             };
 
