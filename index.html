@@ -56,7 +56,7 @@
             Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock
         } from 'lucide-react';
-        
+
         import { jsPDF } from 'jspdf';
         import autoTable from 'jspdf-autotable';
 
@@ -311,7 +311,7 @@ ${ticket.vehicleDesc ? `(${ticket.vehicleDesc})` : ''}
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
                 const hasUsd = payment.usd > 0;
                 const changeUsd = hasUsd ? (payment.change / payment.rate).toFixed(2) : '0.00';
-                
+
                 return `<div style="white-space: pre; font-family: monospace;">
 CARWASH LAVAMEX
 WATERFILL 216 CP 32553
@@ -412,21 +412,21 @@ O    _    - |   _    ,*
                     if (p.deductionDetails && p.deductionDetails.length > 0) {
                         doc.text("Deducciones / Varios", 14, currentY);
                         const dedBody = p.deductionDetails.map(d => [
-                            d.desc || 'Varios', 
+                            d.desc || 'Varios',
                             formatCurrency(d.amount)
                         ]);
-                        
+
                         autoTable(doc, {
                             startY: currentY + 2,
                             head: [['Concepto', 'Monto']],
                             body: dedBody,
                             theme: 'striped',
-                            headStyles: { fillColor: [200, 200, 200], textColor: [0,0,0] }, // Light gray header
+                            headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0] }, // Light gray header
                             bodyStyles: { textColor: [200, 0, 0] }, // Red text for values
                             margin: { right: 100 }
                         });
                         currentY = doc.lastAutoTable.finalY + 5;
-                        
+
                         doc.setFontSize(10);
                         doc.setTextColor(200, 0, 0);
                         doc.text(`Total Deducciones: -${formatCurrency(p.deductionTotal)}`, 14, currentY + 5);
@@ -456,7 +456,7 @@ O    _    - |   _    ,*
 
             generateCorte: (data) => {
                 const doc = new jsPDF();
-                
+
                 // Header
                 doc.setFontSize(22);
                 doc.text(`CORTE ${data.type.toUpperCase()}`, 105, 20, { align: 'center' });
@@ -516,12 +516,12 @@ O    _    - |   _    ,*
 
             generateAttendance: (monthLabel, employees, attendanceData, daysInMonth) => {
                 const doc = new jsPDF({ orientation: 'landscape' });
-                
+
                 doc.setFontSize(18);
                 doc.text(`REPORTE DE ASISTENCIA: ${monthLabel}`, 14, 20);
 
                 const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-                
+
                 const head = [['Empleado', ...days.map(d => String(d))]];
                 const body = employees.map(emp => {
                     const row = [emp.name];
@@ -899,7 +899,7 @@ O    _    - |   _    ,*
                                     <h3 className="font-bold mb-3 text-gray-700 flex items-center"><Car className="w-5 h-5 mr-2" /> 1. Tamaño</h3>
                                     <div className="space-y-2">{SIZES.map(s => <button key={s.id} onClick={() => setSize(s)} className={`w-full p-4 text-left rounded-lg border-2 transition-all ${size?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 hover:bg-gray-50'}`}>{s.label}</button>)}</div>
                                 </div>
-                                
+
                                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
                                     <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 2. Lavadores ({washers.length}/2)</h3>
                                     <div className="grid grid-cols-2 gap-3 mb-4">
@@ -964,7 +964,7 @@ O    _    - |   _    ,*
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-mono font-bold text-xl text-gray-800 bg-gray-100 px-2 py-1 rounded">#{t.id.slice(-4).toUpperCase()}</span>
-                                                    <span className="text-xs font-bold text-gray-500 flex items-center bg-gray-50 px-2 py-1 rounded border"><Clock size={12} className="mr-1"/> {t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                                                    <span className="text-xs font-bold text-gray-500 flex items-center bg-gray-50 px-2 py-1 rounded border"><Clock size={12} className="mr-1" /> {t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                                                 </div>
                                             </div>
                                             <div className="text-right">
@@ -1015,10 +1015,10 @@ O    _    - |   _    ,*
             const [showVarios, setShowVarios] = useState(false);
             const [showAttendance, setShowAttendance] = useState(false);
             const [showExpense, setShowExpense] = useState(false);
-            
+
             // Snack State
             const [snackEmp, setSnackEmp] = useState('');
-            
+
             // Varios State
             const [variosEmp, setVariosEmp] = useState('');
             const [variosDesc, setVariosDesc] = useState('');
@@ -1029,7 +1029,7 @@ O    _    - |   _    ,*
             const [expAmt, setExpAmt] = useState('');
 
             const handleAddExpense = () => { if (!expDesc || !expAmt) return; addExpense(expDesc, expAmt); setExpDesc(''); setExpAmt(''); setShowExpense(false); };
-            
+
             const handleAddSnack = () => {
                 if (snackEmp) {
                     addDeduction(snackEmp, snackPrice, 'Snack');
@@ -1441,12 +1441,50 @@ O    _    - |   _    ,*
             );
         };
 
+        const LockedView = () => {
+            const { logout } = useContext(AppContext);
+            return (
+                <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 text-white p-4">
+                    <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl text-center max-w-md w-full border border-gray-700">
+                        <div className="bg-red-900/30 p-4 rounded-full w-fit mx-auto mb-6">
+                            <Lock size={48} className="text-red-500" />
+                        </div>
+                        <h1 className="text-2xl font-bold mb-2">El sistema está bloqueado</h1>
+                        <Button onClick={logout} variant="danger" className="w-full py-3">
+                            <LogOut className="mr-2" size={18} /> Cerrar Sesión
+                        </Button>
+                    </div>
+                </div>
+            );
+        };
+
         // ------------------------------------------------------------------
         // SECTION 10: MAIN LAYOUT
         // ------------------------------------------------------------------
         const LavamexPOS = () => {
             const { role, view, setView, logout } = useContext(AppContext);
+            const [isLocked, setIsLocked] = useState(false);
+
+            useEffect(() => {
+                const checkTime = () => {
+                    const now = new Date();
+                    const hours = now.getHours();
+                    // Lock if Role is NOT Admin AND Time is outside 7-19
+                    // 7 means 7:00 AM, 19 means 7:00 PM (19:00)
+                    const outsideHours = hours < 7 || hours >= 19;
+                    setIsLocked(role !== 'ADMIN' && outsideHours);
+                };
+
+                checkTime(); // Initial check
+                const interval = setInterval(checkTime, 60000); // Check every minute
+                return () => clearInterval(interval);
+            }, [role]);
+
             if (!role) return <LoginScreen />;
+
+            // If locked and not admin, show locked screen
+            if (isLocked) return <LockedView />;
+
             return (
                 <div className="h-screen flex flex-col bg-gray-100 font-sans">
                     <header className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md shrink-0 z-50">
