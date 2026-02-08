@@ -338,11 +338,12 @@
                 return `<div style="white-space: pre; font-family: monospace;">
 --------------------------------
 TICKET: #${shortId}
+${ticket.vehicleDesc ? ticket.vehicleDesc.toUpperCase() : ''}
+--------------------------------
 ${ticket.washers ? ticket.washers.join(', ') : ticket.washer}
 ${ticket.size ? ticket.size.label : ''}
 ${ticket.service ? ticket.service.label : 'Extras Only'}
 ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label}`).join('\n') : ''}
-${ticket.vehicleDesc ? `(${ticket.vehicleDesc})` : ''}
 --------------------------------</div>`;
             },
 
@@ -357,6 +358,7 @@ CD. JUAREZ CHIH.
 RFC. CACN760904AN7
 --------------------------------
 Ticket: #${shortId}
+${ticket.vehicleDesc ? ticket.vehicleDesc.toUpperCase() : ''}
 Fecha: ${new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
 Metodo: ${payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO'}
 --------------------------------
@@ -916,7 +918,7 @@ O    _    - |   _    ,*
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
             const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: 0 }]); setVDesc(''); setVPrice(''); };
             const canSubmit = washers.length > 0 && ((size && service) || extras.some(e => e.id === 'BOLEADA' || e.id.startsWith('VARIOS')));
-            const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
+            const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
 
             // --- RENDER HELPERS FOR LAYOUT FLEXIBILITY ---
             const renderSizes = () => (
