@@ -278,21 +278,52 @@
         };
 
         // ------------------------------------------------------------------
-        // SECTION 5: PRINTING SERVICE (WEB SHARE API) & PDF SERVICE
+        // SECTION 5: PRINTING SERVICE (WEB SHARE API & DESKTOP PRINT)
         // ------------------------------------------------------------------
         const PrintService = {
-            print: async (content) => {
-                if (navigator.share) {
-                    try {
-                        await navigator.share({
-                            text: "<HTML>" + content
-                        });
-                    } catch (err) {
-                        console.error("Share failed:", err);
+            print: async (content, role) => {
+                // If CASHIER or ADMIN, assume desktop environment -> Direct Print
+                if (role === 'CASHIER' || role === 'ADMIN') {
+                    const printWindow = window.open('', '_blank', 'width=400,height=600');
+                    if (printWindow) {
+                        printWindow.document.write(`
+                            <html>
+                                <head>
+                                    <title>Imprimir Ticket</title>
+                                    <style>
+                                        body { font-family: monospace; white-space: pre; margin: 0; padding: 10px; font-size: 12px; }
+                                    </style>
+                                </head>
+                                <body>
+                                    ${content}
+                                    <script>
+                                        window.onload = function() {
+                                            window.print();
+                                            setTimeout(function() { window.close(); }, 500);
+                                        }
+                                    <\/script>
+                                </body>
+                            </html>
+                        `);
+                        printWindow.document.close();
+                    } else {
+                        alert("Por favor permite ventanas emergentes para imprimir el ticket.");
                     }
-                } else {
-                    alert("Tu navegador no soporta compartir. Copia el texto manualmente.");
-                    console.log("<HTML>" + content);
+                } 
+                // If GREETER (Entrada), assume mobile environment -> Web Share API
+                else {
+                    if (navigator.share) {
+                        try {
+                            await navigator.share({
+                                text: "<HTML>" + content
+                            });
+                        } catch (err) {
+                            console.error("Share failed:", err);
+                        }
+                    } else {
+                        alert("Tu navegador no soporta compartir. Copia el texto manualmente.");
+                        console.log("<HTML>" + content);
+                    }
                 }
             },
 
@@ -697,7 +728,7 @@ O    _    - |   _    ,*
                     } else {
                         const ref = await addDoc(collection(db, "tickets"), ticketData);
                         const html = PrintService.getJobTicketHtml({ ...ticketData, timestamp: new Date() }, ref.id.slice(-4).toUpperCase());
-                        PrintService.print(html);
+                        PrintService.print(html, role);
                     }
                 } finally { setIsSubmitting(false); }
             });
@@ -755,7 +786,7 @@ O    _    - |   _    ,*
                     await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
 
                     const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
-                    PrintService.print(html);
+                    PrintService.print(html, role);
 
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
                 } finally { setIsSubmitting(false); }
@@ -770,7 +801,7 @@ O    _    - |   _    ,*
                     await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
 
                     const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
-                    PrintService.print(html);
+                    PrintService.print(html, role);
 
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
                 } finally { setIsSubmitting(false); }
