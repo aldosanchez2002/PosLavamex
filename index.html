@@ -1572,7 +1572,8 @@ O    _    - |   _    ,*
                     // Lock if Role is NOT Admin AND Time is outside 7-19
                     // 7 means 7:00 AM, 19 means 7:00 PM (19:00)
                     const outsideHours = hours < 7 || hours >= 19;
-                    setIsLocked(role !== 'ADMIN' && outsideHours);
+                    // setIsLocked(role !== 'ADMIN' && outsideHours);
+                    setIsLocked(false);// temp for dev
                 };
 
                 checkTime(); // Initial check
