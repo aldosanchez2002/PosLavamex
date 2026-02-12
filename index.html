@@ -54,7 +54,8 @@
             LogOut, Users, Calculator, Printer, Wifi, Lock, Archive, Pencil,
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
             Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
-            TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock
+            TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
+            EyeOff
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -191,16 +192,17 @@
 
         const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
             const payroll = {};
-            employees.forEach(emp => {
-                const serviceGrid = {};
+            const initPayrollItem = () => {
+                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0 };
                 SERVICES.forEach(svc => {
-                    serviceGrid[svc.id] = {};
-                    SIZES.forEach(sz => serviceGrid[svc.id][sz.id] = 0);
+                    item.serviceGrid[svc.id] = {};
+                    SIZES.forEach(sz => item.serviceGrid[svc.id][sz.id] = 0);
                 });
-                payroll[emp.name] = {
-                    count: 0, total: 0, serviceGrid, extrasData: {},
-                    deductionTotal: 0, deductionDetails: [], netPay: 0
-                };
+                return item;
+            };
+
+            employees.forEach(emp => {
+                payroll[emp.name] = initPayrollItem();
             });
 
             history.forEach(item => {
@@ -228,7 +230,7 @@
                 const baseShare = baseCommissionTotal / washerCount;
 
                 washersList.forEach(washerName => {
-                    if (!payroll[washerName]) return;
+                    if (!payroll[washerName]) payroll[washerName] = initPayrollItem(); 
                     const p = payroll[washerName];
                     p.count += 1;
                     p.total += (baseShare + (extrasCommissionTotal / washerCount));
@@ -244,10 +246,9 @@
             });
 
             deductions.forEach(d => {
-                if (payroll[d.employee]) {
-                    payroll[d.employee].deductionTotal += d.amount;
-                    payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
-                }
+                if (!payroll[d.employee]) payroll[d.employee] = initPayrollItem();
+                payroll[d.employee].deductionTotal += d.amount;
+                payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
             });
 
             Object.keys(payroll).forEach(key => { payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal; });
@@ -341,10 +342,10 @@ ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.labe
 
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
                 const isOnlyUsd = payment.isOnlyUsd;
-                const changeStr = isOnlyUsd
-                    ? `Cambio: $${(payment.changeUsd || 0).toFixed(2)} USD`
+                const changeStr = isOnlyUsd 
+                    ? `Cambio: $${(payment.changeUsd || 0).toFixed(2)} USD` 
                     : `Cambio: $${(payment.changeMxn || 0).toFixed(2)} MXN`;
-
+                
                 const receivedStr = [
                     payment.usd > 0 ? `$${payment.usd.toFixed(2)} USD` : null,
                     payment.mxn > 0 ? `$${payment.mxn.toFixed(2)} MXN` : null
@@ -369,7 +370,7 @@ TOTAL: $${ticket.price}
 ${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
 Gracias por su preferencia
       .--------.
- ____/_____|___ \___
+ ____/_____|___ \\___
 O    _    - |   _    ,*
  '--(_)-------(_)--' </div>`;
             }
@@ -613,7 +614,7 @@ O    _    - |   _    ,*
                     if (snap.empty && employees.length === 0) {
                         DEFAULTS.INITIAL_EMPLOYEES.forEach(e => addDoc(collection(db, "employees"), e));
                     }
-                    setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                    setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => !e.archived));
                 });
                 return () => unsub();
             }, []);
@@ -737,6 +738,8 @@ O    _    - |   _    ,*
             });
 
             const addEmployee = (name) => handleDbAction(() => addDoc(collection(db, "employees"), { name, active: true }));
+            
+            const archiveEmployee = (id) => handleDbAction(() => updateDoc(doc(db, "employees", id), { archived: true }));
 
             const deleteTicket = (id) => handleDbAction(async () => {
                 if (confirm("¿Seguro que deseas borrar este ticket?")) {
@@ -764,11 +767,11 @@ O    _    - |   _    ,*
             const processPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-
+                
                 const mxnVal = parseFloat(payment.mxn) || 0;
                 const usdVal = parseFloat(payment.usd) || 0;
                 const total = mxnVal + (usdVal * exRate);
-
+                
                 if (total < t.price) return alert("Falta dinero");
 
                 setIsSubmitting(true);
@@ -809,7 +812,7 @@ O    _    - |   _    ,*
                 role, login, logout, view, setView, employees, tickets, history, deductions, expenses,
                 prices, commissions, extrasList, exRate, snackPrice, initialCash, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
-                saveTicket, updateSnacks, toggleAttendance, addEmployee, deleteTicket, addDeduction,
+                saveTicket, updateSnacks, toggleAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, updateExpense, resolveExpense, processPayment, processCardPayment,
                 db, isSubmitting
             };
@@ -887,10 +890,10 @@ O    _    - |   _    ,*
             useEffect(() => {
                 if (editingTicket) {
                     setSubTab('FORM');
-                    setSize(editingTicket.size || null);
-                    setService(editingTicket.service || null);
-                    setWashers(editingTicket.washers || []);
-                    setExtras(editingTicket.extras || []);
+                    setSize(editingTicket.size || null); 
+                    setService(editingTicket.service || null); 
+                    setWashers(editingTicket.washers || []); 
+                    setExtras(editingTicket.extras || []); 
                     setDesc(editingTicket.vehicleDesc || '');
                 } else {
                     setSize(null); setService(null); setWashers([]); setExtras([]); setDesc('');
@@ -902,10 +905,9 @@ O    _    - |   _    ,*
             const addExtra = (item) => setExtras(prev => [...prev, item]);
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
             const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: 0 }]); setVDesc(''); setVPrice(''); };
-
-            // Allow Chasis only, Armor-all only, Boleada only, etc.
+            
             const canSubmit = washers.length > 0 && ((size && service) || extras.length > 0);
-
+            
             const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
 
             const renderSizes = () => (
@@ -1364,7 +1366,7 @@ O    _    - |   _    ,*
         };
 
         const AdminConfig = () => {
-            const { exRate, snackPrice, initialCash, updateGlobalSettings, employees, addEmployee } = useContext(AppContext);
+            const { exRate, snackPrice, initialCash, updateGlobalSettings, employees, addEmployee, archiveEmployee } = useContext(AppContext);
             const [localExRate, setLocalExRate] = useState(exRate);
             const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
             const [localInitMxn, setLocalInitMxn] = useState(initialCash.mxn);
@@ -1384,7 +1386,15 @@ O    _    - |   _    ,*
                     </div>
                     <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
                     <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} placeholder="Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><Button onClick={handleAddEmployee}><PlusCircle className="w-5 h-5" /></Button></div>
-                    <div className="space-y-2">{employees.map((e) => (<div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span className="font-medium">{e.name}</span><span className={`text-xs font-bold px-2 py-1 rounded ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.active ? 'Presente' : 'Ausente'}</span></div>))}</div>
+                    <div className="space-y-2">{employees.map((e) => (
+                        <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span className="font-medium">{e.name}</span>
+                            <div className="flex items-center gap-3">
+                                <span className={`text-xs font-bold px-2 py-1 rounded ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.active ? 'Presente' : 'Ausente'}</span>
+                                <button onClick={() => { if(confirm(`¿Ocultar a ${e.name}?`)) archiveEmployee(e.id); }} className="text-red-500 hover:text-red-700" title="Ocultar empleado"><EyeOff size={16} /></button>
+                            </div>
+                        </div>
+                    ))}</div>
                 </div>
             );
         };
@@ -1555,7 +1565,7 @@ O    _    - |   _    ,*
                     setIsLocked(role !== 'ADMIN' && outsideHours);
                 };
 
-                checkTime();
+                checkTime(); 
                 const interval = setInterval(checkTime, 60000);
                 return () => clearInterval(interval);
             }, [role]);
