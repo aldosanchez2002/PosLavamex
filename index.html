@@ -107,7 +107,7 @@
                 ADMIN: 'OTk5OQ=='    // 9999
             },
             EXCHANGE_RATE: 18.10,
-            SNACK_PRICE: 25,
+            SNACK_PRICE: 30,
             INITIAL_CASH_MXN: 0,
             INITIAL_CASH_USD: 0,
             INITIAL_EMPLOYEES: [
@@ -137,6 +137,7 @@
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 30 },
                 { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
                 { id: 'LIMP_FOCOS', label: 'Limpieza de Focos', price: 340, commission: 120 },
+                { id: 'ARMORALL', label: 'Armor-All', price: 50, commission: 20 },
             ]
         };
 
@@ -174,7 +175,7 @@
             return `${y}-${m}`;
         };
 
-        const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0, currentSnackPrice = 25) => {
+        const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0, currentSnackPrice = 30) => {
             const basePrice = (serviceId && sizeId && prices[serviceId]?.[sizeId]) || 0;
             const baseComm = (serviceId && sizeId && commissions[serviceId]?.[sizeId]) || 0;
             const extrasPrice = extraList.reduce((a, b) => a + b.price, 0);
@@ -263,13 +264,6 @@
             return null;
         };
 
-        const calculateChange = (mxn, usd, rate, totalCost) => {
-            const mxnVal = parseFloat(mxn) || 0;
-            const usdVal = parseFloat(usd) || 0;
-            const totalGiven = mxnVal + (usdVal * rate);
-            return totalGiven - totalCost;
-        };
-
         const toggleSelection = (list, item, limit = null) => {
             const isObj = typeof item !== 'string';
             const exists = isObj ? list.some(x => x.id === item.id) : list.includes(item);
@@ -282,7 +276,6 @@
         // ------------------------------------------------------------------
         const PrintService = {
             print: async (content, role) => {
-                // If CASHIER or ADMIN, assume desktop environment -> Direct Print
                 if (role === 'CASHIER' || role === 'ADMIN') {
                     const printWindow = window.open('', '_blank', 'width=400,height=600');
                     if (printWindow) {
@@ -291,11 +284,11 @@
                                 <head>
                                     <title>Imprimir Ticket</title>
                                     <style>
-                                        @page { margin: 0; } /* CRITICAL: Removes browser header/footer (URL, Date, Page #) */
+                                        @page { margin: 0; } 
                                         body { 
                                             font-family: monospace; 
                                             white-space: pre; 
-                                            margin: 10px; /* Add margin back to body since page margin is 0 */
+                                            margin: 10px; 
                                             padding: 0; 
                                             font-size: 12px; 
                                         }
@@ -317,7 +310,6 @@
                         alert("Por favor permite ventanas emergentes para imprimir el ticket.");
                     }
                 }
-                // If GREETER (Entrada), assume mobile environment -> Web Share API
                 else {
                     if (navigator.share) {
                         try {
@@ -348,8 +340,15 @@ ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.labe
             },
 
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
-                const hasUsd = payment.usd > 0;
-                const changeUsd = hasUsd ? (payment.change / payment.rate).toFixed(2) : '0.00';
+                const isOnlyUsd = payment.isOnlyUsd;
+                const changeStr = isOnlyUsd
+                    ? `Cambio: $${(payment.changeUsd || 0).toFixed(2)} USD`
+                    : `Cambio: $${(payment.changeMxn || 0).toFixed(2)} MXN`;
+
+                const receivedStr = [
+                    payment.usd > 0 ? `$${payment.usd.toFixed(2)} USD` : null,
+                    payment.mxn > 0 ? `$${payment.mxn.toFixed(2)} MXN` : null
+                ].filter(Boolean).join(' / ');
 
                 return `<div style="white-space: pre; font-family: monospace;">
 CARWASH LAVAMEX
@@ -364,12 +363,10 @@ Metodo: ${payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO'}
 --------------------------------
 ${ticket.service ? ticket.service.label : 'General'} $${ticket.basePrice || 0}
 ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label} $${e.price}`).join('\n') : ''}
-${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount}) $${ticket.snackCount * (currentSnackPrice || 25)}` : ''}
+${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount}) $${ticket.snackCount * (currentSnackPrice || 30)}` : ''}
 --------------------------------
 TOTAL: $${ticket.price}
-${payment.method === 'CASH' ? `Recibido: $${payment.mxn.toFixed(2)} MXN / $${payment.usd.toFixed(2)} USD
-Cambio: $${payment.change.toFixed(2)} MXN
-${hasUsd ? `Cambio USD: $${changeUsd}` : ''}` : ''}
+${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
 Gracias por su preferencia
       .--------.
  ____/_____|___ \___
@@ -378,7 +375,6 @@ O    _    - |   _    ,*
             }
         };
 
-        // NEW: PDF Service using jsPDF
         const PdfService = {
             generateNomina: (payroll, startDate, endDate) => {
                 const doc = new jsPDF();
@@ -386,12 +382,9 @@ O    _    - |   _    ,*
 
                 Object.keys(payroll).forEach((name, index) => {
                     const p = payroll[name];
-                    // Skip if nothing to pay and no deductions
                     if (p.count === 0 && p.deductionTotal === 0) return;
-
                     if (index > 0) doc.addPage();
 
-                    // Header
                     doc.setFontSize(18);
                     doc.text(`LAVAMEX - NÓMINA`, 105, 15, { align: 'center' });
                     doc.setFontSize(14);
@@ -400,7 +393,6 @@ O    _    - |   _    ,*
                     doc.text(`Periodo: ${startDate} al ${endDate}`, 14, 30);
                     doc.text(`Generado: ${new Date().toLocaleDateString()}`, 14, 35);
 
-                    // Net Pay Box
                     doc.setDrawColor(0);
                     doc.setFillColor(240, 240, 240);
                     doc.rect(140, 20, 50, 20, 'F');
@@ -411,7 +403,6 @@ O    _    - |   _    ,*
                     doc.text(formatCurrency(p.netPay), 165, 35, { align: 'center' });
                     doc.setTextColor(0);
 
-                    // Service Grid
                     const head = [['Servicio', ...SIZES.map(s => s.label)]];
                     const body = [];
                     SERVICES.forEach(svc => {
@@ -432,7 +423,6 @@ O    _    - |   _    ,*
 
                     let currentY = doc.lastAutoTable.finalY + 10;
 
-                    // Extras
                     const extraKeys = Object.keys(p.extrasData).sort();
                     if (extraKeys.length > 0) {
                         doc.text("Comisiones Extras", 14, currentY);
@@ -443,12 +433,11 @@ O    _    - |   _    ,*
                             body: extrasBody,
                             theme: 'striped',
                             headStyles: { fillColor: [50, 50, 50] },
-                            margin: { right: 100 } // keep it narrow
+                            margin: { right: 100 }
                         });
                         currentY = doc.lastAutoTable.finalY + 10;
                     }
 
-                    // Deductions
                     if (p.deductionDetails && p.deductionDetails.length > 0) {
                         doc.text("Deducciones / Varios", 14, currentY);
                         const dedBody = p.deductionDetails.map(d => [
@@ -461,8 +450,8 @@ O    _    - |   _    ,*
                             head: [['Concepto', 'Monto']],
                             body: dedBody,
                             theme: 'striped',
-                            headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0] }, // Light gray header
-                            bodyStyles: { textColor: [200, 0, 0] }, // Red text for values
+                            headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0] },
+                            bodyStyles: { textColor: [200, 0, 0] },
                             margin: { right: 100 }
                         });
                         currentY = doc.lastAutoTable.finalY + 5;
@@ -474,14 +463,12 @@ O    _    - |   _    ,*
                         doc.setFontSize(10);
                         currentY += 15;
                     } else if (p.deductionTotal > 0) {
-                        // Fallback for legacy data without details
                         doc.setTextColor(0, 0, 0);
                         doc.text(`Deducciones: -${formatCurrency(p.deductionTotal)}`, 14, currentY);
                         doc.setTextColor(0);
                         currentY += 10;
                     }
 
-                    // Legal & Signature
                     doc.setFontSize(8);
                     const legalText = "Recibí de LAVAMEX la cantidad descrita a mi entera satisfacción por concepto de pago por servicios de lavado realizados. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.";
                     const splitText = doc.splitTextToSize(legalText, 180);
@@ -497,13 +484,11 @@ O    _    - |   _    ,*
             generateCorte: (data) => {
                 const doc = new jsPDF();
 
-                // Header
                 doc.setFontSize(22);
                 doc.text(`CORTE ${data.type.toUpperCase()}`, 105, 20, { align: 'center' });
                 doc.setFontSize(12);
                 doc.text(`Fecha: ${data.dateLabel}`, 105, 28, { align: 'center' });
 
-                // Big Totals
                 doc.setFillColor(245, 245, 245);
                 doc.rect(14, 35, 182, 30, 'F');
                 doc.setFontSize(14);
@@ -518,7 +503,6 @@ O    _    - |   _    ,*
                 doc.text(formatCurrency(data.totals.cashNetMxn), 150, 55, { align: 'center' });
                 doc.setTextColor(0);
 
-                // Summary Table
                 const summaryData = [
                     ['Tickets Totales', data.tickets.length],
                     ['Venta Efectivo (Tickets)', formatCurrency(data.totals.cashTotal)],
@@ -538,7 +522,6 @@ O    _    - |   _    ,*
                     columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } }
                 });
 
-                // Expenses Table
                 if (data.expenses.length > 0) {
                     doc.text("Desglose de Gastos", 14, doc.lastAutoTable.finalY + 15);
                     const expBody = data.expenses.map(e => [e.description, formatCurrency(e.amount), e.status]);
@@ -602,7 +585,6 @@ O    _    - |   _    ,*
             const [expenses, setExpenses] = useState([]);
             const [editingTicket, setEditingTicket] = useState(null);
 
-            // Global settings
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
             const [initialCash, setInitialCash] = useState({ mxn: 0, usd: 0 });
@@ -610,12 +592,10 @@ O    _    - |   _    ,*
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
 
-            // UI State
             const [payment, setPayment] = useState({ mxn: '', usd: '' });
             const [activeId, setActiveId] = useState(null);
             const [isSubmitting, setIsSubmitting] = useState(false);
 
-            // Auth Logic
             const login = (r) => {
                 setRole(r);
                 localStorage.setItem('lavamex_role', r);
@@ -628,7 +608,6 @@ O    _    - |   _    ,*
                 setView('GREETER');
             };
 
-            // --- FIREBASE LISTENERS ---
             useEffect(() => {
                 const unsub = onSnapshot(query(collection(db, "employees"), orderBy("name")), (snap) => {
                     if (snap.empty && employees.length === 0) {
@@ -710,7 +689,6 @@ O    _    - |   _    ,*
                 return () => { unsubT(); unsubD(); unsubE(); };
             }, []);
 
-            // --- ACTIONS (USING HANDLEDBACTION) ---
             const updateGlobalSettings = (newRate, newSnackPrice, initMxn, initUsd) => handleDbAction(async () => {
                 await setDoc(doc(db, "settings", "general"), {
                     exchangeRate: newRate, snackPrice: newSnackPrice, initialCashMxn: initMxn, initialCashUsd: initUsd
@@ -737,7 +715,6 @@ O    _    - |   _    ,*
                     } else {
                         const ref = await addDoc(collection(db, "tickets"), ticketData);
                         const html = PrintService.getJobTicketHtml({ ...ticketData, timestamp: new Date() }, ref.id.slice(-4).toUpperCase());
-                        // Pass role to decide print method
                         PrintService.print(html, role);
                     }
                 } finally { setIsSubmitting(false); }
@@ -746,7 +723,7 @@ O    _    - |   _    ,*
             const updateSnacks = (id, count) => handleDbAction(async () => {
                 const t = tickets.find(x => x.id === id); if (!t) return;
                 const newCount = Math.max(0, count);
-                const totals = calculateTicketTotals(t.service.id, t.size.id, t.extras || [], prices, commissions, newCount, snackPrice);
+                const totals = calculateTicketTotals(t.service?.id, t.size?.id, t.extras || [], prices, commissions, newCount, snackPrice);
                 await updateDoc(doc(db, "tickets", id), { snackCount: newCount, price: totals.totalPrice });
             });
 
@@ -787,16 +764,23 @@ O    _    - |   _    ,*
             const processPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-                const total = (parseFloat(payment.mxn) || 0) + ((parseFloat(payment.usd) || 0) * exRate);
+
+                const mxnVal = parseFloat(payment.mxn) || 0;
+                const usdVal = parseFloat(payment.usd) || 0;
+                const total = mxnVal + (usdVal * exRate);
+
                 if (total < t.price) return alert("Falta dinero");
 
                 setIsSubmitting(true);
                 try {
-                    const details = { mxn: parseFloat(payment.mxn) || 0, usd: parseFloat(payment.usd) || 0, rate: exRate, change: total - t.price, method: 'CASH' };
+                    const isOnlyUsd = usdVal > 0 && mxnVal === 0;
+                    const changeMxn = total - t.price;
+                    const changeUsd = changeMxn / exRate;
+
+                    const details = { mxn: mxnVal, usd: usdVal, rate: exRate, changeMxn, changeUsd, isOnlyUsd, method: 'CASH' };
                     await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
 
                     const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
-                    // Pass role to decide print method
                     PrintService.print(html, role);
 
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
@@ -808,11 +792,10 @@ O    _    - |   _    ,*
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
                 setIsSubmitting(true);
                 try {
-                    const details = { mxn: t.price, usd: 0, rate: exRate, change: 0, method: 'CARD' };
+                    const details = { mxn: t.price, usd: 0, rate: exRate, changeMxn: 0, changeUsd: 0, isOnlyUsd: false, method: 'CARD' };
                     await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
 
                     const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
-                    // Pass role to decide print method
                     PrintService.print(html, role);
 
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
@@ -838,7 +821,6 @@ O    _    - |   _    ,*
         // SECTION 8: COMPONENTS (Refactored)
         // ------------------------------------------------------------------
 
-        // REUSABLE COMPONENTS
         const Button = ({ onClick, children, variant = 'primary', className = '', ...props }) => {
             const base = "p-3 rounded-xl font-bold transition-transform active:scale-95 shadow-sm flex items-center justify-center gap-2";
             const styles = {
@@ -900,13 +882,16 @@ O    _    - |   _    ,*
             const [vDesc, setVDesc] = useState('');
             const [vPrice, setVPrice] = useState('');
 
-            // DETECT DESKTOP USERS (CASHIER / ADMIN)
             const isDesktop = role === 'CASHIER' || role === 'ADMIN';
 
             useEffect(() => {
                 if (editingTicket) {
                     setSubTab('FORM');
-                    setSize(editingTicket.size); setService(editingTicket.service); setWashers(editingTicket.washers || []); setExtras(editingTicket.extras || []); setDesc(editingTicket.vehicleDesc || '');
+                    setSize(editingTicket.size || null);
+                    setService(editingTicket.service || null);
+                    setWashers(editingTicket.washers || []);
+                    setExtras(editingTicket.extras || []);
+                    setDesc(editingTicket.vehicleDesc || '');
                 } else {
                     setSize(null); setService(null); setWashers([]); setExtras([]); setDesc('');
                 }
@@ -917,10 +902,12 @@ O    _    - |   _    ,*
             const addExtra = (item) => setExtras(prev => [...prev, item]);
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
             const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: 0 }]); setVDesc(''); setVPrice(''); };
-            const canSubmit = washers.length > 0 && ((size && service) || extras.some(e => e.id === 'BOLEADA' || e.id.startsWith('VARIOS')));
+
+            // Allow Chasis only, Armor-all only, Boleada only, etc.
+            const canSubmit = washers.length > 0 && ((size && service) || extras.length > 0);
+
             const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
 
-            // --- RENDER HELPERS FOR LAYOUT FLEXIBILITY ---
             const renderSizes = () => (
                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
                     <h3 className="font-bold mb-3 text-gray-700 flex items-center"><Car className="w-5 h-5 mr-2" /> 1. Tamaño</h3>
@@ -1029,7 +1016,6 @@ O    _    - |   _    ,*
                     <div className="flex-1 overflow-y-auto p-4">
                         {subTab === 'FORM' ? (
                             isDesktop ? (
-                                // DESKTOP LAYOUT (3 Columns)
                                 <div className="grid grid-cols-3 gap-4 h-full content-start">
                                     <div className="flex flex-col gap-4">
                                         {renderSizes()}
@@ -1043,7 +1029,6 @@ O    _    - |   _    ,*
                                     </div>
                                 </div>
                             ) : (
-                                // MOBILE LAYOUT (Existing Stacked)
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full content-start">
                                     {renderSizes()}
                                     {renderWashers()}
@@ -1074,7 +1059,7 @@ O    _    - |   _    ,*
                                             <div>
                                                 <div className="text-xl font-bold text-gray-800 mb-1">{t.vehicleDesc || 'Sin descripción'}</div>
                                                 <div className="flex items-center gap-2 mb-2">
-                                                    <span className="font-bold text-blue-700 text-lg">{t.service?.label}</span>
+                                                    <span className="font-bold text-blue-700 text-lg">{t.service?.label || 'Extras Solo'}</span>
                                                     {t.size && <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">{t.size.label}</span>}
                                                 </div>
                                                 {t.extras && t.extras.length > 0 && (
@@ -1114,15 +1099,10 @@ O    _    - |   _    ,*
             const [showAttendance, setShowAttendance] = useState(false);
             const [showExpense, setShowExpense] = useState(false);
 
-            // Snack State
             const [snackEmp, setSnackEmp] = useState('');
-
-            // Varios State
             const [variosEmp, setVariosEmp] = useState('');
             const [variosDesc, setVariosDesc] = useState('');
             const [variosAmt, setVariosAmt] = useState('');
-
-            // Expense State
             const [expDesc, setExpDesc] = useState('');
             const [expAmt, setExpAmt] = useState('');
 
@@ -1146,9 +1126,12 @@ O    _    - |   _    ,*
                 }
             };
 
-            // Calculate change variables for display
-            const changeVal = t ? calculateChange(payment.mxn, payment.usd, exRate, t.price) : 0;
-            const changeUsdVal = parseFloat(payment.usd) > 0 ? (changeVal / exRate) : 0;
+            const mxnVal = parseFloat(payment.mxn) || 0;
+            const usdVal = parseFloat(payment.usd) || 0;
+            const isOnlyUsd = usdVal > 0 && mxnVal === 0;
+            const totalGiven = mxnVal + (usdVal * exRate);
+            const changeMxn = totalGiven - (t ? t.price : 0);
+            const changeUsd = changeMxn / exRate;
 
             return (
                 <div className="flex flex-col md:flex-row h-full gap-4 p-4 overflow-hidden">
@@ -1190,8 +1173,12 @@ O    _    - |   _    ,*
                                     <div><label className="text-xs font-bold text-gray-500 mb-1 block">USD (Rate: {exRate})</label><input type="number" inputMode="decimal" value={payment.usd} onChange={e => setPayment({ ...payment, usd: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
                                 </div>
                                 <div className="text-center font-bold mb-6 text-xl bg-gray-50 p-3 rounded-lg border">
-                                    <div>Cambio: <span className={changeVal < 0 ? 'text-red-500' : 'text-green-600'}>{formatCurrency(changeVal)} MXN</span></div>
-                                    {parseFloat(payment.usd) > 0 && changeVal > 0 && <div className="text-blue-600 text-lg mt-1">Cambio USD: ${changeUsdVal.toFixed(2)}</div>}
+                                    {isOnlyUsd ? (
+                                        <div>Cambio: <span className={changeUsd < 0 ? 'text-red-500' : 'text-green-600'}>${changeUsd.toFixed(2)} USD</span></div>
+                                    ) : (
+                                        <div>Cambio: <span className={changeMxn < 0 ? 'text-red-500' : 'text-green-600'}>{formatCurrency(changeMxn)} MXN</span></div>
+                                    )}
+                                    {!isOnlyUsd && usdVal > 0 && changeMxn > 0 && <div className="text-blue-600 text-lg mt-1">Cambio eqv. USD: ${changeUsd.toFixed(2)}</div>}
                                 </div>
                                 <div className="flex gap-3">
                                     {role !== 'CASHIER' && <Button onClick={() => deleteTicket(t.id)} variant="danger" title="Borrar"><Trash2 className="w-6 h-6" /></Button>}
@@ -1267,7 +1254,6 @@ O    _    - |   _    ,*
             };
             const corteTotals = calculateCorteTotals();
 
-            // Updated to use PdfService
             const printCorte = () => {
                 const data = {
                     type: corteMode === 'DAY' ? 'Diario' : 'Mensual',
@@ -1321,7 +1307,6 @@ O    _    - |   _    ,*
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
             const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
 
-            // Updated to use PdfService
             const printNomina = () => {
                 PdfService.generateNomina(payroll, startDate, endDate);
             };
@@ -1366,7 +1351,6 @@ O    _    - |   _    ,*
                 snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
 
                 const daysInMonth = new Date(reportMonth.split('-')[0], reportMonth.split('-')[1], 0).getDate();
-                // Updated to use PdfService
                 PdfService.generateAttendance(reportMonth, employees, attendanceData, daysInMonth);
             };
 
@@ -1436,11 +1420,9 @@ O    _    - |   _    ,*
                 if (!confirm("¿Aplicar nuevos precios?")) return;
                 const batch = writeBatch(db);
 
-                // 1. Save Prices & Commissions (Maps)
                 batch.set(doc(db, "settings", "prices"), editPrices);
                 batch.set(doc(db, "settings", "commissions"), editComms);
 
-                // 2. Process Extras Updates/Inserts
                 editExtras.forEach(e => {
                     if (e.docId) {
                         batch.update(doc(db, "extras", e.docId), {
@@ -1569,20 +1551,17 @@ O    _    - |   _    ,*
                 const checkTime = () => {
                     const now = new Date();
                     const hours = now.getHours();
-                    // Lock if Role is NOT Admin AND Time is outside 7-19
-                    // 7 means 7:00 AM, 19 means 7:00 PM (19:00)
                     const outsideHours = hours < 7 || hours >= 19;
                     setIsLocked(role !== 'ADMIN' && outsideHours);
                 };
 
-                checkTime(); // Initial check
-                const interval = setInterval(checkTime, 60000); // Check every minute
+                checkTime();
+                const interval = setInterval(checkTime, 60000);
                 return () => clearInterval(interval);
             }, [role]);
 
             if (!role) return <LoginScreen />;
 
-            // If locked and not admin, show locked screen
             if (isLocked) return <LockedView />;
 
             return (
