@@ -785,6 +785,7 @@ O    _      - |    _     ,*
 
                 const mxnVal = parseFloat(payment.mxn) || 0;
                 const usdVal = parseFloat(payment.usd) || 0;
+                const isOnlyUsd = usdVal > 0 && mxnVal === 0;
                 const total = mxnVal + (usdVal * exRate);
 
                 if (total < t.price) return alert("Falta dinero");
