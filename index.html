@@ -285,7 +285,7 @@
             },
 
             print: async (content, role) => {
-                if (role === 'CASHIER' || role === 'ADMIN' || role === 'GREETER') {
+                if (role === 'CASHIER' || role === 'ADMIN') {
                     const printWindow = window.open('', '_blank', 'width=400,height=600');
                     if (printWindow) {
                         printWindow.document.write(`
@@ -383,7 +383,7 @@ ${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
 Gracias por su preferencia
       .--------.
  ____/_____|___ \\___
-O    _     - |    _    ,*
+O    _      - |    _     ,*
  '--(_)-------(_)--' </div>`;
             }
         };
@@ -809,6 +809,7 @@ O    _     - |    _    ,*
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
 
+                // VALIDATION: Prevent payment if no washers are assigned
                 if (!t.washers || t.washers.length === 0) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
@@ -926,6 +927,7 @@ O    _     - |    _    ,*
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
             const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: 0 }]); setVDesc(''); setVPrice(''); };
 
+            // MODIFIED: Removed washers.length > 0 check to allow ticket creation without washers
             const canSubmit = ((size && service) || extras.length > 0);
 
             const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
@@ -1110,6 +1112,7 @@ O    _     - |    _    ,*
                                         {role !== 'CASHIER' && (
                                             <div className="flex gap-3 pt-2">
                                                 <Button onClick={() => startEdit(t)} variant="warning" className="flex-1 py-2 text-sm"><Pencil size={16} /> Editar</Button>
+                                                {/* ADDED: Print button for Entrada user */}
                                                 <Button onClick={() => handleReprint(t)} variant="secondary" className="flex-1 py-2 text-sm"><Printer size={16} /> Imprimir</Button>
                                                 <Button onClick={() => deleteTicket(t.id)} variant="danger" className="flex-1 py-2 text-sm"><Trash2 size={16} /> Borrar</Button>
                                             </div>
@@ -1160,7 +1163,6 @@ O    _     - |    _    ,*
 
             const mxnVal = parseFloat(payment.mxn) || 0;
             const usdVal = parseFloat(payment.usd) || 0;
-            const isOnlyUsd = usdVal > 0 && mxnVal === 0;
             const totalGiven = mxnVal + (usdVal * exRate);
             const changeMxn = totalGiven - (t ? t.price : 0);
             const changeUsd = changeMxn / exRate;
