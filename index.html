@@ -285,7 +285,7 @@
             },
 
             print: async (content, role) => {
-                if (role === 'CASHIER' || role === 'ADMIN') {
+                if (role === 'CASHIER' || role === 'ADMIN' || role === 'GREETER') {
                     const printWindow = window.open('', '_blank', 'width=400,height=600');
                     if (printWindow) {
                         printWindow.document.write(`
@@ -778,6 +778,11 @@ O    _     - |    _    ,*
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
 
+                // VALIDATION: Prevent payment if no washers are assigned
+                if (!t.washers || t.washers.length === 0) {
+                    return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
+                }
+
                 const mxnVal = parseFloat(payment.mxn) || 0;
                 const usdVal = parseFloat(payment.usd) || 0;
                 const total = mxnVal + (usdVal * exRate);
@@ -803,6 +808,11 @@ O    _     - |    _    ,*
             const processCardPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
+
+                if (!t.washers || t.washers.length === 0) {
+                    return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
+                }
+
                 setIsSubmitting(true);
                 try {
                     const details = { mxn: t.price, usd: 0, rate: exRate, changeMxn: 0, changeUsd: 0, isOnlyUsd: false, method: 'CARD' };
@@ -916,9 +926,14 @@ O    _     - |    _    ,*
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
             const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: 0 }]); setVDesc(''); setVPrice(''); };
 
-            const canSubmit = washers.length > 0 && ((size && service) || extras.length > 0);
+            const canSubmit = ((size && service) || extras.length > 0);
 
             const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
+
+            const handleReprint = (ticket) => {
+                const html = PrintService.getJobTicketHtml({ ...ticket, timestamp: ticket.timestamp || new Date() }, ticket.id.slice(-4).toUpperCase());
+                PrintService.print(html, role);
+            };
 
             const renderSizes = () => (
                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
@@ -1094,8 +1109,9 @@ O    _     - |    _    ,*
 
                                         {role !== 'CASHIER' && (
                                             <div className="flex gap-3 pt-2">
-                                                <Button onClick={() => startEdit(t)} variant="warning" className="flex-1 py-2 text-sm"><Pencil size={16} /> Editar Ticket</Button>
-                                                <Button onClick={() => deleteTicket(t.id)} variant="danger" className="flex-1 py-2 text-sm"><Trash2 size={16} /> Cancelar / Borrar</Button>
+                                                <Button onClick={() => startEdit(t)} variant="warning" className="flex-1 py-2 text-sm"><Pencil size={16} /> Editar</Button>
+                                                <Button onClick={() => handleReprint(t)} variant="secondary" className="flex-1 py-2 text-sm"><Printer size={16} /> Imprimir</Button>
+                                                <Button onClick={() => deleteTicket(t.id)} variant="danger" className="flex-1 py-2 text-sm"><Trash2 size={16} /> Borrar</Button>
                                             </div>
                                         )}
                                     </div>
