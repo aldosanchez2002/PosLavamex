@@ -1166,7 +1166,10 @@ O    _     - |    _    ,*
                                 <div key={ticket.id} onClick={() => setActiveId(ticket.id)} className={`p-4 rounded-lg border cursor-pointer transition-all ${activeId === ticket.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:bg-gray-50'}`}>
                                     <div className="flex justify-between font-bold text-gray-800">
                                         <span className="truncate pr-2">#{ticket.id.slice(-4).toUpperCase()}{ticket.vehicleDesc ? <span className="uppercase"> - {ticket.vehicleDesc}</span> : ''}</span>
-                                        <span className="whitespace-nowrap">{formatCurrency(ticket.price)}</span>
+                                        <div className="text-right">
+                                            <div className="whitespace-nowrap">{formatCurrency(ticket.price)} MXN</div>
+                                            <div className="text-xs text-green-600 font-normal">${(ticket.price / exRate).toFixed(2)} USD</div>
+                                        </div>
                                     </div>
                                     <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || 'Extras'} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size?.label || '-'}</span></div>
                                 </div>
@@ -1176,7 +1179,10 @@ O    _     - |    _    ,*
                     <div className="flex-1 bg-white rounded-xl shadow border p-4 md:p-6 flex flex-col items-center justify-center h-2/3 md:h-full overflow-y-auto">
                         {t ? (
                             <div className="w-full max-w-md">
-                                <h2 className="text-4xl font-bold text-center mb-2 text-gray-800">{formatCurrency(t.price)}</h2>
+                                <div className="text-center mb-2">
+                                    <h2 className="text-4xl font-bold text-gray-800">{formatCurrency(t.price)}</h2>
+                                    <div className="text-xl text-green-600 font-medium">${(t.price / exRate).toFixed(2)} USD</div>
+                                </div>
                                 <p className="text-center text-gray-500 mb-6 font-medium">{t.vehicleDesc} • {t.washers?.join(', ')}</p>
                                 <div className="flex justify-center items-center gap-3 mb-6 bg-orange-50 p-3 rounded-xl border border-orange-100">
                                     <span className="font-bold text-sm text-orange-800 uppercase tracking-wide">Snacks Cliente</span>
