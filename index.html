@@ -230,7 +230,7 @@
                 const baseShare = baseCommissionTotal / washerCount;
 
                 washersList.forEach(washerName => {
-                    if (!payroll[washerName]) payroll[washerName] = initPayrollItem(); 
+                    if (!payroll[washerName]) payroll[washerName] = initPayrollItem();
                     const p = payroll[washerName];
                     p.count += 1;
                     p.total += (baseShare + (extrasCommissionTotal / washerCount));
@@ -276,6 +276,14 @@
         // SECTION 5: PRINTING SERVICE (WEB SHARE API & DESKTOP PRINT)
         // ------------------------------------------------------------------
         const PrintService = {
+            // Helper function to remove accents for printer compatibility
+            normalizeText: (str) => {
+                if (!str) return '';
+                // NFD decomposes characters (e.g., 'é' -> 'e' + '´')
+                // replace removes the diacritic marks
+                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            },
+
             print: async (content, role) => {
                 if (role === 'CASHIER' || role === 'ADMIN') {
                     const printWindow = window.open('', '_blank', 'width=400,height=600');
@@ -328,12 +336,16 @@
             },
 
             getJobTicketHtml: (ticket, shortId) => {
+                // Normalize names for printer compatibility
+                const rawWashers = ticket.washers ? ticket.washers : (ticket.washer ? [ticket.washer] : []);
+                const cleanWashers = rawWashers.map(w => PrintService.normalizeText(w)).join(', ');
+
                 return `<div style="white-space: pre; font-family: monospace;">
 --------------------------------
 TICKET: #${shortId}
 ${ticket.vehicleDesc ? ticket.vehicleDesc.toUpperCase() : ''}
 --------------------------------
-${ticket.washers ? ticket.washers.join(', ') : ticket.washer}
+${cleanWashers}
 ${ticket.size ? ticket.size.label : ''}
 ${ticket.service ? ticket.service.label : 'Extras Only'}
 ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label}`).join('\n') : ''}
@@ -342,10 +354,10 @@ ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.labe
 
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
                 const isOnlyUsd = payment.isOnlyUsd;
-                const changeStr = isOnlyUsd 
-                    ? `Cambio: $${(payment.changeUsd || 0).toFixed(2)} USD` 
+                const changeStr = isOnlyUsd
+                    ? `Cambio: $${(payment.changeUsd || 0).toFixed(2)} USD`
                     : `Cambio: $${(payment.changeMxn || 0).toFixed(2)} MXN`;
-                
+
                 const receivedStr = [
                     payment.usd > 0 ? `$${payment.usd.toFixed(2)} USD` : null,
                     payment.mxn > 0 ? `$${payment.mxn.toFixed(2)} MXN` : null
@@ -371,7 +383,7 @@ ${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
 Gracias por su preferencia
       .--------.
  ____/_____|___ \\___
-O    _    - |   _    ,*
+O    _     - |    _    ,*
  '--(_)-------(_)--' </div>`;
             }
         };
@@ -736,7 +748,7 @@ O    _    - |   _    ,*
             });
 
             const addEmployee = (name) => handleDbAction(() => addDoc(collection(db, "employees"), { name, active: true }));
-            
+
             const archiveEmployee = (id) => handleDbAction(() => updateDoc(doc(db, "employees", id), { archived: true }));
 
             const deleteTicket = (id) => handleDbAction(async () => {
@@ -765,11 +777,11 @@ O    _    - |   _    ,*
             const processPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-                
+
                 const mxnVal = parseFloat(payment.mxn) || 0;
                 const usdVal = parseFloat(payment.usd) || 0;
                 const total = mxnVal + (usdVal * exRate);
-                
+
                 if (total < t.price) return alert("Falta dinero");
 
                 setIsSubmitting(true);
@@ -888,10 +900,10 @@ O    _    - |   _    ,*
             useEffect(() => {
                 if (editingTicket) {
                     setSubTab('FORM');
-                    setSize(editingTicket.size || null); 
-                    setService(editingTicket.service || null); 
-                    setWashers(editingTicket.washers || []); 
-                    setExtras(editingTicket.extras || []); 
+                    setSize(editingTicket.size || null);
+                    setService(editingTicket.service || null);
+                    setWashers(editingTicket.washers || []);
+                    setExtras(editingTicket.extras || []);
                     setDesc(editingTicket.vehicleDesc || '');
                 } else {
                     setSize(null); setService(null); setWashers([]); setExtras([]); setDesc('');
@@ -903,9 +915,9 @@ O    _    - |   _    ,*
             const addExtra = (item) => setExtras(prev => [...prev, item]);
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
             const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: 0 }]); setVDesc(''); setVPrice(''); };
-            
+
             const canSubmit = washers.length > 0 && ((size && service) || extras.length > 0);
-            
+
             const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
 
             const renderSizes = () => (
@@ -1206,7 +1218,7 @@ O    _    - |   _    ,*
                         </Modal>
                     )}
 
-                    {showAttendance && <Modal title="Asistencia" icon={UserCheck} onClose={() => setShowAttendance(false)} footer={<div className="flex gap-2"><Button onClick={() => setShowAttendance(false)} variant="secondary" className="flex-1">Cerrar</Button>{/* PLACEBO BUTTON: Attendance is saved instantly on toggle. This just gives user confidence. */}<Button onClick={() => { alert('Asistencia guardada exitosamente.'); setShowAttendance(false); }} variant="success" className="flex-1"><Upload size={18} className="mr-2"/> Guardar</Button></div>}><div className="max-h-80 overflow-y-auto space-y-2">{employees.map(e => <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span className="font-medium text-lg">{e.name}</span><button onClick={() => toggleAttendance(e.id, e.name, !e.active)} className={`px-4 py-2 rounded-lg font-bold ${e.active ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>{e.active ? 'PRESENTE' : 'AUSENTE'}</button></div>)}</div></Modal>}
+                    {showAttendance && <Modal title="Asistencia" icon={UserCheck} onClose={() => setShowAttendance(false)} footer={<div className="flex gap-2"><Button onClick={() => setShowAttendance(false)} variant="secondary" className="flex-1">Cerrar</Button>{/* PLACEBO BUTTON: Attendance is saved instantly on toggle. This just gives user confidence. */}<Button onClick={() => { alert('Asistencia guardada exitosamente.'); setShowAttendance(false); }} variant="success" className="flex-1"><Upload size={18} className="mr-2" /> Guardar</Button></div>}><div className="max-h-80 overflow-y-auto space-y-2">{employees.map(e => <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span className="font-medium text-lg">{e.name}</span><button onClick={() => toggleAttendance(e.id, e.name, !e.active)} className={`px-4 py-2 rounded-lg font-bold ${e.active ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>{e.active ? 'PRESENTE' : 'AUSENTE'}</button></div>)}</div></Modal>}
 
                     {showExpense && <Modal title="Registrar Gasto" icon={TrendingDown} onClose={() => setShowExpense(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowExpense(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddExpense} variant="danger" className="flex-1">Registrar</Button></div>}><div className="space-y-3"><div><label className="block text-sm font-bold text-gray-600 mb-1">Concepto</label><input value={expDesc} onChange={e => setExpDesc(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Jabón" /></div><div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" /></div></div></Modal>}
                 </div>
@@ -1393,7 +1405,7 @@ O    _    - |   _    ,*
                             <span className="font-medium">{e.name}</span>
                             <div className="flex items-center gap-3">
                                 <span className={`text-xs font-bold px-2 py-1 rounded ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.active ? 'Presente' : 'Ausente'}</span>
-                                <button onClick={() => { if(confirm(`¿Ocultar a ${e.name}?`)) archiveEmployee(e.id); }} className="text-red-500 hover:text-red-700" title="Ocultar empleado"><EyeOff size={16} /></button>
+                                <button onClick={() => { if (confirm(`¿Ocultar a ${e.name}?`)) archiveEmployee(e.id); }} className="text-red-500 hover:text-red-700" title="Ocultar empleado"><EyeOff size={16} /></button>
                             </div>
                         </div>
                     ))}</div>
@@ -1568,7 +1580,7 @@ O    _    - |   _    ,*
                     setIsLocked(false);
                 };
 
-                checkTime(); 
+                checkTime();
                 const interval = setInterval(checkTime, 60000);
                 return () => clearInterval(interval);
             }, [role]);
