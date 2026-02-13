@@ -1564,7 +1564,8 @@ O    _    - |   _    ,*
                     const now = new Date();
                     const hours = now.getHours();
                     const outsideHours = hours < 7 || hours >= 19;
-                    setIsLocked(role !== 'ADMIN' && outsideHours);
+                    // setIsLocked(role !== 'ADMIN' && outsideHours);
+                    setIsLocked(false);
                 };
 
                 checkTime(); 
