@@ -55,7 +55,7 @@
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
             Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
-            EyeOff, ClipboardList
+            EyeOff, ClipboardList, ShieldCheck
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -380,6 +380,23 @@ Gracias por su preferencia
  ____/_____|___ \\___
 O    _       - |    _      ,*
  '--(_)-------(_)--' </div>`;
+            },
+
+            getCashDropTicketHtml: (dropData) => {
+                return `<div style="white-space: pre; font-family: monospace;">
+RETIRO DE EFECTIVO
+(Resguardo)
+--------------------------------
+CODIGO: ${dropData.code}
+FECHA: ${dropData.timestamp.toLocaleDateString()}
+HORA: ${dropData.timestamp.toLocaleTimeString()}
+USUARIO: ${dropData.user}
+--------------------------------
+MXN: ${formatCurrency(dropData.amountMxn)}
+USD: $${dropData.amountUsd.toFixed(2)}
+--------------------------------
+Firma: __________________
+</div>`;
             }
         };
 
@@ -590,6 +607,7 @@ O    _       - |    _      ,*
             const [deductions, setDeductions] = useState([]);
             const [expenses, setExpenses] = useState([]);
             const [cashCounts, setCashCounts] = useState([]);
+            const [cashDrops, setCashDrops] = useState([]);
             const [editingTicket, setEditingTicket] = useState(null);
 
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
@@ -700,7 +718,15 @@ O    _       - |    _      ,*
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-                return () => { unsubT(); unsubD(); unsubE(); unsubCC(); };
+                // LOAD CASH DROPS
+                const qCD = query(collection(db, "cash_drops"), orderBy("timestamp", "desc"));
+                const unsubCD = onSnapshot(qCD, (snap) => {
+                    setCashDrops(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date()
+                    })));
+                });
+                return () => { unsubT(); unsubD(); unsubE(); unsubCC(); unsubCD(); };
             }, []);
 
             const updateGlobalSettings = (newRate, newSnackPrice, initMxn, initUsd) => handleDbAction(async () => {
@@ -769,6 +795,30 @@ O    _       - |    _      ,*
                 await addDoc(collection(db, "cash_counts"), {
                     ...data, timestamp: serverTimestamp()
                 });
+            });
+
+            // Add Cash Drop Action
+            const addCashDrop = (amountMxn, amountUsd) => handleDbAction(async () => {
+                const timestamp = new Date();
+                const uniqueSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+                const code = `DROP-${uniqueSuffix}`;
+
+                const dropData = {
+                    amountMxn: parseFloat(amountMxn) || 0,
+                    amountUsd: parseFloat(amountUsd) || 0,
+                    timestamp: serverTimestamp(),
+                    user: role,
+                    code: code,
+                    status: 'PENDING_PICKUP'
+                };
+
+                await addDoc(collection(db, "cash_drops"), dropData);
+
+                // Print Drop Ticket
+                const html = PrintService.getCashDropTicketHtml({ ...dropData, timestamp });
+                PrintService.print(html, role);
+
+                alert(`Retiro Registrado: ${code}`);
             });
 
             const addEmployee = (name) => handleDbAction(() => addDoc(collection(db, "employees"), { name, active: true }));
@@ -853,11 +903,11 @@ O    _       - |    _      ,*
             const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
 
             const value = {
-                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, cashCounts,
+                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, cashCounts, cashDrops,
                 prices, commissions, extrasList, exRate, snackPrice, initialCash, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
-                addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount,
+                addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop,
                 db, isSubmitting
             };
 
@@ -1150,13 +1200,14 @@ O    _       - |    _      ,*
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, initialCash, expenses, addCashCount } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, initialCash, expenses, addCashCount, addCashDrop } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showVarios, setShowVarios] = useState(false);
             const [showAttendance, setShowAttendance] = useState(false);
             const [showExpense, setShowExpense] = useState(false);
             const [showCorte, setShowCorte] = useState(false);
+            const [corteTab, setCorteTab] = useState('ARQUEO');
 
             // Local state for attendance batching
             const [localAttendance, setLocalAttendance] = useState({});
@@ -1171,6 +1222,10 @@ O    _       - |    _      ,*
             // Corte State
             const [declaredMxn, setDeclaredMxn] = useState('');
             const [declaredUsd, setDeclaredUsd] = useState('');
+
+            // Drop State
+            const [dropMxn, setDropMxn] = useState('');
+            const [dropUsd, setDropUsd] = useState('');
 
             // Initialize local attendance state when modal opens
             useEffect(() => {
@@ -1217,32 +1272,7 @@ O    _       - |    _      ,*
             };
 
             const handleCorte = async () => {
-                // 1. Calculate Expected Cash
-                const today = getLocalDateStr();
-                const allToday = history.concat(tickets).filter(t => t.status === 'PAID' && getLocalDateStr(t.paidAt || t.timestamp) === today);
-
-                const expensesToday = expenses.filter(e => e.status === 'APPROVED' && getLocalDateStr(e.timestamp) === today)
-                    .reduce((a, b) => a + (b.amount || 0), 0);
-
-                let expectedMxn = parseFloat(initialCash.mxn) || 0;
-                let expectedUsd = parseFloat(initialCash.usd) || 0;
-
-                allToday.forEach(t => {
-                    const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false };
-
-                    expectedMxn += (pay.mxn || 0);
-                    expectedUsd += (pay.usd || 0);
-
-                    // Subtract change
-                    if (pay.isOnlyUsd) {
-                        expectedUsd -= (pay.changeUsd || 0);
-                    } else {
-                        expectedMxn -= (pay.changeMxn || 0);
-                    }
-                });
-
-                // Expenses come out of MXN typically
-                expectedMxn -= expensesToday;
+                const { expectedMxn, expectedUsd } = calculateCurrentExpectedCash();
 
                 const decMxnVal = parseFloat(declaredMxn) || 0;
                 const decUsdVal = parseFloat(declaredUsd) || 0;
@@ -1274,6 +1304,56 @@ O    _       - |    _      ,*
                 setShowCorte(false);
                 setDeclaredMxn('');
                 setDeclaredUsd('');
+            };
+
+            const calculateCurrentExpectedCash = () => {
+                const { cashDrops } = useContext(AppContext); // Access drops here
+                const today = getLocalDateStr();
+                const allToday = history.concat(tickets).filter(t => t.status === 'PAID' && getLocalDateStr(t.paidAt || t.timestamp) === today);
+
+                const expensesToday = expenses.filter(e => e.status === 'APPROVED' && getLocalDateStr(e.timestamp) === today)
+                    .reduce((a, b) => a + (b.amount || 0), 0);
+
+                // Calculate Drops Today
+                const dropsTodayMxn = cashDrops.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const dropsTodayUsd = cashDrops.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountUsd || 0), 0);
+
+                let expectedMxn = parseFloat(initialCash.mxn) || 0;
+                let expectedUsd = parseFloat(initialCash.usd) || 0;
+
+                allToday.forEach(t => {
+                    const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false };
+
+                    expectedMxn += (pay.mxn || 0);
+                    expectedUsd += (pay.usd || 0);
+
+                    // Subtract change
+                    if (pay.isOnlyUsd) {
+                        expectedUsd -= (pay.changeUsd || 0);
+                    } else {
+                        expectedMxn -= (pay.changeMxn || 0);
+                    }
+                });
+
+                // Expenses come out of MXN typically
+                expectedMxn -= expensesToday;
+
+                // Subtract DROPS from Expected Cash in Drawer
+                expectedMxn -= dropsTodayMxn;
+                expectedUsd -= dropsTodayUsd;
+
+                return { expectedMxn, expectedUsd };
+            };
+
+            const handleCashDrop = async () => {
+                if ((!dropMxn && !dropUsd) || (parseFloat(dropMxn) <= 0 && parseFloat(dropUsd) <= 0)) {
+                    return alert("Ingrese un monto válido.");
+                }
+
+                await addCashDrop(dropMxn, dropUsd);
+                setDropMxn('');
+                setDropUsd('');
+                setShowCorte(false); // Close modal on success
             };
 
             const mxnVal = parseFloat(payment.mxn) || 0;
@@ -1388,31 +1468,70 @@ O    _       - |    _      ,*
                     {showExpense && <Modal title="Registrar Gasto" icon={TrendingDown} onClose={() => setShowExpense(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowExpense(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddExpense} variant="danger" className="flex-1">Registrar</Button></div>}><div className="space-y-3"><div><label className="block text-sm font-bold text-gray-600 mb-1">Concepto</label><input value={expDesc} onChange={e => setExpDesc(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Jabón" /></div><div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" /></div></div></Modal>}
 
                     {showCorte && (
-                        <Modal title="Realizar Corte de Caja" icon={ClipboardList} onClose={() => setShowCorte(false)} footer={
-                            <div className="flex gap-3">
-                                <Button onClick={() => setShowCorte(false)} variant="secondary" className="flex-1">Cancelar</Button>
-                                <Button onClick={handleCorte} variant="primary" className="flex-1 bg-slate-800 hover:bg-slate-900">Verificar</Button>
-                            </div>
-                        }>
-                            <div className="space-y-4">
-                                <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
-                                    Ingresa el dinero físico que hay actualmente en la caja. El sistema lo comparará con lo esperado.
+                        <Modal
+                            title={corteTab === 'ARQUEO' ? "Arqueo de Caja (Verificación)" : "Retiro de Efectivo (Resguardo)"}
+                            icon={corteTab === 'ARQUEO' ? ClipboardList : ShieldCheck}
+                            onClose={() => setShowCorte(false)}
+                            footer={
+                                <div className="flex gap-3">
+                                    <Button onClick={() => setShowCorte(false)} variant="secondary" className="flex-1">Cancelar</Button>
+                                    {corteTab === 'ARQUEO' ? (
+                                        <Button onClick={handleCorte} variant="primary" className="flex-1 bg-slate-800 hover:bg-slate-900">Verificar</Button>
+                                    ) : (
+                                        <Button onClick={handleCashDrop} variant="warning" className="flex-1">Confirmar Retiro</Button>
+                                    )}
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Efectivo MXN</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
-                                        <input type="number" value={declaredMxn} onChange={e => setDeclaredMxn(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold" placeholder="0.00" />
+                            }
+                        >
+                            <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
+                                <button onClick={() => setCorteTab('ARQUEO')} className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${corteTab === 'ARQUEO' ? 'bg-white shadow text-slate-800' : 'text-gray-500'}`}>Verificar Caja</button>
+                                <button onClick={() => setCorteTab('DROP')} className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${corteTab === 'DROP' ? 'bg-orange-100 text-orange-700 shadow border border-orange-200' : 'text-gray-500'}`}>Retiro de Efectivo</button>
+                            </div>
+
+                            {corteTab === 'ARQUEO' && (
+                                <div className="space-y-4">
+                                    <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
+                                        Ingresa el dinero físico que hay actualmente en la caja. El sistema lo comparará con lo esperado.
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Efectivo MXN</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={declaredMxn} onChange={e => setDeclaredMxn(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold" placeholder="0.00" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Efectivo USD</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={declaredUsd} onChange={e => setDeclaredUsd(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold" placeholder="0.00" />
+                                        </div>
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Efectivo USD</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
-                                        <input type="number" value={declaredUsd} onChange={e => setDeclaredUsd(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold" placeholder="0.00" />
+                            )}
+
+                            {corteTab === 'DROP' && (
+                                <div className="space-y-4">
+                                    <div className="bg-orange-50 p-3 rounded-lg text-sm text-orange-800 border border-orange-200">
+                                        <ShieldCheck className="w-5 h-5 inline mr-1" />
+                                        Ingresa el monto que vas a retirar de la caja para mover a resguardo. Se imprimirá un ticket.
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Monto a Retirar (MXN)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={dropMxn} onChange={e => setDropMxn(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold text-orange-700" placeholder="0.00" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Monto a Retirar (USD)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={dropUsd} onChange={e => setDropUsd(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold text-green-700" placeholder="0.00" />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </Modal>
                     )}
                 </div>
@@ -1441,7 +1560,7 @@ O    _       - |    _      ,*
         };
 
         const AdminCorte = () => {
-            const { history, tickets, expenses, exRate, initialCash, updateExpense, resolveExpense, cashCounts } = useContext(AppContext);
+            const { history, tickets, expenses, exRate, initialCash, updateExpense, resolveExpense, cashCounts, cashDrops } = useContext(AppContext);
             const [corteMode, setCorteMode] = useState('DAY');
             const [corteDate, setCorteDate] = useState(getLocalDateStr());
             const [corteMonth, setCorteMonth] = useState(getMonthStr());
@@ -1452,6 +1571,7 @@ O    _       - |    _      ,*
             const allPaidForCorte = history.concat(tickets.filter(t => t.status === 'PAID'));
             const corteTickets = allPaidForCorte.filter(t => { const d = new Date(t.paidAt ? t.paidAt : t.timestamp); return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; });
             const corteExpenses = expenses.filter(e => { const d = new Date(e.timestamp); return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; });
+            const corteDrops = cashDrops.filter(d => { const dte = new Date(d.timestamp); return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; });
 
             const calculateCorteTotals = () => {
                 let revenueCard = 0, revenueCashTickets = 0, collectedUsd = 0;
@@ -1460,7 +1580,24 @@ O    _       - |    _      ,*
                 const approvedExpensesTotal = corteExpenses.filter(e => e.status === 'APPROVED').reduce((a, b) => a + (b.amount || 0), 0);
                 const initMxn = parseFloat(initialCash.mxn) || 0;
                 const initUsd = parseFloat(initialCash.usd) || 0;
-                return { total: revenueCard + revenueCashTickets, card: revenueCard, cashTotal: revenueCashTickets, cashMxn: impliedMxnSales, cashUsd: collectedUsd, expenses: approvedExpensesTotal, initialMxn: initMxn, initialUsd: initUsd, cashNetMxn: (impliedMxnSales + initMxn) - approvedExpensesTotal, cashNetUsd: collectedUsd + initUsd };
+
+                const dropsMxn = corteDrops.reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const dropsUsd = corteDrops.reduce((a, b) => a + (b.amountUsd || 0), 0);
+
+                return {
+                    total: revenueCard + revenueCashTickets,
+                    card: revenueCard,
+                    cashTotal: revenueCashTickets,
+                    cashMxn: impliedMxnSales,
+                    cashUsd: collectedUsd,
+                    expenses: approvedExpensesTotal,
+                    initialMxn: initMxn,
+                    initialUsd: initUsd,
+                    cashNetMxn: (impliedMxnSales + initMxn) - approvedExpensesTotal - dropsMxn, // Subtract Drops from Drawer Net
+                    cashNetUsd: collectedUsd + initUsd - dropsUsd,
+                    dropsMxn,
+                    dropsUsd
+                };
             };
             const corteTotals = calculateCorteTotals();
 
@@ -1505,10 +1642,43 @@ O    _       - |    _      ,*
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div><div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div><div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div></div>
-                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja (Neto MXN)</div><div className="text-3xl font-bold text-gray-800">{formatCurrency(corteTotals.cashNetMxn)}</div><div className="text-xs text-gray-400 mt-1">Incluye Fondo Inicial</div></div>
-                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><DollarSign size={18} /> Dólares (Neto)</div><div className="text-3xl font-bold text-green-700">${corteTotals.cashNetUsd.toFixed(2)}</div><div className="text-xs text-gray-400 mt-1">Incluye Fondo Inicial</div></div>
+                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja (Drawer)</div><div className="text-3xl font-bold text-gray-800">{formatCurrency(corteTotals.cashNetMxn)}</div><div className="text-xs text-gray-400 mt-1">Listo para Arqueo</div></div>
+                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><ShieldCheck size={18} /> Caja Fuerte (Retiros)</div><div className="text-3xl font-bold text-orange-600">{formatCurrency(corteTotals.dropsMxn)}</div><div className="text-xs text-green-600 font-bold mt-1">+ ${corteTotals.dropsUsd.toFixed(2)} USD</div></div>
                         <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><CreditCard size={18} /> Tarjeta</div><div className="text-3xl font-bold text-blue-600">{formatCurrency(corteTotals.card)}</div></div>
                     </div>
+
+                    {/* NEW SECTION: DROP HISTORY */}
+                    <div className="bg-white rounded-xl shadow border overflow-hidden">
+                        <div className="p-4 bg-orange-50 border-b border-orange-100 font-bold text-orange-800 flex justify-between items-center">
+                            <span>Retiros de Efectivo (Drops)</span>
+                            <ShieldCheck className="w-4 h-4" />
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-orange-100 text-orange-800">
+                                    <tr>
+                                        <th className="p-3">Código</th>
+                                        <th className="p-3">Hora</th>
+                                        <th className="p-3">Usuario</th>
+                                        <th className="p-3 text-right">Monto MXN</th>
+                                        <th className="p-3 text-right">Monto USD</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {corteDrops.length === 0 ? <tr><td colSpan="5" className="p-4 text-center text-gray-400">No hay retiros registrados en este periodo.</td></tr> : corteDrops.map(d => (
+                                        <tr key={d.id} className="border-t hover:bg-orange-50">
+                                            <td className="p-3 font-mono font-bold text-xs">{d.code}</td>
+                                            <td className="p-3">{d.timestamp.toLocaleTimeString()}</td>
+                                            <td className="p-3">{d.user}</td>
+                                            <td className="p-3 text-right font-bold">{formatCurrency(d.amountMxn)}</td>
+                                            <td className="p-3 text-right font-bold text-green-600">${d.amountUsd.toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <div className="bg-white rounded-xl shadow border overflow-hidden">
                         <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center"><span>Gastos</span><span className="text-sm text-red-500 font-bold">Total: {formatCurrency(corteTotals.expenses)}</span></div>
                         <div className="overflow-x-auto">
