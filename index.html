@@ -1888,8 +1888,8 @@ Firma: __________________
                     </div>
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
                         <div className="flex flex-wrap gap-3 items-end">
-                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Inicio</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
-                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Fin</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
+                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Inicio (Mañana)</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
+                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Fin(Mañana)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
                             <Button onClick={printNomina} variant="success"><Printer className="w-4 h-4" /> PDF</Button>
                         </div>
                         <Button onClick={closeWeek} variant="danger"><Archive className="w-4 h-4" /> CERRAR SEMANA</Button>
