@@ -608,6 +608,7 @@ Firma: __________________
             const [expenses, setExpenses] = useState([]);
             const [cashCounts, setCashCounts] = useState([]);
             const [cashDrops, setCashDrops] = useState([]);
+            const [cashIns, setCashIns] = useState([]);
             const [editingTicket, setEditingTicket] = useState(null);
 
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
@@ -726,7 +727,15 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-                return () => { unsubT(); unsubD(); unsubE(); unsubCC(); unsubCD(); };
+                // LOAD CASH INS (Refills)
+                const qCI = query(collection(db, "cash_ins"), orderBy("timestamp", "desc"));
+                const unsubCI = onSnapshot(qCI, (snap) => {
+                    setCashIns(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date()
+                    })));
+                });
+                return () => { unsubT(); unsubD(); unsubE(); unsubCC(); unsubCD(); unsubCI(); };
             }, []);
 
             const updateGlobalSettings = (newRate, newSnackPrice, initMxn, initUsd) => handleDbAction(async () => {
@@ -821,6 +830,18 @@ Firma: __________________
                 alert(`Retiro Registrado: ${code}`);
             });
 
+            // Add Cash In (Refill) Action
+            const addCashIn = (amountMxn, amountUsd, reason) => handleDbAction(async () => {
+                await addDoc(collection(db, "cash_ins"), {
+                    amountMxn: parseFloat(amountMxn) || 0,
+                    amountUsd: parseFloat(amountUsd) || 0,
+                    reason: reason || 'Ingreso Extra',
+                    user: role,
+                    timestamp: serverTimestamp()
+                });
+                alert("Efectivo agregado exitosamente.");
+            });
+
             const addEmployee = (name) => handleDbAction(() => addDoc(collection(db, "employees"), { name, active: true }));
 
             const archiveEmployee = (id) => handleDbAction(() => updateDoc(doc(db, "employees", id), { archived: true }));
@@ -903,11 +924,11 @@ Firma: __________________
             const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
 
             const value = {
-                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, cashCounts, cashDrops,
+                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, cashCounts, cashDrops, cashIns,
                 prices, commissions, extrasList, exRate, snackPrice, initialCash, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
-                addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop,
+                addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
                 db, isSubmitting
             };
 
@@ -1200,7 +1221,7 @@ Firma: __________________
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, initialCash, expenses, addCashCount, addCashDrop, cashDrops } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, initialCash, expenses, addCashCount, addCashDrop, cashDrops, cashIns } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showVarios, setShowVarios] = useState(false);
@@ -1322,6 +1343,10 @@ Firma: __________________
                 const dropsTodayMxn = cashDrops.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountMxn || 0), 0);
                 const dropsTodayUsd = cashDrops.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountUsd || 0), 0);
 
+                // Calculate Cash Ins (Refills) Today
+                const cashInsTodayMxn = cashIns.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const cashInsTodayUsd = cashIns.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountUsd || 0), 0);
+
                 let expectedMxn = parseFloat(initialCash.mxn) || 0;
                 let expectedUsd = parseFloat(initialCash.usd) || 0;
 
@@ -1345,6 +1370,10 @@ Firma: __________________
                 // Subtract DROPS from Expected Cash in Drawer
                 expectedMxn -= dropsTodayMxn;
                 expectedUsd -= dropsTodayUsd;
+
+                // Add CASH INS to Expected Cash
+                expectedMxn += cashInsTodayMxn;
+                expectedUsd += cashInsTodayUsd;
 
                 return { expectedMxn, expectedUsd };
             };
@@ -1566,7 +1595,7 @@ Firma: __________________
         };
 
         const AdminCorte = () => {
-            const { history, tickets, expenses, exRate, initialCash, updateExpense, resolveExpense, cashCounts, cashDrops } = useContext(AppContext);
+            const { history, tickets, expenses, exRate, initialCash, updateExpense, resolveExpense, cashCounts, cashDrops, cashIns } = useContext(AppContext);
             const [corteMode, setCorteMode] = useState('DAY');
             const [corteDate, setCorteDate] = useState(getLocalDateStr());
             const [corteMonth, setCorteMonth] = useState(getMonthStr());
@@ -1578,6 +1607,7 @@ Firma: __________________
             const corteTickets = allPaidForCorte.filter(t => { const d = new Date(t.paidAt ? t.paidAt : t.timestamp); return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; });
             const corteExpenses = expenses.filter(e => { const d = new Date(e.timestamp); return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; });
             const corteDrops = cashDrops.filter(d => { const dte = new Date(d.timestamp); return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; });
+            const corteCashIns = cashIns.filter(d => { const dte = new Date(d.timestamp); return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; });
 
             const calculateCorteTotals = () => {
                 let revenueCard = 0, revenueCashTickets = 0, collectedUsd = 0;
@@ -1590,6 +1620,9 @@ Firma: __________________
                 const dropsMxn = corteDrops.reduce((a, b) => a + (b.amountMxn || 0), 0);
                 const dropsUsd = corteDrops.reduce((a, b) => a + (b.amountUsd || 0), 0);
 
+                const cashInsMxn = corteCashIns.reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const cashInsUsd = corteCashIns.reduce((a, b) => a + (b.amountUsd || 0), 0);
+
                 return {
                     total: revenueCard + revenueCashTickets,
                     card: revenueCard,
@@ -1599,10 +1632,12 @@ Firma: __________________
                     expenses: approvedExpensesTotal,
                     initialMxn: initMxn,
                     initialUsd: initUsd,
-                    cashNetMxn: (impliedMxnSales + initMxn) - approvedExpensesTotal - dropsMxn, // Subtract Drops from Drawer Net
-                    cashNetUsd: collectedUsd + initUsd - dropsUsd,
+                    cashNetMxn: (impliedMxnSales + initMxn + cashInsMxn) - approvedExpensesTotal - dropsMxn, // Subtract Drops + Add CashIns
+                    cashNetUsd: collectedUsd + initUsd + cashInsUsd - dropsUsd,
                     dropsMxn,
-                    dropsUsd
+                    dropsUsd,
+                    cashInsMxn,
+                    cashInsUsd
                 };
             };
             const corteTotals = calculateCorteTotals();
@@ -1648,7 +1683,13 @@ Firma: __________________
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div><div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div><div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div></div>
-                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja (Drawer)</div><div className="text-3xl font-bold text-gray-800">{formatCurrency(corteTotals.cashNetMxn)}</div><div className="text-xs text-gray-400 mt-1">Listo para Arqueo</div></div>
+                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+                            <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja (Drawer)</div>
+                            <div className="text-3xl font-bold text-gray-800">{formatCurrency(corteTotals.cashNetMxn)}</div>
+                            <div className="text-xs text-gray-400 mt-1">
+                                {corteTotals.cashInsMxn > 0 ? <span className="text-green-600 font-bold">Inc. +{formatCurrency(corteTotals.cashInsMxn)} Ingresos</span> : 'Listo para Arqueo'}
+                            </div>
+                        </div>
                         <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><ShieldCheck size={18} /> Caja Fuerte (Retiros)</div><div className="text-3xl font-bold text-orange-600">{formatCurrency(corteTotals.dropsMxn)}</div><div className="text-xs text-green-600 font-bold mt-1">+ ${corteTotals.dropsUsd.toFixed(2)} USD</div></div>
                         <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><CreditCard size={18} /> Tarjeta</div><div className="text-3xl font-bold text-blue-600">{formatCurrency(corteTotals.card)}</div></div>
                     </div>
@@ -1954,17 +1995,60 @@ Firma: __________________
         };
 
         const AdminPanel = () => {
+            const { addCashIn } = useContext(AppContext);
             const [tab, setTab] = useState('CORTE');
+            const [showAddCash, setShowAddCash] = useState(false);
+            const [acMxn, setAcMxn] = useState('');
+            const [acUsd, setAcUsd] = useState('');
+            const [acReason, setAcReason] = useState('');
+
+            const handleAddCash = () => {
+                if(!acMxn && !acUsd) return;
+                addCashIn(acMxn, acUsd, acReason);
+                setAcMxn(''); setAcUsd(''); setAcReason('');
+                setShowAddCash(false);
+            };
+
             return (
                 <div className="p-4 md:p-6 h-full overflow-y-auto">
-                    <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
+                    <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1 items-center">
                         {['CORTE', 'NOMINA', 'ASISTENCIA', 'CONFIG', 'PRECIOS'].map(t => <button key={t} onClick={() => setTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === t ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>{t}</button>)}
+                        <button onClick={() => setShowAddCash(true)} className="px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors bg-green-600 text-white shadow-md flex items-center gap-2 hover:bg-green-700">
+                            <PlusCircle size={18} /> AGREGAR EFECTIVO
+                        </button>
                     </div>
                     {tab === 'CORTE' && <AdminCorte />}
                     {tab === 'NOMINA' && <AdminNomina />}
                     {tab === 'ASISTENCIA' && <AdminAsistencia />}
                     {tab === 'CONFIG' && <AdminConfig />}
                     {tab === 'PRECIOS' && <AdminPrecios />}
+
+                    {showAddCash && (
+                        <Modal title="Agregar Efectivo a Caja" icon={Banknote} onClose={() => setShowAddCash(false)} footer={
+                            <div className="flex gap-3">
+                                <Button onClick={() => setShowAddCash(false)} variant="secondary" className="flex-1">Cancelar</Button>
+                                <Button onClick={handleAddCash} variant="success" className="flex-1">Agregar</Button>
+                            </div>
+                        }>
+                            <div className="space-y-4">
+                                <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">
+                                    Este monto se sumará al dinero esperado en caja (similar al fondo inicial). Úsalo cuando necesites meter cambio o aumentar el fondo.
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label>
+                                    <input type="number" value={acMxn} onChange={e => setAcMxn(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label>
+                                    <input type="number" value={acUsd} onChange={e => setAcUsd(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Razón (Opcional)</label>
+                                    <input value={acReason} onChange={e => setAcReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Refill de cambio" />
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
                 </div>
             );
         };
