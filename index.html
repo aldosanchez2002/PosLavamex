@@ -378,7 +378,7 @@ ${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
 Gracias por su preferencia
       .--------.
  ____/_____|___ \\___
-O    _       - |    _      ,*
+O    _        - |    _       ,*
  '--(_)-------(_)--' </div>`;
             },
 
@@ -1200,7 +1200,7 @@ Firma: __________________
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, initialCash, expenses, addCashCount, addCashDrop } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, initialCash, expenses, addCashCount, addCashDrop, cashDrops } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showVarios, setShowVarios] = useState(false);
@@ -1294,11 +1294,16 @@ Firma: __________________
                     timestamp: new Date()
                 });
 
-                // 3. Notify User
-                if (isMatch) {
-                    alert("✅ CORTE CORRECTO. El dinero en caja coincide.");
+                // 3. Notify User - Logic Changed to hide details from non-admins
+                if (role === 'ADMIN') {
+                    if (isMatch) {
+                        alert("✅ CORTE CORRECTO. El dinero en caja coincide.");
+                    } else {
+                        alert(`⚠️ DESCUADRE DETECTADO.\n\nDiferencia MXN: ${formatCurrency(diffMxn)}\nDiferencia USD: $${diffUsd.toFixed(2)}`);
+                    }
                 } else {
-                    alert(`⚠️ DESCUADRE DETECTADO.\n\nDiferencia MXN: ${formatCurrency(diffMxn)}\nDiferencia USD: $${diffUsd.toFixed(2)}`);
+                    // For Caja/Greeter just confirm it saved
+                    alert("✅ Corte registrado.");
                 }
 
                 setShowCorte(false);
@@ -1307,7 +1312,6 @@ Firma: __________________
             };
 
             const calculateCurrentExpectedCash = () => {
-                const { cashDrops } = useContext(AppContext); // Access drops here
                 const today = getLocalDateStr();
                 const allToday = history.concat(tickets).filter(t => t.status === 'PAID' && getLocalDateStr(t.paidAt || t.timestamp) === today);
 
@@ -1361,6 +1365,7 @@ Firma: __________________
             const totalGiven = mxnVal + (usdVal * exRate);
             const changeMxn = totalGiven - (t ? t.price : 0);
             const changeUsd = changeMxn / exRate;
+            const isOnlyUsd = usdVal > 0 && mxnVal === 0;
 
             return (
                 <div className="flex flex-col md:flex-row h-full gap-4 p-4 overflow-hidden">
@@ -1390,9 +1395,10 @@ Firma: __________________
                             ))}
                         </div>
                     </div>
-                    <div className="flex-1 bg-white rounded-xl shadow border p-4 md:p-6 flex flex-col items-center justify-center h-2/3 md:h-full overflow-y-auto">
+                    {/* Fixed detailed view container: removed justify-center, added my-auto to child, added pb-20 */}
+                    <div className="flex-1 bg-white rounded-xl shadow border p-4 md:p-6 flex flex-col items-center h-2/3 md:h-full overflow-y-auto pb-20">
                         {t ? (
-                            <div className="w-full max-w-md">
+                            <div className="w-full max-w-md my-auto">
                                 <div className="text-center mb-2">
                                     <h2 className="text-4xl font-bold text-gray-800">{formatCurrency(t.price)}</h2>
                                     <div className="text-xl text-green-600 font-medium">${(t.price / exRate).toFixed(2)} USD</div>
@@ -1423,7 +1429,7 @@ Firma: __________________
                                     {role === 'CASHIER' && <Button onClick={processCardPayment} disabled={isSubmitting} title="Tarjeta"><CreditCard className="w-6 h-6" /></Button>}
                                 </div>
                             </div>
-                        ) : <div className="text-gray-400 flex flex-col items-center"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
+                        ) : <div className="text-gray-400 flex flex-col items-center my-auto"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
                     </div>
 
                     {showSnack && <Modal title={`Snack Empleado ($${snackPrice})`} icon={Coffee} onClose={() => setShowSnack(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowSnack(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddSnack} disabled={!snackEmp} variant="warning" className="flex-1">Confirmar</Button></div>}><select className="w-full border p-3 rounded-lg mb-6 text-lg bg-white" onChange={e => setSnackEmp(e.target.value)} value={snackEmp}><option value="">Seleccionar Empleado...</option>{employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}</select></Modal>}
@@ -2006,7 +2012,7 @@ Firma: __________________
             if (isLocked) return <LockedView />;
 
             return (
-                <div className="h-screen flex flex-col bg-gray-100 font-sans">
+                <div className="h-[100dvh] flex flex-col bg-gray-100 font-sans">
                     <header className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md shrink-0 z-50">
                         <a href="https://lavamex.work/menu" className="flex items-center gap-2 font-bold text-lg md:text-xl truncate hover:opacity-80 transition-opacity">
                             <Car className="text-blue-400 shrink-0" /> <span>LAVAMEX</span>
