@@ -516,11 +516,13 @@ Firma: __________________
                 doc.setFillColor(245, 245, 245);
                 doc.rect(14, 35, 182, 30, 'F');
 
+                // VENTA TOTAL (Left)
                 doc.setFontSize(14);
                 doc.text("VENTA TOTAL", 60, 45, { align: 'center' });
                 doc.setFontSize(18);
                 doc.text(formatCurrency(data.totals.total), 60, 55, { align: 'center' });
 
+                // NETO EN CAJA (Right) - Modified to show MXN and USD
                 doc.setFontSize(14);
                 doc.text("NETO EN CAJA", 150, 42, { align: 'center' });
                 doc.setFontSize(16);
@@ -639,7 +641,6 @@ Firma: __________________
 
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
-
             const [prices, setPrices] = useState({});
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
@@ -693,12 +694,12 @@ Firma: __________________
                         const data = docSnap.data();
                         if (data.exchangeRate) setExRate(data.exchangeRate);
                         if (data.snackPrice) setSnackPrice(data.snackPrice);
-
+                        // Removed initialCash handling
                     } else {
                         setDoc(doc(db, "settings", "general"), {
                             exchangeRate: DEFAULTS.EXCHANGE_RATE,
                             snackPrice: DEFAULTS.SNACK_PRICE,
-
+                            // Removed initialCash defaults
                         });
                     }
                 });
@@ -737,7 +738,7 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-
+                // Increased limit to 50 to find previous day counts more reliably
                 const qCC = query(collection(db, "cash_counts"), orderBy("timestamp", "desc"), limit(50));
                 const unsubCC = onSnapshot(qCC, (snap) => {
                     setCashCounts(snap.docs.map(d => ({
@@ -770,7 +771,7 @@ Firma: __________________
                 }, { merge: true });
             });
 
-
+            // Helper to get opening cash based on previous close
             const getOpeningCash = (targetDate) => {
                 // Explicit check: If there are no counts in the database yet, use 0
                 if (!cashCounts || cashCounts.length === 0) {
@@ -785,6 +786,7 @@ Firma: __________________
                     return { mxn: prevCount.declaredMxn || 0, usd: prevCount.declaredUsd || 0 };
                 }
 
+                // Fallback for initial case if counts exist but none before target date
                 return { mxn: 0, usd: 0 };
             };
 
@@ -979,7 +981,7 @@ Firma: __________________
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
-                getOpeningCash,
+                getOpeningCash, 
                 db, isSubmitting
             };
 
@@ -1631,19 +1633,37 @@ Firma: __________________
 
         const HistoryView = () => {
             const { history, tickets, deductions } = useContext(AppContext);
+            const todayStr = getLocalDateStr();
+
             const allPaid = history.concat(tickets.filter(t => t.status === 'PAID'));
+
+            // Filter tickets for today
+            const todayTickets = allPaid.filter(t => {
+                const tDate = t.paidAt ? getLocalDateStr(t.paidAt) : getLocalDateStr(t.timestamp);
+                return tDate === todayStr;
+            });
+
+            // Calculate total
+            const totalSum = todayTickets.reduce((acc, t) => acc + (t.price || 0), 0);
+
+            // Filter deductions for today
+            const todayDeductions = deductions.filter(d => d.amount > 0 && getLocalDateStr(d.timestamp) === todayStr);
+
             return (
                 <div className="p-4 h-full overflow-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
-                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex items-center"><CheckCircle className="w-4 h-4 mr-2 text-green-600" /> Tickets Pagados</div>
+                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
+                            <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" /> Tickets Pagados (Hoy)</div>
+                            <div className="text-xl font-bold text-green-700">{formatCurrency(totalSum)}</div>
+                        </div>
                         <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
-                            <table className="w-full text-sm text-left"><thead className="bg-gray-50 font-bold text-gray-700 sticky top-0"><tr><th className="p-3">ID</th><th className="p-3">Hora</th><th className="p-3">Servicio</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{allPaid.map(t => <tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td><td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td><td className="p-3"><div className="font-medium">{t.service?.label || 'Extras'}</div>{t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}</td><td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td></tr>)}</tbody></table>
+                            <table className="w-full text-sm text-left"><thead className="bg-gray-50 font-bold text-gray-700 sticky top-0"><tr><th className="p-3">ID</th><th className="p-3">Hora</th><th className="p-3">Servicio</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{todayTickets.map(t => <tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td><td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td><td className="p-3"><div className="font-medium">{t.service?.label || 'Extras'}</div>{t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}</td><td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td></tr>)}</tbody></table>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
-                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center"><span>Deducciones (Snacks/Varios)</span><Coffee className="w-4 h-4 text-orange-500" /></div>
+                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center"><span>Deducciones (Hoy)</span><Coffee className="w-4 h-4 text-orange-500" /></div>
                         <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
-                            <table className="w-full text-sm text-left"><thead className="bg-orange-50 font-bold text-orange-800 sticky top-0"><tr><th className="p-3">Fecha</th><th className="p-3">Empleado</th><th className="p-3">Detalle</th><th className="p-3 text-right">Monto</th></tr></thead><tbody>{deductions.filter(d => d.amount > 0).map(d => <tr key={d.id} className="border-t hover:bg-orange-50"><td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleDateString() : '...'}</td><td className="p-3 font-bold">{d.employee}</td><td className="p-3 text-gray-600 italic">{d.description || 'Snack'}</td><td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td></tr>)}</tbody></table>
+                            <table className="w-full text-sm text-left"><thead className="bg-orange-50 font-bold text-orange-800 sticky top-0"><tr><th className="p-3">Fecha</th><th className="p-3">Empleado</th><th className="p-3">Detalle</th><th className="p-3 text-right">Monto</th></tr></thead><tbody>{todayDeductions.map(d => <tr key={d.id} className="border-t hover:bg-orange-50"><td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleDateString() : '...'}</td><td className="p-3 font-bold">{d.employee}</td><td className="p-3 text-gray-600 italic">{d.description || 'Snack'}</td><td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td></tr>)}</tbody></table>
                         </div>
                     </div>
                 </div>
@@ -1752,13 +1772,13 @@ Firma: __________________
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div><div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div><div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div></div>
                         <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-                            <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja (Drawer)</div>
+                            <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja</div>
                             <div className="text-3xl font-bold text-gray-800">{formatCurrency(corteTotals.cashNetMxn)}</div>
                             <div className="text-xs text-gray-400 mt-1">
                                 {corteTotals.cashInsMxn > 0 ? <span className="text-green-600 font-bold">Inc. +{formatCurrency(corteTotals.cashInsMxn)} Ingresos</span> : 'Listo para Arqueo'}
                             </div>
                         </div>
-                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><ShieldCheck size={18} /> Evios/Retiros de Caja</div><div className="text-3xl font-bold text-orange-600">{formatCurrency(corteTotals.dropsMxn)}</div><div className="text-xs text-green-600 font-bold mt-1">+ ${corteTotals.dropsUsd.toFixed(2)} USD</div></div>
+                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><ShieldCheck size={18} /> Envios/Retiros</div><div className="text-3xl font-bold text-orange-600">{formatCurrency(corteTotals.dropsMxn)}</div><div className="text-xs text-green-600 font-bold mt-1">+ ${corteTotals.dropsUsd.toFixed(2)} USD</div></div>
                         <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><CreditCard size={18} /> Tarjeta</div><div className="text-3xl font-bold text-blue-600">{formatCurrency(corteTotals.card)}</div></div>
                     </div>
 
@@ -1924,7 +1944,6 @@ Firma: __________________
                     <div className="mb-6 flex flex-col gap-4">
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-
                         <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Cambios</Button>
                     </div>
                     <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
