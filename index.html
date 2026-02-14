@@ -520,10 +520,12 @@ Firma: __________________
                 doc.text(formatCurrency(data.totals.total), 60, 55, { align: 'center' });
 
                 doc.setFontSize(14);
-                doc.text("NETO EN CAJA (MXN)", 150, 45, { align: 'center' });
-                doc.setFontSize(18);
+                doc.text("NETO EN CAJA", 150, 42, { align: 'center' });
+                doc.setFontSize(16);
                 doc.setTextColor(0, 128, 0);
-                doc.text(formatCurrency(data.totals.cashNetMxn), 150, 55, { align: 'center' });
+                doc.text(formatCurrency(data.totals.cashNetMxn), 150, 50, { align: 'center' });
+                doc.setFontSize(12);
+                doc.text(`+ $${data.totals.cashNetUsd.toFixed(2)} USD`, 150, 58, { align: 'center' });
                 doc.setTextColor(0);
 
                 const summaryData = [
@@ -535,7 +537,9 @@ Firma: __________________
                     ['Fondo Inicial (USD)', `$${data.totals.initialUsd.toFixed(2)} USD`],
                     ['Ingresos Efectivo (MXN)', formatCurrency(data.totals.cashInsMxn)],
                     ['Ingresos Efectivo (USD)', `$${data.totals.cashInsUsd.toFixed(2)} USD`],
-                    ['Gastos Totales', `-${formatCurrency(data.totals.expenses)}`]
+                    ['Gastos Totales', `-${formatCurrency(data.totals.expenses)}`],
+                    ['Esperado en Caja (MXN)', { content: formatCurrency(data.totals.cashNetMxn), styles: { fontStyle: 'bold', textColor: [0, 128, 0] } }],
+                    ['Esperado en Caja (USD)', { content: `$${data.totals.cashNetUsd.toFixed(2)} USD`, styles: { fontStyle: 'bold', textColor: [0, 128, 0] } }]
                 ];
 
                 autoTable(doc, {
@@ -2024,7 +2028,7 @@ Firma: __________________
             const [acReason, setAcReason] = useState('');
 
             const handleAddCash = () => {
-                if(!acMxn && !acUsd) return;
+                if (!acMxn && !acUsd) return;
                 addCashIn(acMxn, acUsd, acReason);
                 setAcMxn(''); setAcUsd(''); setAcReason('');
                 setShowAddCash(false);
