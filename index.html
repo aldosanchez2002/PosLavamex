@@ -515,6 +515,7 @@ Firma: __________________
 
                 doc.setFillColor(245, 245, 245);
                 doc.rect(14, 35, 182, 30, 'F');
+
                 doc.setFontSize(14);
                 doc.text("VENTA TOTAL", 60, 45, { align: 'center' });
                 doc.setFontSize(18);
@@ -638,7 +639,7 @@ Firma: __________________
 
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
-            const [initialCash, setInitialCash] = useState({ mxn: 0, usd: 0 });
+
             const [prices, setPrices] = useState({});
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
@@ -692,13 +693,12 @@ Firma: __________________
                         const data = docSnap.data();
                         if (data.exchangeRate) setExRate(data.exchangeRate);
                         if (data.snackPrice) setSnackPrice(data.snackPrice);
-                        setInitialCash({ mxn: data.initialCashMxn || 0, usd: data.initialCashUsd || 0 });
+
                     } else {
                         setDoc(doc(db, "settings", "general"), {
                             exchangeRate: DEFAULTS.EXCHANGE_RATE,
                             snackPrice: DEFAULTS.SNACK_PRICE,
-                            initialCashMxn: DEFAULTS.INITIAL_CASH_MXN,
-                            initialCashUsd: DEFAULTS.INITIAL_CASH_USD
+
                         });
                     }
                 });
@@ -737,7 +737,8 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-                const qCC = query(collection(db, "cash_counts"), orderBy("timestamp", "desc"), limit(20));
+
+                const qCC = query(collection(db, "cash_counts"), orderBy("timestamp", "desc"), limit(50));
                 const unsubCC = onSnapshot(qCC, (snap) => {
                     setCashCounts(snap.docs.map(d => ({
                         id: d.id, ...d.data(),
@@ -763,11 +764,23 @@ Firma: __________________
                 return () => { unsubT(); unsubD(); unsubE(); unsubCC(); unsubCD(); unsubCI(); };
             }, []);
 
-            const updateGlobalSettings = (newRate, newSnackPrice, initMxn, initUsd) => handleDbAction(async () => {
+            const updateGlobalSettings = (newRate, newSnackPrice) => handleDbAction(async () => {
                 await setDoc(doc(db, "settings", "general"), {
-                    exchangeRate: newRate, snackPrice: newSnackPrice, initialCashMxn: initMxn, initialCashUsd: initUsd
+                    exchangeRate: newRate, snackPrice: newSnackPrice
                 }, { merge: true });
             });
+
+
+            const getOpeningCash = (targetDate) => {
+                // targetDate should be a Date object representing the START of the period we are interested in.
+                // We want the most recent cash count strictly BEFORE this time.
+                const prevCount = cashCounts.find(c => c.timestamp < targetDate);
+
+                if (prevCount) {
+                    return { mxn: prevCount.declaredMxn || 0, usd: prevCount.declaredUsd || 0 };
+                }
+                return { mxn: 0, usd: 0 };
+            };
 
             const saveTicket = (data) => handleDbAction(async () => {
                 if (isSubmitting) return;
@@ -898,6 +911,7 @@ Firma: __________________
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
 
+                // Check for PINO exception (Pino-only tickets don't need washers)
                 const isPinoOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => e.id === 'PINO');
 
                 if ((!t.washers || t.washers.length === 0) && !isPinoOnly) {
@@ -931,6 +945,7 @@ Firma: __________________
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
 
+                // Check for PINO exception (Pino-only tickets don't need washers)
                 const isPinoOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => e.id === 'PINO');
 
                 if ((!t.washers || t.washers.length === 0) && !isPinoOnly) {
@@ -954,10 +969,11 @@ Firma: __________________
 
             const value = {
                 role, login, logout, view, setView, employees, tickets, history, deductions, expenses, cashCounts, cashDrops, cashIns,
-                prices, commissions, extrasList, exRate, snackPrice, initialCash, updateGlobalSettings,
+                prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
+                getOpeningCash,
                 db, isSubmitting
             };
 
@@ -1250,7 +1266,7 @@ Firma: __________________
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, initialCash, expenses, addCashCount, addCashDrop, cashDrops, cashIns } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showVarios, setShowVarios] = useState(false);
@@ -1362,22 +1378,27 @@ Firma: __________________
             };
 
             const calculateCurrentExpectedCash = () => {
-                const today = getLocalDateStr();
-                const allToday = history.concat(tickets).filter(t => t.status === 'PAID' && getLocalDateStr(t.paidAt || t.timestamp) === today);
+                const todayStr = getLocalDateStr();
+                // Determine start of "Today" for finding previous opening balance
+                const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
 
-                const expensesToday = expenses.filter(e => e.status === 'APPROVED' && getLocalDateStr(e.timestamp) === today)
+                const allToday = history.concat(tickets).filter(t => t.status === 'PAID' && getLocalDateStr(t.paidAt || t.timestamp) === todayStr);
+
+                const expensesToday = expenses.filter(e => e.status === 'APPROVED' && getLocalDateStr(e.timestamp) === todayStr)
                     .reduce((a, b) => a + (b.amount || 0), 0);
 
                 // Calculate Drops Today
-                const dropsTodayMxn = cashDrops.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountMxn || 0), 0);
-                const dropsTodayUsd = cashDrops.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountUsd || 0), 0);
+                const dropsTodayMxn = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const dropsTodayUsd = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountUsd || 0), 0);
 
                 // Calculate Cash Ins (Refills) Today
-                const cashInsTodayMxn = cashIns.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountMxn || 0), 0);
-                const cashInsTodayUsd = cashIns.filter(d => getLocalDateStr(d.timestamp) === today).reduce((a, b) => a + (b.amountUsd || 0), 0);
+                const cashInsTodayMxn = cashIns.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const cashInsTodayUsd = cashIns.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountUsd || 0), 0);
 
-                let expectedMxn = parseFloat(initialCash.mxn) || 0;
-                let expectedUsd = parseFloat(initialCash.usd) || 0;
+                // Get dynamic opening cash
+                const openingCash = getOpeningCash(startOfToday);
+                let expectedMxn = openingCash.mxn;
+                let expectedUsd = openingCash.usd;
 
                 allToday.forEach(t => {
                     const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false };
@@ -1624,7 +1645,7 @@ Firma: __________________
         };
 
         const AdminCorte = () => {
-            const { history, tickets, expenses, exRate, initialCash, updateExpense, resolveExpense, cashCounts, cashDrops, cashIns } = useContext(AppContext);
+            const { history, tickets, expenses, exRate, updateExpense, resolveExpense, cashCounts, cashDrops, cashIns, getOpeningCash } = useContext(AppContext);
             const [corteMode, setCorteMode] = useState('DAY');
             const [corteDate, setCorteDate] = useState(getLocalDateStr());
             const [corteMonth, setCorteMonth] = useState(getMonthStr());
@@ -1643,8 +1664,19 @@ Firma: __________________
                 corteTickets.forEach(t => { if (t.paymentDetails?.method === 'CARD') revenueCard += t.price; else { revenueCashTickets += t.price; collectedUsd += (t.paymentDetails?.usd || 0); } });
                 const impliedMxnSales = revenueCashTickets - (collectedUsd * exRate);
                 const approvedExpensesTotal = corteExpenses.filter(e => e.status === 'APPROVED').reduce((a, b) => a + (b.amount || 0), 0);
-                const initMxn = parseFloat(initialCash.mxn) || 0;
-                const initUsd = parseFloat(initialCash.usd) || 0;
+
+                // Determine start date for opening cash
+                let startDateObj;
+                if (corteMode === 'DAY') {
+                    // Start of the specific day
+                    startDateObj = new Date(corteDate + 'T00:00:00');
+                } else {
+                    // Start of the month
+                    startDateObj = new Date(corteMonth + '-01T00:00:00');
+                }
+                const openingCash = getOpeningCash(startDateObj);
+                const initMxn = openingCash.mxn;
+                const initUsd = openingCash.usd;
 
                 const dropsMxn = corteDrops.reduce((a, b) => a + (b.amountMxn || 0), 0);
                 const dropsUsd = corteDrops.reduce((a, b) => a + (b.amountUsd || 0), 0);
@@ -1873,13 +1905,11 @@ Firma: __________________
         };
 
         const AdminConfig = () => {
-            const { exRate, snackPrice, initialCash, updateGlobalSettings, employees, addEmployee, archiveEmployee } = useContext(AppContext);
+            const { exRate, snackPrice, updateGlobalSettings, employees, addEmployee, archiveEmployee } = useContext(AppContext);
             const [localExRate, setLocalExRate] = useState(exRate);
             const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
-            const [localInitMxn, setLocalInitMxn] = useState(initialCash.mxn);
-            const [localInitUsd, setLocalInitUsd] = useState(initialCash.usd);
             const [newEmpName, setNewEmpName] = useState('');
-            useEffect(() => { setLocalExRate(exRate); setLocalSnackPrice(snackPrice); setLocalInitMxn(initialCash.mxn); setLocalInitUsd(initialCash.usd); }, [exRate, snackPrice, initialCash]);
+            useEffect(() => { setLocalExRate(exRate); setLocalSnackPrice(snackPrice); }, [exRate, snackPrice]);
             const handleAddEmployee = () => { if (newEmpName.trim()) { addEmployee(newEmpName.trim()); setNewEmpName(''); } };
 
             return (
@@ -1888,8 +1918,7 @@ Firma: __________________
                     <div className="mb-6 flex flex-col gap-4">
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-                        <div className="border-t pt-4"><h4 className="font-bold text-gray-700 mb-3 flex items-center"><Briefcase className="w-4 h-4 mr-2" /> Fondo de Caja (Inicial)</h4><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 mb-1">Pesos (MXN)</label><input type="number" value={localInitMxn} onChange={e => setLocalInitMxn(e.target.value)} className="border p-3 rounded-lg w-full text-lg bg-gray-50" /></div><div><label className="block text-xs font-bold text-gray-500 mb-1">Dólares (USD)</label><input type="number" value={localInitUsd} onChange={e => setLocalInitUsd(e.target.value)} className="border p-3 rounded-lg w-full text-lg bg-gray-50" /></div></div></div>
-                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice), parseFloat(localInitMxn), parseFloat(localInitUsd)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Cambios</Button>
+                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Cambios</Button>
                     </div>
                     <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
                     <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} placeholder="Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><Button onClick={handleAddEmployee}><PlusCircle className="w-5 h-5" /></Button></div>
