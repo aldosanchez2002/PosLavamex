@@ -132,6 +132,7 @@
                 PRESIDENTIAL: { AUTO: 539, SUV_CHICA: 679, PICKUP: 812, SUV_GDE: 812 },
             },
             EXTRAS: [
+                { id: 'PINO', label: 'Pino (Aromatizante)', price: 35, commission: 0 },
                 { id: 'MOTOR', label: 'Lavado Motor', price: 400, commission: 140 },
                 { id: 'CHASIS', label: 'Chasis', price: 400, commission: 140 },
                 { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
@@ -897,7 +898,9 @@ Firma: __________________
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
 
-                if (!t.washers || t.washers.length === 0) {
+                const isPinoOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => e.id === 'PINO');
+
+                if ((!t.washers || t.washers.length === 0) && !isPinoOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
 
@@ -928,7 +931,9 @@ Firma: __________________
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
 
-                if (!t.washers || t.washers.length === 0) {
+                const isPinoOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => e.id === 'PINO');
+
+                if ((!t.washers || t.washers.length === 0) && !isPinoOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
 
