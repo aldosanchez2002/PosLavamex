@@ -533,6 +533,8 @@ Firma: __________________
                     ['Efectivo Dólares (Recibido)', `$${data.totals.cashUsd.toFixed(2)} USD`],
                     ['Fondo Inicial (MXN)', formatCurrency(data.totals.initialMxn)],
                     ['Fondo Inicial (USD)', `$${data.totals.initialUsd.toFixed(2)} USD`],
+                    ['Ingresos Efectivo (MXN)', formatCurrency(data.totals.cashInsMxn)],
+                    ['Ingresos Efectivo (USD)', `$${data.totals.cashInsUsd.toFixed(2)} USD`],
                     ['Gastos Totales', `-${formatCurrency(data.totals.expenses)}`]
                 ];
 
@@ -544,6 +546,24 @@ Firma: __________________
                     headStyles: { fillColor: [44, 62, 80] },
                     columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } }
                 });
+
+                // Detalle de Ingresos (Cash Ins)
+                if (data.cashIns && data.cashIns.length > 0) {
+                    doc.text("Detalle de Ingresos de Efectivo", 14, doc.lastAutoTable.finalY + 15);
+                    const cashInBody = data.cashIns.map(c => [
+                        c.reason || 'Ingreso',
+                        c.user,
+                        formatCurrency(c.amountMxn),
+                        `$${c.amountUsd.toFixed(2)}`
+                    ]);
+                    autoTable(doc, {
+                        startY: doc.lastAutoTable.finalY + 20,
+                        head: [['Razón', 'Usuario', 'MXN', 'USD']],
+                        body: cashInBody,
+                        theme: 'striped',
+                        headStyles: { fillColor: [46, 204, 113] } // Greenish
+                    });
+                }
 
                 if (data.expenses.length > 0) {
                     doc.text("Desglose de Gastos", 14, doc.lastAutoTable.finalY + 15);
@@ -1648,7 +1668,8 @@ Firma: __________________
                     dateLabel: corteMode === 'DAY' ? corteDate : corteMonth,
                     totals: corteTotals,
                     tickets: corteTickets,
-                    expenses: corteExpenses.filter(e => e.status === 'APPROVED')
+                    expenses: corteExpenses.filter(e => e.status === 'APPROVED'),
+                    cashIns: corteCashIns
                 };
                 PdfService.generateCorte(data);
             };
