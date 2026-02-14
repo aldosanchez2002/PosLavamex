@@ -922,7 +922,7 @@ O    _      - |    _     ,*
                 }
             }, [editingTicket]);
 
-            const toggle = (item) => setWashers(prev => toggleSelection(prev, item, 2));
+            const toggle = (item) => setWashers(prev => toggleSelection(prev, item, 3));
             const toggleExtra = (item) => setExtras(prev => toggleSelection(prev, item));
             const addExtra = (item) => setExtras(prev => [...prev, item]);
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
@@ -954,7 +954,7 @@ O    _      - |    _     ,*
 
             const renderWashers = () => (
                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
-                    <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 2. Lavadores ({washers.length}/2)</h3>
+                    <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 2. Lavadores ({washers.length}/3)</h3>
                     <div className={`grid ${isDesktop ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-3'} mb-4`}>
                         {employees.filter(e => e.active).map(e => (
                             <button key={e.name} onClick={() => toggle(e.name)}
