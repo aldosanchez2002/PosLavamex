@@ -132,14 +132,15 @@
                 PRESIDENTIAL: { AUTO: 539, SUV_CHICA: 679, PICKUP: 812, SUV_GDE: 812 },
             },
             EXTRAS: [
-                { id: 'PINO', label: 'Pino (Aromatizante)', price: 35, commission: 0 },
+                { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 30 },
                 { id: 'MOTOR', label: 'Lavado Motor', price: 400, commission: 140 },
                 { id: 'CHASIS', label: 'Chasis', price: 400, commission: 140 },
                 { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
                 { id: 'ARMORALL', label: 'Armor-All', price: 50, commission: 20 },
-                { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 30 },
                 { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
                 { id: 'LIMP_FOCOS', label: 'Limpieza de Focos', price: 340, commission: 120 },
+                { id: 'PINO', label: 'Pino (Aromatizante)', price: 35, commission: 0 },
+                { id: 'SNACKS', label: 'Snacks', price: 30, commission: 0 },
             ]
         };
 
@@ -641,6 +642,7 @@ Firma: __________________
 
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
+            // Removed static initialCash state
             const [prices, setPrices] = useState({});
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
@@ -919,10 +921,10 @@ Firma: __________________
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
 
-                // Check for PINO exception (Pino-only tickets don't need washers)
-                const isPinoOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => e.id === 'PINO');
+                // Check for PINO/SNACKS exception (These tickets don't need washers)
+                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS'].includes(e.id));
 
-                if ((!t.washers || t.washers.length === 0) && !isPinoOnly) {
+                if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
 
@@ -953,10 +955,10 @@ Firma: __________________
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
 
-                // Check for PINO exception (Pino-only tickets don't need washers)
-                const isPinoOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => e.id === 'PINO');
+                // Check for PINO/SNACKS exception (These tickets don't need washers)
+                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS'].includes(e.id));
 
-                if ((!t.washers || t.washers.length === 0) && !isPinoOnly) {
+                if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
 
@@ -981,7 +983,7 @@ Firma: __________________
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
-                getOpeningCash, 
+                getOpeningCash, // Export helper
                 db, isSubmitting
             };
 
@@ -1772,13 +1774,13 @@ Firma: __________________
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div><div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div><div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div></div>
                         <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-                            <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja</div>
+                            <div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja (Drawer)</div>
                             <div className="text-3xl font-bold text-gray-800">{formatCurrency(corteTotals.cashNetMxn)}</div>
                             <div className="text-xs text-gray-400 mt-1">
                                 {corteTotals.cashInsMxn > 0 ? <span className="text-green-600 font-bold">Inc. +{formatCurrency(corteTotals.cashInsMxn)} Ingresos</span> : 'Listo para Arqueo'}
                             </div>
                         </div>
-                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><ShieldCheck size={18} /> Envios/Retiros</div><div className="text-3xl font-bold text-orange-600">{formatCurrency(corteTotals.dropsMxn)}</div><div className="text-xs text-green-600 font-bold mt-1">+ ${corteTotals.dropsUsd.toFixed(2)} USD</div></div>
+                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><ShieldCheck size={18} /> Caja Fuerte (Retiros)</div><div className="text-3xl font-bold text-orange-600">{formatCurrency(corteTotals.dropsMxn)}</div><div className="text-xs text-green-600 font-bold mt-1">+ ${corteTotals.dropsUsd.toFixed(2)} USD</div></div>
                         <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><CreditCard size={18} /> Tarjeta</div><div className="text-3xl font-bold text-blue-600">{formatCurrency(corteTotals.card)}</div></div>
                     </div>
 
@@ -1888,8 +1890,8 @@ Firma: __________________
                     </div>
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
                         <div className="flex flex-wrap gap-3 items-end">
-                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Inicio (Mañana)</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
-                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Fin(Mañana)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
+                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Inicio</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
+                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Fin</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
                             <Button onClick={printNomina} variant="success"><Printer className="w-4 h-4" /> PDF</Button>
                         </div>
                         <Button onClick={closeWeek} variant="danger"><Archive className="w-4 h-4" /> CERRAR SEMANA</Button>
@@ -1944,6 +1946,7 @@ Firma: __________________
                     <div className="mb-6 flex flex-col gap-4">
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
+                        {/* Removed Initial Cash Section */}
                         <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Cambios</Button>
                     </div>
                     <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
