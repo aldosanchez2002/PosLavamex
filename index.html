@@ -738,13 +738,28 @@ O    _      - |    _     ,*
                 await updateDoc(doc(db, "tickets", id), { snackCount: newCount, price: totals.totalPrice });
             });
 
-            const toggleAttendance = (empId, empName, isActive) => handleDbAction(async () => {
-                await updateDoc(doc(db, "employees", empId), { active: isActive });
+            const saveBatchAttendance = (updates) => handleDbAction(async () => {
+                const batch = writeBatch(db);
                 const dateKey = getLocalDateStr();
                 const monthKey = dateKey.slice(0, 7);
-                await setDoc(doc(db, "attendance", dateKey), {
-                    date: dateKey, month: monthKey, records: { [empName]: isActive }
+                const records = {};
+
+                Object.values(updates).forEach(item => {
+                    records[item.name] = item.active;
+                    if (item.id) {
+                        const empRef = doc(db, "employees", item.id);
+                        batch.update(empRef, { active: item.active });
+                    }
+                });
+
+                const attendanceRef = doc(db, "attendance", dateKey);
+                batch.set(attendanceRef, {
+                    date: dateKey,
+                    month: monthKey,
+                    records: records
                 }, { merge: true });
+
+                await batch.commit();
             });
 
             const addEmployee = (name) => handleDbAction(() => addDoc(collection(db, "employees"), { name, active: true }));
@@ -834,7 +849,7 @@ O    _      - |    _     ,*
                 role, login, logout, view, setView, employees, tickets, history, deductions, expenses,
                 prices, commissions, extrasList, exRate, snackPrice, initialCash, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
-                saveTicket, updateSnacks, toggleAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
+                saveTicket, updateSnacks, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, updateExpense, resolveExpense, processPayment, processCardPayment,
                 db, isSubmitting
             };
@@ -1128,12 +1143,14 @@ O    _      - |    _     ,*
         };
 
         const CashierView = () => {
-            const { tickets, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, toggleAttendance, isSubmitting, role, snackPrice } = useContext(AppContext);
+            const { tickets, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showVarios, setShowVarios] = useState(false);
             const [showAttendance, setShowAttendance] = useState(false);
             const [showExpense, setShowExpense] = useState(false);
+
+            const [localAttendance, setLocalAttendance] = useState({});
 
             const [snackEmp, setSnackEmp] = useState('');
             const [variosEmp, setVariosEmp] = useState('');
@@ -1141,6 +1158,29 @@ O    _      - |    _     ,*
             const [variosAmt, setVariosAmt] = useState('');
             const [expDesc, setExpDesc] = useState('');
             const [expAmt, setExpAmt] = useState('');
+
+            useEffect(() => {
+                if (showAttendance) {
+                    const init = {};
+                    employees.forEach(e => {
+                        init[e.id] = { id: e.id, name: e.name, active: e.active };
+                    });
+                    setLocalAttendance(init);
+                }
+            }, [showAttendance, employees]);
+
+            const handleLocalToggle = (id) => {
+                setLocalAttendance(prev => ({
+                    ...prev,
+                    [id]: { ...prev[id], active: !prev[id].active }
+                }));
+            };
+
+            const handleSaveAttendance = async () => {
+                await saveBatchAttendance(localAttendance);
+                alert("Asistencia guardada.");
+                setShowAttendance(false);
+            };
 
             const handleAddExpense = () => { if (!expDesc || !expAmt) return; addExpense(expDesc, expAmt); setExpDesc(''); setExpAmt(''); setShowExpense(false); };
 
@@ -1243,7 +1283,31 @@ O    _      - |    _     ,*
                         </Modal>
                     )}
 
-                    {showAttendance && <Modal title="Asistencia" icon={UserCheck} onClose={() => setShowAttendance(false)} footer={<div className="flex gap-2"><Button onClick={() => setShowAttendance(false)} variant="secondary" className="flex-1">Cerrar</Button>{/* PLACEBO BUTTON: Attendance is saved instantly on toggle. This just gives user confidence. */}<Button onClick={() => { alert('Asistencia guardada exitosamente.'); setShowAttendance(false); }} variant="success" className="flex-1"><Upload size={18} className="mr-2" /> Guardar</Button></div>}><div className="max-h-80 overflow-y-auto space-y-2">{employees.map(e => <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span className="font-medium text-lg">{e.name}</span><button onClick={() => toggleAttendance(e.id, e.name, !e.active)} className={`px-4 py-2 rounded-lg font-bold ${e.active ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>{e.active ? 'PRESENTE' : 'AUSENTE'}</button></div>)}</div></Modal>}
+                    {showAttendance && (
+                        <Modal title="Asistencia" icon={UserCheck} onClose={() => setShowAttendance(false)} footer={
+                            <div className="flex gap-2">
+                                <Button onClick={() => setShowAttendance(false)} variant="secondary" className="flex-1">Cerrar</Button>
+                                <Button onClick={handleSaveAttendance} variant="success" className="flex-1"><Upload size={18} className="mr-2" /> Guardar</Button>
+                            </div>
+                        }>
+                            <div className="max-h-80 overflow-y-auto space-y-2">
+                                {employees.map(e => {
+                                    const isActive = localAttendance[e.id] ? localAttendance[e.id].active : e.active;
+                                    return (
+                                        <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                            <span className="font-medium text-lg">{e.name}</span>
+                                            <button
+                                                onClick={() => handleLocalToggle(e.id)}
+                                                className={`px-4 py-2 rounded-lg font-bold ${isActive ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}
+                                            >
+                                                {isActive ? 'PRESENTE' : 'AUSENTE'}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </Modal>
+                    )}
 
                     {showExpense && <Modal title="Registrar Gasto" icon={TrendingDown} onClose={() => setShowExpense(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowExpense(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddExpense} variant="danger" className="flex-1">Registrar</Button></div>}><div className="space-y-3"><div><label className="block text-sm font-bold text-gray-600 mb-1">Concepto</label><input value={expDesc} onChange={e => setExpDesc(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Jabón" /></div><div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" /></div></div></Modal>}
                 </div>
