@@ -541,14 +541,14 @@ Firma: __________________
                     ['Venta Total', formatCurrency(data.totals.total)],
                     ['Neto en Caja USD', `$${data.totals.cashNetUsd.toFixed(2)} USD`],
                     ['Neto en Caja MXN', formatCurrency(data.totals.cashNetMxn)],
-                    ['', ''], 
+                    ['', ''],
                     ['Fondo Inicial Pesos', formatCurrency(data.totals.initialMxn)],
                     ['Fondo Inicial Dólares', `$${data.totals.initialUsd.toFixed(2)} USD`],
                     ['Pagado Pesos (Ventas)', formatCurrency(data.totals.cashMxn)],
                     ['Pagado Dólares (Ventas)', `$${data.totals.cashUsd.toFixed(2)} USD`],
                     ['Pagado Tarjeta', formatCurrency(data.totals.card)],
                     ['Gastos Totales', `-${formatCurrency(data.totals.expenses)}`],
-                    ['', ''], 
+                    ['', ''],
                     ['En Caja Pesos', formatCurrency(data.totals.cashNetMxn)],
                     ['En Caja Dólares', `$${data.totals.cashNetUsd.toFixed(2)} USD`],
                     ['Ingresos Efectivo', `${formatCurrency(data.totals.cashInsMxn)} / $${data.totals.cashInsUsd.toFixed(2)} USD`],
@@ -942,7 +942,6 @@ Firma: __________________
 
                 setIsSubmitting(true);
                 try {
-                    const isOnlyUsd = usdVal > 0 && mxnVal === 0;
                     const changeMxn = total - t.price;
                     const changeUsd = changeMxn / exRate;
                     const details = { mxn: mxnVal, usd: usdVal, rate: exRate, changeMxn, changeUsd, isOnlyUsd, method: 'CASH' };
@@ -1353,7 +1352,7 @@ Firma: __________________
                     expectedUsd,
                     diffMxn,
                     diffUsd,
-                    card: totalCard, 
+                    card: totalCard,
                     exchangeRate: exRate,
                     user: role,
                     timestamp: new Date()
@@ -1635,7 +1634,31 @@ Firma: __________________
                             <div className="text-xl font-bold text-green-700">{formatCurrency(totalSum)}</div>
                         </div>
                         <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
-                            <table className="w-full text-sm text-left"><thead className="bg-gray-50 font-bold text-gray-700 sticky top-0"><tr><th className="p-3">ID</th><th className="p-3">Hora</th><th className="p-3">Servicio</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{todayTickets.map(t => <tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td><td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td><td className="p-3"><div className="font-medium">{t.service?.label || 'Extras'}</div>{t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}</td><td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td></tr>)}</tbody></table>
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50 font-bold text-gray-700 sticky top-0">
+                                    <tr>
+                                        <th className="p-3">ID</th>
+                                        <th className="p-3">Hora</th>
+                                        <th className="p-3">Descripción</th>
+                                        <th className="p-3">Servicio</th>
+                                        <th className="p-3 text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {todayTickets.map(t => (
+                                        <tr key={t.id} className="border-t hover:bg-gray-50">
+                                            <td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td>
+                                            <td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td>
+                                            <td className="p-3 font-bold text-gray-700 uppercase">{t.vehicleDesc || '-'}</td>
+                                            <td className="p-3">
+                                                <div className="font-medium">{t.service?.label || 'Extras'}</div>
+                                                {t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}
+                                            </td>
+                                            <td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
@@ -1694,7 +1717,7 @@ Firma: __________________
                     expenses: approvedExpensesTotal,
                     initialMxn: initMxn,
                     initialUsd: initUsd,
-                    cashNetMxn: (impliedMxnSales + initMxn + cashInsMxn) - approvedExpensesTotal - dropsMxn, 
+                    cashNetMxn: (impliedMxnSales + initMxn + cashInsMxn) - approvedExpensesTotal - dropsMxn,
                     cashNetUsd: collectedUsd + initUsd + cashInsUsd - dropsUsd,
                     dropsMxn,
                     dropsUsd,
@@ -1835,7 +1858,7 @@ Firma: __________________
                                         // Dif Total formula: Dif MXN + (Dif USD * Rate) + Card
                                         // Note: Assuming "Dif Total" is Net (Revenue + Difference) based on user prompt logic
                                         const totalDiffVal = c.diffMxn + (c.diffUsd * rate) + cardAmount;
-                                        
+
                                         const isBad = Math.abs(c.diffMxn) > 1 || Math.abs(c.diffUsd) > 0.1;
 
                                         return (
@@ -1847,11 +1870,11 @@ Firma: __________________
                                                 <td className="p-3 text-right">{formatCurrency(c.declaredMxn)}</td>
                                                 <td className="p-3 text-right text-gray-500">{formatCurrency(c.expectedMxn)}</td>
                                                 <td className={`p-3 text-right font-bold ${c.diffMxn < 0 ? 'text-red-600' : (c.diffMxn > 0 ? 'text-blue-600' : 'text-gray-400')}`}>{c.diffMxn > 0 ? '+' : ''}{formatCurrency(c.diffMxn)}</td>
-                                                
+
                                                 <td className="p-3 text-right">${(c.declaredUsd || 0).toFixed(2)}</td>
                                                 <td className="p-3 text-right text-gray-500">${(c.expectedUsd || 0).toFixed(2)}</td>
                                                 <td className={`p-3 text-right font-bold ${(c.diffUsd || 0) < 0 ? 'text-red-600' : ((c.diffUsd || 0) > 0 ? 'text-blue-600' : 'text-gray-400')}`}>{(c.diffUsd || 0) > 0 ? '+' : ''}${(c.diffUsd || 0).toFixed(2)}</td>
-                                                
+
                                                 <td className="p-3 text-right font-bold text-blue-800">{formatCurrency(cardAmount)}</td>
                                                 <td className={`p-3 text-right font-black ${totalDiffVal < 0 ? 'text-red-700' : 'text-green-700'}`}>{formatCurrency(totalDiffVal)}</td>
                                             </tr>
@@ -2223,7 +2246,7 @@ Firma: __________________
                     const now = new Date();
                     const hours = now.getHours();
                     const outsideHours = hours < 7 || hours >= 19;
-                    // setIsLocked(role !== 'ADMIN' && outsideHours);
+                    // setIsLocked(role !== 'ADMIN' && outsideHours); //KEEP
                     setIsLocked(false);
                 };
 
