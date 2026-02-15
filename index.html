@@ -2395,8 +2395,8 @@ Firma: __________________
             return (
                 <div className="space-y-6">
                     <div className="bg-purple-50 border-purple-200 border p-4 rounded-xl shadow-sm">
-                        <h3 className="font-bold text-purple-800 mb-2 flex items-center gap-2"><Briefcase size={20} /> Registrar Gasto Administrativo</h3>
-                        <p className="text-sm text-purple-600 mb-4 font-medium">Estos gastos son pagados externamente (banco, tarjeta del dueño, efectivo externo) y NO afectan el corte de caja diario.</p>
+                        <h3 className="font-bold text-purple-800 mb-2 flex items-center gap-2"><Briefcase size={20} /> Registrar Gasto Administrativo </h3>
+                        <p className="text-sm text-purple-600 mb-4 font-medium">Estos gastos son pagados externamente (SAM's, IMSS, etc) y NO afectan el corte de caja diario.</p>
                         <div className="flex gap-2 flex-col md:flex-row">
                             <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción del gasto" className="border p-3 rounded-lg flex-1 shadow-sm" />
                             <input type="number" value={amt} onChange={e => setAmt(e.target.value)} placeholder="Monto ($)" className="border p-3 rounded-lg w-full md:w-40 shadow-sm" />
