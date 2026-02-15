@@ -55,7 +55,7 @@
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
             Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
-            EyeOff, ClipboardList, ShieldCheck
+            EyeOff, ClipboardList, ShieldCheck, UserCog
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -109,13 +109,11 @@
             },
             EXCHANGE_RATE: 18.10,
             SNACK_PRICE: 30,
-            INITIAL_CASH_MXN: 0,
-            INITIAL_CASH_USD: 0,
             INITIAL_EMPLOYEES: [
-                { name: 'Aldo', active: true },
-                { name: 'Sergio', active: true },
-                { name: 'Juan', active: true },
-                { name: 'Rodrigo', active: true }
+                { name: 'Aldo', active: true, role: 'WASHER' },
+                { name: 'Sergio', active: true, role: 'WASHER' },
+                { name: 'Juan', active: true, role: 'WASHER' },
+                { name: 'Rodrigo', active: true, role: 'WASHER' }
             ],
             PRICES: {
                 GENERAL: { AUTO: 200, SUV_CHICA: 240, PICKUP: 360, SUV_GDE: 360 },
@@ -193,6 +191,7 @@
 
         const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
             const payroll = {};
+            // Initialize payroll items for all employees
             const initPayrollItem = () => {
                 const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0 };
                 SERVICES.forEach(svc => {
@@ -206,6 +205,10 @@
                 payroll[emp.name] = initPayrollItem();
             });
 
+            // Calculate Gross Sales first (needed for Supervisors)
+            const totalGrossSales = history.reduce((acc, t) => acc + (t.price || 0), 0);
+
+            // STANDARD COMMISSION LOGIC (Accumulate splits)
             history.forEach(item => {
                 const washersList = item.washers || (item.washer ? [item.washer] : []);
                 if (washersList.length === 0) return;
@@ -233,11 +236,16 @@
                 washersList.forEach(washerName => {
                     if (!payroll[washerName]) payroll[washerName] = initPayrollItem();
                     const p = payroll[washerName];
+
+                    // Increment counts regardless of role (for stats)
                     p.count += 1;
-                    p.total += (baseShare + (extrasCommissionTotal / washerCount));
                     if (item.service && item.size) {
                         p.serviceGrid[item.service.id][item.size.id] = (p.serviceGrid[item.service.id][item.size.id] || 0) + 1;
                     }
+
+                    // Add Commission Share (Note: Supervisors will have this overridden later)
+                    p.total += (baseShare + (extrasCommissionTotal / washerCount));
+
                     extrasShares.forEach(ex => {
                         if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
                         p.extrasData[ex.label].count += 1;
@@ -246,12 +254,40 @@
                 });
             });
 
+            // SUPERVISOR OVERRIDE LOGIC
+            employees.forEach(emp => {
+                if (emp.role === 'SUPERVISOR' && payroll[emp.name]) {
+                    // Reset commission accumulated from splits (if any) because they get salary + % of sales
+                    // We keep the serviceGrid counts for statistical purposes
+
+                    const baseSalary = parseFloat(emp.baseSalary) || 0;
+                    const commPct = parseFloat(emp.commissionPct) || 0;
+                    const salesComm = totalGrossSales * (commPct / 100);
+
+                    const newTotal = baseSalary + salesComm;
+
+                    // Override the payroll object for this person
+                    payroll[emp.name].total = newTotal;
+
+                    // Clear extras data to avoid confusion in PDF, and insert the salary details instead
+                    payroll[emp.name].extrasData = {};
+                    if (baseSalary > 0) {
+                        payroll[emp.name].extrasData['SUELDO BASE'] = { count: 1, total: baseSalary };
+                    }
+                    if (salesComm > 0) {
+                        payroll[emp.name].extrasData[`COMISIÓN VENTAS (${commPct}%)`] = { count: 1, total: salesComm };
+                    }
+                }
+            });
+
+            // APPLY DEDUCTIONS
             deductions.forEach(d => {
                 if (!payroll[d.employee]) payroll[d.employee] = initPayrollItem();
                 payroll[d.employee].deductionTotal += d.amount;
                 payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
             });
 
+            // CALCULATE NET PAY
             Object.keys(payroll).forEach(key => { payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal; });
             return payroll;
         };
@@ -409,7 +445,7 @@ Firma: __________________
 
                 Object.keys(payroll).forEach((name, index) => {
                     const p = payroll[name];
-                    if (p.count === 0 && p.deductionTotal === 0) return;
+                    if (p.count === 0 && p.deductionTotal === 0 && p.total === 0) return;
                     if (index > 0) doc.addPage();
 
                     doc.setFontSize(14);
@@ -450,7 +486,7 @@ Firma: __________________
 
                     const extraKeys = Object.keys(p.extrasData).sort();
                     if (extraKeys.length > 0) {
-                        doc.text("Comisiones Extras", 14, currentY);
+                        doc.text("Detalle de Pagos / Comisiones", 14, currentY);
                         const extrasBody = extraKeys.map(k => [k, p.extrasData[k].count, formatCurrency(p.extrasData[k].total)]);
                         autoTable(doc, {
                             startY: currentY + 2,
@@ -590,20 +626,6 @@ Firma: __________________
                         headStyles: { fillColor: [46, 204, 113] }
                     });
                     currentY = doc.lastAutoTable.finalY + 10;
-                }
-
-                // Desglose de Envios (Drops) - Optional but useful context given "Envios" line
-                if (data.cashDrops && data.cashDrops.length > 0) {
-                    doc.setFontSize(14);
-                    doc.text("Desglose de Envíos (Retiros)", 14, currentY);
-                    // Filter drops based on mode is tricky here as 'data' just has totals usually, 
-                    // but we can query them if passed.
-                    // For now, if the 'data' object passed to generateCorte includes the drops array, print it.
-                    // Assuming AdminCorte passes it? AdminCorte currently doesn't pass 'drops' array explicitly in 'data' object, 
-                    // let's check AdminCorte... it passes 'tickets', 'expenses', 'cashIns'.
-                    // I'll add 'drops' to AdminCorte call momentarily to support this if needed, 
-                    // but strictly based on prompt "Desglose de Gastos" and "Desglose de Ingresos" were requested.
-                    // I will stick to the requested desgloses.
                 }
 
                 doc.save(`Corte_${data.dateLabel}.pdf`);
@@ -910,7 +932,9 @@ Firma: __________________
                 alert("Efectivo agregado exitosamente.");
             });
 
-            const addEmployee = (name) => handleDbAction(() => addDoc(collection(db, "employees"), { name, active: true }));
+            const addEmployee = (name) => handleDbAction(() => addDoc(collection(db, "employees"), { name, active: true, role: 'WASHER' }));
+
+            const updateEmployee = (id, data) => handleDbAction(() => updateDoc(doc(db, "employees", id), data));
 
             const archiveEmployee = (id) => handleDbAction(() => updateDoc(doc(db, "employees", id), { archived: true }));
 
@@ -1003,7 +1027,8 @@ Firma: __________________
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
-                getOpeningCash, // Export helper
+                updateEmployee,
+                getOpeningCash,
                 db, isSubmitting
             };
 
@@ -1968,12 +1993,33 @@ Firma: __________________
         };
 
         const AdminConfig = () => {
-            const { exRate, snackPrice, updateGlobalSettings, employees, addEmployee, archiveEmployee } = useContext(AppContext);
+            const { exRate, snackPrice, updateGlobalSettings, employees, addEmployee, archiveEmployee, updateEmployee } = useContext(AppContext);
             const [localExRate, setLocalExRate] = useState(exRate);
             const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
             const [newEmpName, setNewEmpName] = useState('');
+            const [editingEmp, setEditingEmp] = useState(null);
+
             useEffect(() => { setLocalExRate(exRate); setLocalSnackPrice(snackPrice); }, [exRate, snackPrice]);
             const handleAddEmployee = () => { if (newEmpName.trim()) { addEmployee(newEmpName.trim()); setNewEmpName(''); } };
+
+            const handleEditEmployee = (emp) => {
+                setEditingEmp({
+                    ...emp,
+                    role: emp.role || 'WASHER',
+                    baseSalary: emp.baseSalary || 0,
+                    commissionPct: emp.commissionPct || 0
+                });
+            };
+
+            const saveEmployeeChanges = () => {
+                if (!editingEmp) return;
+                updateEmployee(editingEmp.id, {
+                    role: editingEmp.role,
+                    baseSalary: parseFloat(editingEmp.baseSalary) || 0,
+                    commissionPct: parseFloat(editingEmp.commissionPct) || 0
+                });
+                setEditingEmp(null);
+            };
 
             return (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
@@ -1981,20 +2027,69 @@ Firma: __________________
                     <div className="mb-6 flex flex-col gap-4">
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-                        {/* Removed Initial Cash Section */}
                         <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Cambios</Button>
                     </div>
                     <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
                     <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} placeholder="Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><Button onClick={handleAddEmployee}><PlusCircle className="w-5 h-5" /></Button></div>
                     <div className="space-y-2">{employees.map((e) => (
                         <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span className="font-medium">{e.name}</span>
+                            <div>
+                                <span className="font-medium block">{e.name}</span>
+                                <span className="text-xs text-gray-500 uppercase font-bold">{e.role === 'SUPERVISOR' ? 'Supervisor' : 'Lavador'}</span>
+                            </div>
                             <div className="flex items-center gap-3">
                                 <span className={`text-xs font-bold px-2 py-1 rounded ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.active ? 'Presente' : 'Ausente'}</span>
-                                <button onClick={() => { if (confirm(`¿Ocultar a ${e.name}?`)) archiveEmployee(e.id); }} className="text-red-500 hover:text-red-700" title="Ocultar empleado"><EyeOff size={16} /></button>
+                                <button onClick={() => handleEditEmployee(e)} className="text-blue-500 hover:text-blue-700" title="Editar Rol"><UserCog size={18} /></button>
+                                <button onClick={() => { if (confirm(`¿Ocultar a ${e.name}?`)) archiveEmployee(e.id); }} className="text-red-500 hover:text-red-700" title="Ocultar empleado"><EyeOff size={18} /></button>
                             </div>
                         </div>
                     ))}</div>
+
+                    {editingEmp && (
+                        <Modal title={`Editar Empleado: ${editingEmp.name}`} icon={UserCog} onClose={() => setEditingEmp(null)} footer={
+                            <div className="flex gap-2">
+                                <Button onClick={() => setEditingEmp(null)} variant="secondary" className="flex-1">Cancelar</Button>
+                                <Button onClick={saveEmployeeChanges} variant="primary" className="flex-1">Guardar</Button>
+                            </div>
+                        }>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Rol</label>
+                                    <select
+                                        className="w-full border p-2 rounded"
+                                        value={editingEmp.role}
+                                        onChange={(e) => setEditingEmp({ ...editingEmp, role: e.target.value })}
+                                    >
+                                        <option value="WASHER">Lavador (Comisión Estandar)</option>
+                                        <option value="SUPERVISOR">Supervisor (Sueldo + % Ventas)</option>
+                                    </select>
+                                </div>
+                                {editingEmp.role === 'SUPERVISOR' && (
+                                    <>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-600 mb-1">Sueldo Base Semanal ($)</label>
+                                            <input
+                                                type="number"
+                                                className="w-full border p-2 rounded"
+                                                value={editingEmp.baseSalary}
+                                                onChange={(e) => setEditingEmp({ ...editingEmp, baseSalary: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-600 mb-1">Comisión de Ventas Totales (%)</label>
+                                            <input
+                                                type="number"
+                                                className="w-full border p-2 rounded"
+                                                value={editingEmp.commissionPct}
+                                                onChange={(e) => setEditingEmp({ ...editingEmp, commissionPct: e.target.value })}
+                                                placeholder="Ej. 5"
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </Modal>
+                    )}
                 </div>
             );
         };
