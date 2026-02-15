@@ -427,7 +427,7 @@ Firma: __________________
         };
 
         const PdfService = {
-            generateNomina: (payroll, startDate, endDate) => {
+            generateNomina: (payroll, startDate, endDate, history = []) => {
                 const doc = new jsPDF();
                 let yPos = 20;
 
@@ -526,6 +526,62 @@ Firma: __________________
                     doc.line(70, currentY + 40, 140, currentY + 40);
                     doc.text("Firma de Conformidad", 105, currentY + 45, { align: 'center' });
                 });
+
+                // --- BOLERO PAGE LOGIC ---
+                if (history && history.length > 0) {
+                    let boleadaCount = 0;
+                    history.forEach(t => {
+                        if (t.extras && Array.isArray(t.extras)) {
+                            t.extras.forEach(e => {
+                                if (['BOLEADA', 'QA_BOLEADA'].includes(e.id)) {
+                                    boleadaCount++;
+                                }
+                            });
+                        }
+                    });
+
+                    if (boleadaCount > 0) {
+                        doc.addPage();
+                        const boleroRate = 30;
+                        const boleroTotal = boleadaCount * boleroRate;
+
+                        doc.setFontSize(14);
+                        doc.text("Bolero", 14, 25);
+                        doc.setFontSize(10);
+                        doc.text(`Periodo: ${startDate} al ${endDate}`, 14, 30);
+                        doc.text(`Generado: ${new Date().toLocaleDateString()}`, 14, 35);
+
+                        doc.setDrawColor(0);
+                        doc.setFillColor(240, 240, 240);
+                        doc.rect(140, 20, 50, 20, 'F');
+                        doc.setFontSize(12);
+                        doc.text("TOTAL A PAGAR", 165, 26, { align: 'center' });
+                        doc.setFontSize(16);
+                        doc.setTextColor(0, 0, 0);
+                        doc.text(formatCurrency(boleroTotal), 165, 35, { align: 'center' });
+                        doc.setTextColor(0);
+
+                        autoTable(doc, {
+                            startY: 45,
+                            head: [['Concepto', 'Cantidad', 'Tarifa', 'Total']],
+                            body: [
+                                ['Boleadas', boleadaCount, formatCurrency(boleroRate), formatCurrency(boleroTotal)]
+                            ],
+                            theme: 'striped',
+                            headStyles: { fillColor: [0, 0, 0], fontSize: 10, textColor: [255, 255, 255] },
+                            bodyStyles: { fontSize: 10, textColor: [0, 0, 0] }
+                        });
+
+                        let currentY = doc.lastAutoTable.finalY + 20;
+                        doc.setFontSize(8);
+                        const legalText = "Recibí de LAVAMEX la cantidad descrita a mi entera satisfacción por concepto de pago por servicios de boleado realizados. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.";
+                        const splitText = doc.splitTextToSize(legalText, 180);
+                        doc.text(splitText, 14, currentY);
+
+                        doc.line(70, currentY + 30, 140, currentY + 30);
+                        doc.text("Firma de Conformidad", 105, currentY + 35, { align: 'center' });
+                    }
+                }
 
                 doc.save(`Nomina_${startDate}_${endDate}.pdf`);
             },
@@ -2105,7 +2161,7 @@ Firma: __________________
             const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
 
             const printNomina = () => {
-                PdfService.generateNomina(payroll, startDate, endDate);
+                PdfService.generateNomina(payroll, startDate, endDate, rangeHistory);
             };
 
             const closeWeek = async () => { if (!confirm("¿Archivar semana?")) return; const batch = writeBatch(db); rangeHistory.forEach(t => batch.update(doc(db, "tickets", t.id), { status: 'ARCHIVED' })); rangeDeductions.forEach(d => batch.update(doc(db, "deductions", d.id), { status: 'ARCHIVED' })); await batch.commit(); alert("Semana Cerrada"); };
