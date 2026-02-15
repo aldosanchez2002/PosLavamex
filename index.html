@@ -429,7 +429,7 @@ Firma: __________________
         const PdfService = {
             generateNomina: (payroll, startDate, endDate, history = []) => {
                 const doc = new jsPDF();
-                let yPos = 20;
+                const formatDate = (s) => s ? s.split('-').reverse().join('-') : '';
 
                 Object.keys(payroll).forEach((name, index) => {
                     const p = payroll[name];
@@ -439,12 +439,11 @@ Firma: __________________
                     doc.setFontSize(14);
                     doc.text(`${name}`, 14, 25);
                     doc.setFontSize(10);
-                    doc.text(`Periodo: ${startDate} al ${endDate}`, 14, 30);
-                    doc.text(`Generado: ${new Date().toLocaleDateString()}`, 14, 35);
+                    doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 30);
 
                     doc.setDrawColor(0);
-                    doc.setFillColor(240, 240, 240);
-                    doc.rect(140, 20, 50, 20, 'F');
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(140, 20, 50, 20);
                     doc.setFontSize(12);
                     doc.text("TOTAL A PAGAR", 165, 26, { align: 'center' });
                     doc.setFontSize(16);
@@ -461,56 +460,55 @@ Firma: __________________
                         }
                     });
 
+                    const tableStyles = {
+                        theme: 'grid',
+                        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1, lineColor: [0, 0, 0] },
+                        bodyStyles: { textColor: [0, 0, 0], lineWidth: 0.1, lineColor: [0, 0, 0] },
+                        styles: { fontSize: 8, cellPadding: 1, lineColor: [0, 0, 0] }
+                    };
+
                     autoTable(doc, {
                         startY: 45,
                         head: head,
                         body: body,
-                        theme: 'grid',
-                        headStyles: { fillColor: [0, 0, 0], fontSize: 8, textColor: [255, 255, 255] },
-                        bodyStyles: { fontSize: 8, textColor: [0, 0, 0] }
+                        ...tableStyles
                     });
 
                     let currentY = doc.lastAutoTable.finalY + 10;
 
                     const extraKeys = Object.keys(p.extrasData).sort();
                     if (extraKeys.length > 0) {
-                        doc.text("Detalle de Pagos / Comisiones", 14, currentY);
                         const extrasBody = extraKeys.map(k => [k, p.extrasData[k].count, formatCurrency(p.extrasData[k].total)]);
                         autoTable(doc, {
-                            startY: currentY + 2,
+                            startY: currentY,
                             head: [['Concepto', 'Cant', 'Total']],
                             body: extrasBody,
-                            theme: 'striped',
-                            headStyles: { fillColor: [50, 50, 50] },
+                            ...tableStyles,
                             margin: { right: 100 }
                         });
                         currentY = doc.lastAutoTable.finalY + 10;
                     }
 
                     if (p.deductionDetails && p.deductionDetails.length > 0) {
-                        doc.text("Deducciones / Varios", 14, currentY);
                         const dedBody = p.deductionDetails.map(d => [
                             d.desc || 'Varios',
                             formatCurrency(d.amount)
                         ]);
+                        dedBody.push(['TOTAL DEDUCCIONES', formatCurrency(p.deductionTotal)]);
 
                         autoTable(doc, {
-                            startY: currentY + 2,
+                            startY: currentY,
                             head: [['Concepto', 'Monto']],
                             body: dedBody,
-                            theme: 'striped',
-                            headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0] },
-                            bodyStyles: { textColor: [200, 0, 0] },
-                            margin: { right: 100 }
+                            ...tableStyles,
+                            margin: { right: 100 },
+                            didParseCell: function (data) {
+                                if (data.row.index === dedBody.length - 1) {
+                                    data.cell.styles.fontStyle = 'bold';
+                                }
+                            }
                         });
-                        currentY = doc.lastAutoTable.finalY + 5;
-
-                        doc.setFontSize(10);
-                        doc.setTextColor(200, 0, 0);
-                        doc.text(`Total Deducciones: -${formatCurrency(p.deductionTotal)}`, 14, currentY + 5);
-                        doc.setTextColor(0);
-                        doc.setFontSize(10);
-                        currentY += 15;
+                        currentY = doc.lastAutoTable.finalY + 10;
                     } else if (p.deductionTotal > 0) {
                         doc.setTextColor(0, 0, 0);
                         doc.text(`Deducciones: -${formatCurrency(p.deductionTotal)}`, 14, currentY);
@@ -519,12 +517,13 @@ Firma: __________________
                     }
 
                     doc.setFontSize(8);
-                    const legalText = "Recibí de LAVAMEX la cantidad descrita a mi entera satisfacción por concepto de pago por servicios de lavado realizados. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.";
+                    const legalText = "Recibí la cantidad descrita a mi entera satisfacción. Recibi el importe indicado a el periodo señalado por jornada dre urna. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.";
                     const splitText = doc.splitTextToSize(legalText, 180);
                     doc.text(splitText, 14, currentY + 10);
 
                     doc.line(70, currentY + 40, 140, currentY + 40);
-                    doc.text("Firma de Conformidad", 105, currentY + 45, { align: 'center' });
+                    doc.text(name, 105, currentY + 45, { align: 'center' });
+                    doc.text("Firma de Conformidad", 105, currentY + 50, { align: 'center' });
                 });
 
                 // --- BOLERO PAGE LOGIC ---
@@ -546,14 +545,13 @@ Firma: __________________
                         const boleroTotal = boleadaCount * boleroRate;
 
                         doc.setFontSize(14);
-                        doc.text("Bolero", 14, 25);
+                        doc.text("Bolero - Raul Barron Reza", 14, 25);
                         doc.setFontSize(10);
-                        doc.text(`Periodo: ${startDate} al ${endDate}`, 14, 30);
-                        doc.text(`Generado: ${new Date().toLocaleDateString()}`, 14, 35);
+                        doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 30);
 
                         doc.setDrawColor(0);
-                        doc.setFillColor(240, 240, 240);
-                        doc.rect(140, 20, 50, 20, 'F');
+                        doc.setFillColor(255, 255, 255);
+                        doc.rect(140, 20, 50, 20);
                         doc.setFontSize(12);
                         doc.text("TOTAL A PAGAR", 165, 26, { align: 'center' });
                         doc.setFontSize(16);
@@ -567,9 +565,10 @@ Firma: __________________
                             body: [
                                 ['Boleadas', boleadaCount, formatCurrency(boleroRate), formatCurrency(boleroTotal)]
                             ],
-                            theme: 'striped',
-                            headStyles: { fillColor: [0, 0, 0], fontSize: 10, textColor: [255, 255, 255] },
-                            bodyStyles: { fontSize: 10, textColor: [0, 0, 0] }
+                            theme: 'grid',
+                            headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1, lineColor: [0, 0, 0] },
+                            bodyStyles: { textColor: [0, 0, 0], lineWidth: 0.1, lineColor: [0, 0, 0] },
+                            styles: { fontSize: 10, cellPadding: 1, lineColor: [0, 0, 0] }
                         });
 
                         let currentY = doc.lastAutoTable.finalY + 20;
@@ -579,7 +578,8 @@ Firma: __________________
                         doc.text(splitText, 14, currentY);
 
                         doc.line(70, currentY + 30, 140, currentY + 30);
-                        doc.text("Firma de Conformidad", 105, currentY + 35, { align: 'center' });
+                        doc.text("Bolero - Raul Barron Reza", 105, currentY + 35, { align: 'center' });
+                        doc.text("Firma de Conformidad", 105, currentY + 40, { align: 'center' });
                     }
                 }
 
