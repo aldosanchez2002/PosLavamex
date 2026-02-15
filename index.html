@@ -55,7 +55,7 @@
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
             Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
-            EyeOff, ClipboardList, ShieldCheck, UserCog
+            EyeOff, ClipboardList, ShieldCheck, UserCog, Zap
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -403,8 +403,8 @@ TOTAL: $${ticket.price}
 ${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
 Gracias por su preferencia
       .--------.
- ____/_____|___ \\___
-O    _         - |    _,*
+ ____/_____|___ \___
+O    _          - |    _,*
  '--(_)-------(_)--' </div>`;
             },
 
@@ -836,6 +836,48 @@ Firma: __________________
                 await updateDoc(doc(db, "tickets", id), { snackCount: newCount, price: totals.totalPrice });
             });
 
+            const updateQuickItem = (ticketId, type, change) => handleDbAction(async () => {
+                const t = tickets.find(x => x.id === ticketId);
+                if (!t) return;
+
+                if (type === 'SNACKS') {
+                    const newCount = Math.max(0, (t.snackCount || 0) + change);
+                    const totals = calculateTicketTotals(t.service?.id, t.size?.id, t.extras || [], prices, commissions, newCount, snackPrice);
+                    await updateDoc(doc(db, "tickets", ticketId), { snackCount: newCount, price: totals.totalPrice });
+                    return;
+                }
+
+                // For Pinos and Boleadas, we modify the extras array
+                let newExtras = [...(t.extras || [])];
+                const targetId = type === 'PINO' ? 'QA_PINO' : 'QA_BOLEADA';
+                const label = type === 'PINO' ? 'Pino (Caja)' : 'Boleada (Caja)';
+                // Fixed prices as requested for quick add items, commissioning 0
+                const price = type === 'PINO' ? 35 : 60;
+
+                if (change > 0) {
+                    newExtras.push({ id: targetId, label, price, commission: 0 });
+                } else {
+                    // Remove last instance of this item
+                    // reverse find index
+                    let idx = -1;
+                    for (let i = newExtras.length - 1; i >= 0; i--) {
+                        if (newExtras[i].id === targetId) {
+                            idx = i;
+                            break;
+                        }
+                    }
+
+                    if (idx !== -1) {
+                        newExtras.splice(idx, 1);
+                    } else {
+                        return; // Cannot remove if none exist
+                    }
+                }
+
+                const totals = calculateTicketTotals(t.service?.id, t.size?.id, newExtras, prices, commissions, t.snackCount || 0, snackPrice);
+                await updateDoc(doc(db, "tickets", ticketId), { extras: newExtras, price: totals.totalPrice, commission: totals.totalCommission });
+            });
+
             const saveBatchAttendance = (updates) => handleDbAction(async () => {
                 const batch = writeBatch(db);
                 const dateKey = getLocalDateStr();
@@ -931,7 +973,7 @@ Firma: __________________
             const processPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS'].includes(e.id));
+                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA'].includes(e.id));
                 if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
@@ -956,7 +998,7 @@ Firma: __________________
             const processCardPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS'].includes(e.id));
+                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA'].includes(e.id));
                 if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
@@ -977,7 +1019,7 @@ Firma: __________________
                 role, login, logout, view, setView, employees, tickets, history, deductions, expenses, cashCounts, cashDrops, cashIns,
                 prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
-                saveTicket, updateSnacks, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
+                saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
                 updateEmployee,
                 getOpeningCash,
@@ -1268,7 +1310,7 @@ Firma: __________________
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showVarios, setShowVarios] = useState(false);
@@ -1474,12 +1516,40 @@ Firma: __________________
                                     <div className="text-xl text-green-600 font-medium">${(t.price / exRate).toFixed(2)} USD</div>
                                 </div>
                                 <p className="text-center text-gray-500 mb-6 font-medium">{t.vehicleDesc} • {t.washers?.join(', ')}</p>
-                                <div className="flex justify-center items-center gap-3 mb-6 bg-orange-50 p-3 rounded-xl border border-orange-100">
-                                    <span className="font-bold text-sm text-orange-800 uppercase tracking-wide">Snacks Cliente</span>
-                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) - 1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-xl text-gray-600">-</button>
-                                    <span className="font-bold text-xl w-8 text-center">{t.snackCount || 0}</span>
-                                    <button onClick={() => updateSnacks(t.id, (t.snackCount || 0) + 1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-xl text-green-600">+</button>
+
+                                <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                    <h4 className="font-bold text-gray-500 text-xs uppercase mb-3 text-center tracking-wider">Add-ons Rápidos (Comisión $0)</h4>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {/* Row 1: Pinos */}
+                                        <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
+                                            <span className="font-bold text-gray-700 pl-2">Pinos ($35)</span>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => updateQuickItem(t.id, 'PINO', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                                                <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_PINO').length}</span>
+                                                <button onClick={() => updateQuickItem(t.id, 'PINO', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
+                                            </div>
+                                        </div>
+                                        {/* Row 2: Boleadas */}
+                                        <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
+                                            <span className="font-bold text-gray-700 pl-2">Boleada ($60)</span>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => updateQuickItem(t.id, 'BOLEADA', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                                                <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_BOLEADA').length}</span>
+                                                <button onClick={() => updateQuickItem(t.id, 'BOLEADA', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
+                                            </div>
+                                        </div>
+                                        {/* Row 3: Snacks (Existing) */}
+                                        <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
+                                            <span className="font-bold text-gray-700 pl-2">Snacks (${snackPrice})</span>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => updateQuickItem(t.id, 'SNACKS', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                                                <span className="w-4 text-center font-bold">{t.snackCount || 0}</span>
+                                                <button onClick={() => updateQuickItem(t.id, 'SNACKS', 1)} className="w-8 h-8 bg-orange-100 rounded-full font-bold text-orange-600 hover:bg-orange-200">+</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
+
                                 <div className="grid grid-cols-2 gap-4 mb-6">
                                     <div><label className="text-xs font-bold text-gray-500 mb-1 block">MXN</label><input type="number" inputMode="decimal" value={payment.mxn} onChange={e => setPayment({ ...payment, mxn: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
                                     <div><label className="text-xs font-bold text-gray-500 mb-1 block">USD (Rate: {exRate})</label><input type="number" inputMode="decimal" value={payment.usd} onChange={e => setPayment({ ...payment, usd: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
