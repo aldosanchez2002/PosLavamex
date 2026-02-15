@@ -104,7 +104,7 @@
         const DEFAULTS = {
             PINS: {
                 GREETER: ['bWVsdnkxMDYx', 'NXJpdG83'], // melvy1061, 5rito7
-                CASHIER: 'c2VyZ2lvOTE5MUA=', // sergio9191@
+                CASHIER: 'c2VyZ2lvOTE5MQ==', // sergio9191
                 ADMIN: 'Y292aW5ndG9uNTIx'    // covington521
             },
             EXCHANGE_RATE: 18.10,
@@ -1075,7 +1075,7 @@ Firma: __________________
                     <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center">
                         <h1 className="text-3xl font-bold mb-6 text-gray-800">LAVAMEX POS</h1>
                         <div className="flex flex-col gap-4">
-                            <input type="password" inputMode="numeric" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" className="w-full p-4 border rounded-lg text-center text-3xl tracking-widest mb-2" autoFocus />
+                            <input type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" className="w-full p-4 border rounded-lg text-center text-3xl tracking-widest mb-2" autoFocus />
                             <Button onClick={handleLogin} className="w-full p-4 text-lg">ENTRAR</Button>
                         </div>
                     </div>
