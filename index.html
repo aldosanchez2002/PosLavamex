@@ -191,7 +191,6 @@
 
         const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
             const payroll = {};
-            // Initialize payroll items for all employees
             const initPayrollItem = () => {
                 const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0 };
                 SERVICES.forEach(svc => {
@@ -205,10 +204,8 @@
                 payroll[emp.name] = initPayrollItem();
             });
 
-            // Calculate Gross Sales first (needed for Supervisors)
             const totalGrossSales = history.reduce((acc, t) => acc + (t.price || 0), 0);
 
-            // STANDARD COMMISSION LOGIC (Accumulate splits)
             history.forEach(item => {
                 const washersList = item.washers || (item.washer ? [item.washer] : []);
                 if (washersList.length === 0) return;
@@ -237,13 +234,11 @@
                     if (!payroll[washerName]) payroll[washerName] = initPayrollItem();
                     const p = payroll[washerName];
 
-                    // Increment counts regardless of role (for stats)
                     p.count += 1;
                     if (item.service && item.size) {
                         p.serviceGrid[item.service.id][item.size.id] = (p.serviceGrid[item.service.id][item.size.id] || 0) + 1;
                     }
 
-                    // Add Commission Share (Note: Supervisors will have this overridden later)
                     p.total += (baseShare + (extrasCommissionTotal / washerCount));
 
                     extrasShares.forEach(ex => {
@@ -254,22 +249,16 @@
                 });
             });
 
-            // SUPERVISOR OVERRIDE LOGIC
             employees.forEach(emp => {
                 if (emp.role === 'SUPERVISOR' && payroll[emp.name]) {
-                    // Reset commission accumulated from splits (if any) because they get salary + % of sales
-                    // We keep the serviceGrid counts for statistical purposes
-
                     const baseSalary = parseFloat(emp.baseSalary) || 0;
                     const commPct = parseFloat(emp.commissionPct) || 0;
                     const salesComm = totalGrossSales * (commPct / 100);
 
                     const newTotal = baseSalary + salesComm;
 
-                    // Override the payroll object for this person
                     payroll[emp.name].total = newTotal;
 
-                    // Clear extras data to avoid confusion in PDF, and insert the salary details instead
                     payroll[emp.name].extrasData = {};
                     if (baseSalary > 0) {
                         payroll[emp.name].extrasData['SUELDO BASE'] = { count: 1, total: baseSalary };
@@ -280,14 +269,12 @@
                 }
             });
 
-            // APPLY DEDUCTIONS
             deductions.forEach(d => {
                 if (!payroll[d.employee]) payroll[d.employee] = initPayrollItem();
                 payroll[d.employee].deductionTotal += d.amount;
                 payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
             });
 
-            // CALCULATE NET PAY
             Object.keys(payroll).forEach(key => { payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal; });
             return payroll;
         };
@@ -310,7 +297,7 @@
         };
 
         // ------------------------------------------------------------------
-        // SECTION 5: PRINTING SERVICE (WEB SHARE API & DESKTOP PRINT)
+        // SECTION 5: PRINTING SERVICE
         // ------------------------------------------------------------------
         const PrintService = {
             normalizeText: (str) => {
@@ -550,19 +537,18 @@ Firma: __________________
                 doc.setFontSize(12);
                 doc.text(`Fecha: ${data.dateLabel}`, 105, 28, { align: 'center' });
 
-                // Define data for the main table following strict requested order
                 const mainBody = [
                     ['Venta Total', formatCurrency(data.totals.total)],
                     ['Neto en Caja USD', `$${data.totals.cashNetUsd.toFixed(2)} USD`],
                     ['Neto en Caja MXN', formatCurrency(data.totals.cashNetMxn)],
-                    ['', ''], // Spacer
+                    ['', ''], 
                     ['Fondo Inicial Pesos', formatCurrency(data.totals.initialMxn)],
                     ['Fondo Inicial Dólares', `$${data.totals.initialUsd.toFixed(2)} USD`],
                     ['Pagado Pesos (Ventas)', formatCurrency(data.totals.cashMxn)],
                     ['Pagado Dólares (Ventas)', `$${data.totals.cashUsd.toFixed(2)} USD`],
                     ['Pagado Tarjeta', formatCurrency(data.totals.card)],
                     ['Gastos Totales', `-${formatCurrency(data.totals.expenses)}`],
-                    ['', ''], // Spacer
+                    ['', ''], 
                     ['En Caja Pesos', formatCurrency(data.totals.cashNetMxn)],
                     ['En Caja Dólares', `$${data.totals.cashNetUsd.toFixed(2)} USD`],
                     ['Ingresos Efectivo', `${formatCurrency(data.totals.cashInsMxn)} / $${data.totals.cashInsUsd.toFixed(2)} USD`],
@@ -581,19 +567,17 @@ Firma: __________________
                     },
                     styles: { fontSize: 11, cellPadding: 1.5 },
                     didParseCell: function (data) {
-                        // Bold the top summary lines and "En Caja" lines
                         if ([0, 1, 2, 11, 12].includes(data.row.index)) {
                             data.cell.styles.fontStyle = 'bold';
-                            if (data.row.index === 0) data.cell.styles.textColor = [0, 0, 0]; // Venta Total Black
-                            if ([1, 12].includes(data.row.index)) data.cell.styles.textColor = [0, 100, 0]; // USD Green
-                            if ([2, 11].includes(data.row.index)) data.cell.styles.textColor = [0, 0, 139]; // MXN Blue
+                            if (data.row.index === 0) data.cell.styles.textColor = [0, 0, 0];
+                            if ([1, 12].includes(data.row.index)) data.cell.styles.textColor = [0, 100, 0];
+                            if ([2, 11].includes(data.row.index)) data.cell.styles.textColor = [0, 0, 139];
                         }
                     }
                 });
 
                 let currentY = doc.lastAutoTable.finalY + 10;
 
-                // Desglose de Gastos
                 if (data.expenses.length > 0) {
                     doc.setFontSize(14);
                     doc.text("Desglose de Gastos", 14, currentY);
@@ -608,7 +592,6 @@ Firma: __________________
                     currentY = doc.lastAutoTable.finalY + 10;
                 }
 
-                // Desglose de Ingresos de efectivo
                 if (data.cashIns && data.cashIns.length > 0) {
                     doc.setFontSize(14);
                     doc.text("Desglose de Ingresos de efectivo", 14, currentY);
@@ -684,7 +667,6 @@ Firma: __________________
 
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
-            // Removed static initialCash state
             const [prices, setPrices] = useState({});
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
@@ -738,12 +720,10 @@ Firma: __________________
                         const data = docSnap.data();
                         if (data.exchangeRate) setExRate(data.exchangeRate);
                         if (data.snackPrice) setSnackPrice(data.snackPrice);
-                        // Removed initialCash handling
                     } else {
                         setDoc(doc(db, "settings", "general"), {
                             exchangeRate: DEFAULTS.EXCHANGE_RATE,
                             snackPrice: DEFAULTS.SNACK_PRICE,
-                            // Removed initialCash defaults
                         });
                     }
                 });
@@ -782,7 +762,6 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-                // Increased limit to 50 to find previous day counts more reliably
                 const qCC = query(collection(db, "cash_counts"), orderBy("timestamp", "desc"), limit(50));
                 const unsubCC = onSnapshot(qCC, (snap) => {
                     setCashCounts(snap.docs.map(d => ({
@@ -790,7 +769,6 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-                // LOAD CASH DROPS
                 const qCD = query(collection(db, "cash_drops"), orderBy("timestamp", "desc"));
                 const unsubCD = onSnapshot(qCD, (snap) => {
                     setCashDrops(snap.docs.map(d => ({
@@ -798,7 +776,6 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-                // LOAD CASH INS (Refills)
                 const qCI = query(collection(db, "cash_ins"), orderBy("timestamp", "desc"));
                 const unsubCI = onSnapshot(qCI, (snap) => {
                     setCashIns(snap.docs.map(d => ({
@@ -815,22 +792,14 @@ Firma: __________________
                 }, { merge: true });
             });
 
-            // Helper to get opening cash based on previous close
             const getOpeningCash = (targetDate) => {
-                // Explicit check: If there are no counts in the database yet, use 0
                 if (!cashCounts || cashCounts.length === 0) {
                     return { mxn: 0, usd: 0 };
                 }
-
-                // targetDate should be a Date object representing the START of the period we are interested in.
-                // We want the most recent cash count strictly BEFORE this time.
                 const prevCount = cashCounts.find(c => c.timestamp < targetDate);
-
                 if (prevCount) {
                     return { mxn: prevCount.declaredMxn || 0, usd: prevCount.declaredUsd || 0 };
                 }
-
-                // Fallback for initial case if counts exist but none before target date
                 return { mxn: 0, usd: 0 };
             };
 
@@ -896,7 +865,6 @@ Firma: __________________
                 });
             });
 
-            // Add Cash Drop Action
             const addCashDrop = (amountMxn, amountUsd) => handleDbAction(async () => {
                 const timestamp = new Date();
                 const uniqueSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -913,14 +881,12 @@ Firma: __________________
 
                 await addDoc(collection(db, "cash_drops"), dropData);
 
-                // Print Drop Ticket
                 const html = PrintService.getCashDropTicketHtml({ ...dropData, timestamp });
                 PrintService.print(html, role);
 
                 alert(`Retiro Registrado: ${code}`);
             });
 
-            // Add Cash In (Refill) Action
             const addCashIn = (amountMxn, amountUsd, reason) => handleDbAction(async () => {
                 await addDoc(collection(db, "cash_ins"), {
                     amountMxn: parseFloat(amountMxn) || 0,
@@ -964,19 +930,14 @@ Firma: __________________
             const processPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-
-                // Check for PINO/SNACKS exception (These tickets don't need washers)
                 const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS'].includes(e.id));
-
                 if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
-
                 const mxnVal = parseFloat(payment.mxn) || 0;
                 const usdVal = parseFloat(payment.usd) || 0;
                 const isOnlyUsd = usdVal > 0 && mxnVal === 0;
                 const total = mxnVal + (usdVal * exRate);
-
                 if (total < t.price) return alert("Falta dinero");
 
                 setIsSubmitting(true);
@@ -984,13 +945,10 @@ Firma: __________________
                     const isOnlyUsd = usdVal > 0 && mxnVal === 0;
                     const changeMxn = total - t.price;
                     const changeUsd = changeMxn / exRate;
-
                     const details = { mxn: mxnVal, usd: usdVal, rate: exRate, changeMxn, changeUsd, isOnlyUsd, method: 'CASH' };
                     await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
-
                     const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
                     PrintService.print(html, role);
-
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
                 } finally { setIsSubmitting(false); }
             });
@@ -998,22 +956,16 @@ Firma: __________________
             const processCardPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-
-                // Check for PINO/SNACKS exception (These tickets don't need washers)
                 const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS'].includes(e.id));
-
                 if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
-
                 setIsSubmitting(true);
                 try {
                     const details = { mxn: t.price, usd: 0, rate: exRate, changeMxn: 0, changeUsd: 0, isOnlyUsd: false, method: 'CARD' };
                     await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
-
                     const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
                     PrintService.print(html, role);
-
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
                 } finally { setIsSubmitting(false); }
             });
@@ -1036,7 +988,7 @@ Firma: __________________
         };
 
         // ------------------------------------------------------------------
-        // SECTION 8: COMPONENTS (Refactored)
+        // SECTION 8: COMPONENTS
         // ------------------------------------------------------------------
 
         const Button = ({ onClick, children, variant = 'primary', className = '', ...props }) => {
@@ -1120,12 +1072,8 @@ Firma: __________________
             const addExtra = (item) => setExtras(prev => [...prev, item]);
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
             const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: 0 }]); setVDesc(''); setVPrice(''); };
-
-            // MODIFIED: Removed washers.length > 0 check to allow ticket creation without washers
             const canSubmit = ((size && service) || extras.length > 0);
-
             const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
-
             const handleReprint = (ticket) => {
                 const html = PrintService.getJobTicketHtml({ ...ticket, timestamp: ticket.timestamp || new Date() }, ticket.id.slice(-4).toUpperCase());
                 PrintService.print(html, role);
@@ -1306,7 +1254,6 @@ Firma: __________________
                                         {role !== 'CASHIER' && (
                                             <div className="flex gap-3 pt-2">
                                                 <Button onClick={() => startEdit(t)} variant="warning" className="flex-1 py-2 text-sm"><Pencil size={16} /> Editar</Button>
-                                                {/* ADDED: Print button for Entrada user */}
                                                 <Button onClick={() => handleReprint(t)} variant="secondary" className="flex-1 py-2 text-sm"><Printer size={16} /> Imprimir</Button>
                                                 <Button onClick={() => deleteTicket(t.id)} variant="danger" className="flex-1 py-2 text-sm"><Trash2 size={16} /> Borrar</Button>
                                             </div>
@@ -1330,7 +1277,6 @@ Firma: __________________
             const [showCorte, setShowCorte] = useState(false);
             const [corteTab, setCorteTab] = useState('ARQUEO');
 
-            // Local state for attendance batching
             const [localAttendance, setLocalAttendance] = useState({});
 
             const [snackEmp, setSnackEmp] = useState('');
@@ -1340,15 +1286,12 @@ Firma: __________________
             const [expDesc, setExpDesc] = useState('');
             const [expAmt, setExpAmt] = useState('');
 
-            // Corte State
             const [declaredMxn, setDeclaredMxn] = useState('');
             const [declaredUsd, setDeclaredUsd] = useState('');
 
-            // Drop State
             const [dropMxn, setDropMxn] = useState('');
             const [dropUsd, setDropUsd] = useState('');
 
-            // Initialize local attendance state when modal opens
             useEffect(() => {
                 if (showAttendance) {
                     const init = {};
@@ -1393,7 +1336,7 @@ Firma: __________________
             };
 
             const handleCorte = async () => {
-                const { expectedMxn, expectedUsd } = calculateCurrentExpectedCash();
+                const { expectedMxn, expectedUsd, totalCard } = calculateCurrentExpectedCash();
 
                 const decMxnVal = parseFloat(declaredMxn) || 0;
                 const decUsdVal = parseFloat(declaredUsd) || 0;
@@ -1403,7 +1346,6 @@ Firma: __________________
 
                 const isMatch = Math.abs(diffMxn) < 1 && Math.abs(diffUsd) < 0.1;
 
-                // 2. Save Log
                 await addCashCount({
                     declaredMxn: decMxnVal,
                     declaredUsd: decUsdVal,
@@ -1411,11 +1353,12 @@ Firma: __________________
                     expectedUsd,
                     diffMxn,
                     diffUsd,
+                    card: totalCard, 
+                    exchangeRate: exRate,
                     user: role,
                     timestamp: new Date()
                 });
 
-                // 3. Notify User - Logic Changed to hide details from non-admins
                 if (role === 'ADMIN') {
                     if (isMatch) {
                         alert("✅ CORTE CORRECTO. El dinero en caja coincide.");
@@ -1423,7 +1366,6 @@ Firma: __________________
                         alert(`⚠️ DESCUADRE DETECTADO.\n\nDiferencia MXN: ${formatCurrency(diffMxn)}\nDiferencia USD: $${diffUsd.toFixed(2)}`);
                     }
                 } else {
-                    // For Caja/Greeter just confirm it saved
                     alert("✅ Corte registrado.");
                 }
 
@@ -1434,7 +1376,6 @@ Firma: __________________
 
             const calculateCurrentExpectedCash = () => {
                 const todayStr = getLocalDateStr();
-                // Determine start of "Today" for finding previous opening balance
                 const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
 
                 const allToday = history.concat(tickets).filter(t => t.status === 'PAID' && getLocalDateStr(t.paidAt || t.timestamp) === todayStr);
@@ -1442,45 +1383,41 @@ Firma: __________________
                 const expensesToday = expenses.filter(e => e.status === 'APPROVED' && getLocalDateStr(e.timestamp) === todayStr)
                     .reduce((a, b) => a + (b.amount || 0), 0);
 
-                // Calculate Drops Today
                 const dropsTodayMxn = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountMxn || 0), 0);
                 const dropsTodayUsd = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountUsd || 0), 0);
 
-                // Calculate Cash Ins (Refills) Today
                 const cashInsTodayMxn = cashIns.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountMxn || 0), 0);
                 const cashInsTodayUsd = cashIns.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountUsd || 0), 0);
 
-                // Get dynamic opening cash
                 const openingCash = getOpeningCash(startOfToday);
                 let expectedMxn = openingCash.mxn;
                 let expectedUsd = openingCash.usd;
+                let totalCard = 0;
 
                 allToday.forEach(t => {
-                    const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false };
+                    const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false, method: 'CASH' };
 
-                    expectedMxn += (pay.mxn || 0);
-                    expectedUsd += (pay.usd || 0);
-
-                    // Subtract change
-                    if (pay.isOnlyUsd) {
-                        expectedUsd -= (pay.changeUsd || 0);
+                    if (pay.method === 'CARD') {
+                        totalCard += t.price;
                     } else {
-                        expectedMxn -= (pay.changeMxn || 0);
+                        expectedMxn += (pay.mxn || 0);
+                        expectedUsd += (pay.usd || 0);
+
+                        if (pay.isOnlyUsd) {
+                            expectedUsd -= (pay.changeUsd || 0);
+                        } else {
+                            expectedMxn -= (pay.changeMxn || 0);
+                        }
                     }
                 });
 
-                // Expenses come out of MXN typically
                 expectedMxn -= expensesToday;
-
-                // Subtract DROPS from Expected Cash 
                 expectedMxn -= dropsTodayMxn;
                 expectedUsd -= dropsTodayUsd;
-
-                // Add CASH INS to Expected Cash
                 expectedMxn += cashInsTodayMxn;
                 expectedUsd += cashInsTodayUsd;
 
-                return { expectedMxn, expectedUsd };
+                return { expectedMxn, expectedUsd, totalCard };
             };
 
             const handleCashDrop = async () => {
@@ -1491,7 +1428,7 @@ Firma: __________________
                 await addCashDrop(dropMxn, dropUsd);
                 setDropMxn('');
                 setDropUsd('');
-                setShowCorte(false); // Close modal on success
+                setShowCorte(false);
             };
 
             const mxnVal = parseFloat(payment.mxn) || 0;
@@ -1529,7 +1466,6 @@ Firma: __________________
                             ))}
                         </div>
                     </div>
-                    {/* Fixed detailed view container: removed justify-center, added my-auto to child, added pb-20 */}
                     <div className="flex-1 bg-white rounded-xl shadow border p-4 md:p-6 flex flex-col items-center h-2/3 md:h-full overflow-y-auto pb-20">
                         {t ? (
                             <div className="w-full max-w-md my-auto">
@@ -1587,7 +1523,6 @@ Firma: __________________
                         }>
                             <div className="max-h-80 overflow-y-auto space-y-2">
                                 {employees.map(e => {
-                                    // Use local state if available, fallback to global (prevent crash during init)
                                     const isActive = localAttendance[e.id] ? localAttendance[e.id].active : e.active;
                                     return (
                                         <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
@@ -1684,16 +1619,12 @@ Firma: __________________
 
             const allPaid = history.concat(tickets.filter(t => t.status === 'PAID'));
 
-            // Filter tickets for today
             const todayTickets = allPaid.filter(t => {
                 const tDate = t.paidAt ? getLocalDateStr(t.paidAt) : getLocalDateStr(t.timestamp);
                 return tDate === todayStr;
             });
 
-            // Calculate total
             const totalSum = todayTickets.reduce((acc, t) => acc + (t.price || 0), 0);
-
-            // Filter deductions for today
             const todayDeductions = deductions.filter(d => d.amount > 0 && getLocalDateStr(d.timestamp) === todayStr);
 
             return (
@@ -1738,13 +1669,10 @@ Firma: __________________
                 const impliedMxnSales = revenueCashTickets - (collectedUsd * exRate);
                 const approvedExpensesTotal = corteExpenses.filter(e => e.status === 'APPROVED').reduce((a, b) => a + (b.amount || 0), 0);
 
-                // Determine start date for opening cash
                 let startDateObj;
                 if (corteMode === 'DAY') {
-                    // Start of the specific day
                     startDateObj = new Date(corteDate + 'T00:00:00');
                 } else {
-                    // Start of the month
                     startDateObj = new Date(corteMonth + '-01T00:00:00');
                 }
                 const openingCash = getOpeningCash(startDateObj);
@@ -1766,7 +1694,7 @@ Firma: __________________
                     expenses: approvedExpensesTotal,
                     initialMxn: initMxn,
                     initialUsd: initUsd,
-                    cashNetMxn: (impliedMxnSales + initMxn + cashInsMxn) - approvedExpensesTotal - dropsMxn, // Subtract Drops + Add CashIns
+                    cashNetMxn: (impliedMxnSales + initMxn + cashInsMxn) - approvedExpensesTotal - dropsMxn, 
                     cashNetUsd: collectedUsd + initUsd + cashInsUsd - dropsUsd,
                     dropsMxn,
                     dropsUsd,
@@ -1819,10 +1747,8 @@ Firma: __________________
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div onClick={() => setView('HISTORY')} className="cursor-pointer hover:scale-105 transition-transform bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div><div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div><div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div></div>
 
-                        {/* UPDATE: EN CAJA Card broken down by MXN and USD */}
                         <div onClick={printCorte} className="cursor-pointer hover:scale-105 transition-transform bg-white p-4 rounded-xl shadow border border-gray-100 flex flex-col justify-center">
                             <div className="flex items-center gap-2 mb-2 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja (Neto) </div>
-
                             <div className="mb-2">
                                 <div className="flex justify-between items-end">
                                     <span className="text-xs text-gray-400 font-bold">MXN</span>
@@ -1830,7 +1756,6 @@ Firma: __________________
                                 </div>
                                 {corteTotals.cashInsMxn > 0 && <div className="text-xs text-green-600 text-right font-bold">Incl. +{formatCurrency(corteTotals.cashInsMxn)} Ingresos</div>}
                             </div>
-
                             <div className="pt-2 border-t border-dashed">
                                 <div className="flex justify-between items-end">
                                     <span className="text-xs text-gray-400 font-bold">USD</span>
@@ -1844,7 +1769,6 @@ Firma: __________________
                         <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><CreditCard size={18} /> Tarjeta</div><div className="text-3xl font-bold text-blue-600">{formatCurrency(corteTotals.card)}</div></div>
                     </div>
 
-                    {/* NEW SECTION: DROP HISTORY */}
                     <div className="bg-white rounded-xl shadow border overflow-hidden">
                         <div className="p-4 bg-orange-50 border-b border-orange-100 font-bold text-orange-800 flex justify-between items-center">
                             <span>Retiros de Efectivo (Drops)</span>
@@ -1893,24 +1817,43 @@ Firma: __________________
                                 <thead className="bg-gray-50 text-gray-500">
                                     <tr>
                                         <th className="p-3">Fecha/Hora</th>
-                                        <th className="p-3">Usuario</th>
-                                        <th className="p-3 text-right">Declarado (MXN)</th>
-                                        <th className="p-3 text-right">Esperado (MXN)</th>
-                                        <th className="p-3 text-right">Dif (MXN)</th>
-                                        <th className="p-3 text-right">Dif (USD)</th>
+                                        <th className="p-3 text-right">Declarado MXN</th>
+                                        <th className="p-3 text-right">Esperado MXN</th>
+                                        <th className="p-3 text-right">Dif MXN</th>
+                                        <th className="p-3 text-right">Declarado USD</th>
+                                        <th className="p-3 text-right">Esperado USD</th>
+                                        <th className="p-3 text-right">Dif USD</th>
+                                        <th className="p-3 text-right">Recibido Tarjeta</th>
+                                        <th className="p-3 text-right">Dif Total</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {cashCounts.map(c => {
+                                        const cardAmount = c.card || 0;
+                                        // Use historical exchange rate if available, otherwise current
+                                        const rate = c.exchangeRate || exRate;
+                                        // Dif Total formula: Dif MXN + (Dif USD * Rate) + Card
+                                        // Note: Assuming "Dif Total" is Net (Revenue + Difference) based on user prompt logic
+                                        const totalDiffVal = c.diffMxn + (c.diffUsd * rate) + cardAmount;
+                                        
                                         const isBad = Math.abs(c.diffMxn) > 1 || Math.abs(c.diffUsd) > 0.1;
+
                                         return (
                                             <tr key={c.id} className={`border-t ${isBad ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                                                <td className="p-3">{c.timestamp.toLocaleString()}</td>
-                                                <td className="p-3 font-bold">{c.user}</td>
+                                                <td className="p-3">
+                                                    <div>{c.timestamp.toLocaleString()}</div>
+                                                    <div className="text-xs text-gray-400 font-bold">{c.user}</div>
+                                                </td>
                                                 <td className="p-3 text-right">{formatCurrency(c.declaredMxn)}</td>
                                                 <td className="p-3 text-right text-gray-500">{formatCurrency(c.expectedMxn)}</td>
                                                 <td className={`p-3 text-right font-bold ${c.diffMxn < 0 ? 'text-red-600' : (c.diffMxn > 0 ? 'text-blue-600' : 'text-gray-400')}`}>{c.diffMxn > 0 ? '+' : ''}{formatCurrency(c.diffMxn)}</td>
-                                                <td className={`p-3 text-right font-bold ${c.diffUsd < 0 ? 'text-red-600' : (c.diffUsd > 0 ? 'text-blue-600' : 'text-gray-400')}`}>{c.diffUsd > 0 ? '+' : ''}${c.diffUsd.toFixed(2)}</td>
+                                                
+                                                <td className="p-3 text-right">${(c.declaredUsd || 0).toFixed(2)}</td>
+                                                <td className="p-3 text-right text-gray-500">${(c.expectedUsd || 0).toFixed(2)}</td>
+                                                <td className={`p-3 text-right font-bold ${(c.diffUsd || 0) < 0 ? 'text-red-600' : ((c.diffUsd || 0) > 0 ? 'text-blue-600' : 'text-gray-400')}`}>{(c.diffUsd || 0) > 0 ? '+' : ''}${(c.diffUsd || 0).toFixed(2)}</td>
+                                                
+                                                <td className="p-3 text-right font-bold text-blue-800">{formatCurrency(cardAmount)}</td>
+                                                <td className={`p-3 text-right font-black ${totalDiffVal < 0 ? 'text-red-700' : 'text-green-700'}`}>{formatCurrency(totalDiffVal)}</td>
                                             </tr>
                                         );
                                     })}
@@ -2271,26 +2214,6 @@ Firma: __________________
             );
         };
 
-        const LockedView = () => {
-            const { logout } = useContext(AppContext);
-            return (
-                <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 text-white p-4">
-                    <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl text-center max-w-md w-full border border-gray-700">
-                        <div className="bg-red-900/30 p-4 rounded-full w-fit mx-auto mb-6">
-                            <Lock size={48} className="text-red-500" />
-                        </div>
-                        <h1 className="text-2xl font-bold mb-2">El sistema está bloqueado</h1>
-                        <Button onClick={logout} variant="danger" className="w-full py-3">
-                            <LogOut className="mr-2" size={18} /> Cerrar Sesión
-                        </Button>
-                    </div>
-                </div>
-            );
-        };
-
-        // ------------------------------------------------------------------
-        // SECTION 10: MAIN LAYOUT
-        // ------------------------------------------------------------------
         const LavamexPOS = () => {
             const { role, view, setView, logout } = useContext(AppContext);
             const [isLocked, setIsLocked] = useState(false);
@@ -2311,7 +2234,19 @@ Firma: __________________
 
             if (!role) return <LoginScreen />;
 
-            if (isLocked) return <LockedView />;
+            if (isLocked) return (
+                <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 text-white p-4">
+                    <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl text-center max-w-md w-full border border-gray-700">
+                        <div className="bg-red-900/30 p-4 rounded-full w-fit mx-auto mb-6">
+                            <Lock size={48} className="text-red-500" />
+                        </div>
+                        <h1 className="text-2xl font-bold mb-2">El sistema está bloqueado</h1>
+                        <Button onClick={logout} variant="danger" className="w-full py-3">
+                            <LogOut className="mr-2" size={18} /> Cerrar Sesión
+                        </Button>
+                    </div>
+                </div>
+            );
 
             return (
                 <div className="h-[100dvh] flex flex-col bg-gray-100 font-sans">
