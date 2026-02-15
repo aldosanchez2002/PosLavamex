@@ -661,6 +661,7 @@ Firma: __________________
             const [history, setHistory] = useState([]);
             const [deductions, setDeductions] = useState([]);
             const [expenses, setExpenses] = useState([]);
+            const [businessExpenses, setBusinessExpenses] = useState([]); // New State
             const [cashCounts, setCashCounts] = useState([]);
             const [cashDrops, setCashDrops] = useState([]);
             const [cashIns, setCashIns] = useState([]);
@@ -763,6 +764,15 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
+                // New Listener for Business Expenses
+                const qBE = query(collection(db, "business_expenses"), orderBy("timestamp", "desc"));
+                const unsubBE = onSnapshot(qBE, (snap) => {
+                    setBusinessExpenses(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date()
+                    })));
+                });
+
                 const qCC = query(collection(db, "cash_counts"), orderBy("timestamp", "desc"), limit(50));
                 const unsubCC = onSnapshot(qCC, (snap) => {
                     setCashCounts(snap.docs.map(d => ({
@@ -784,7 +794,7 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-                return () => { unsubT(); unsubD(); unsubE(); unsubCC(); unsubCD(); unsubCI(); };
+                return () => { unsubT(); unsubD(); unsubE(); unsubBE(); unsubCC(); unsubCD(); unsubCI(); };
             }, []);
 
             const updateGlobalSettings = (newRate, newSnackPrice) => handleDbAction(async () => {
@@ -851,7 +861,7 @@ Firma: __________________
                 let newExtras = [...(t.extras || [])];
                 const targetId = type === 'PINO' ? 'QA_PINO' : 'QA_BOLEADA';
                 const label = type === 'PINO' ? 'Pino (Caja)' : 'Boleada (Caja)';
-                
+
                 // Pull price from DB extrasList
                 const dbExtra = extrasList.find(e => e.id === (type === 'PINO' ? 'PINO' : 'BOLEADA'));
                 const price = dbExtra ? dbExtra.price : (type === 'PINO' ? 35 : 60);
@@ -868,7 +878,7 @@ Firma: __________________
                             break;
                         }
                     }
-                    
+
                     if (idx !== -1) {
                         newExtras.splice(idx, 1);
                     } else {
@@ -966,6 +976,17 @@ Firma: __________________
                 alert("Gasto registrado, pendiente de aprobación.");
             });
 
+            // New function for Admin Business Expenses
+            const addBusinessExpense = (desc, amount) => handleDbAction(async () => {
+                await addDoc(collection(db, "business_expenses"), {
+                    description: desc,
+                    amount: parseFloat(amount),
+                    timestamp: serverTimestamp(),
+                    createdBy: role
+                });
+                alert("Gasto administrativo registrado (externo).");
+            });
+
             const updateExpense = (id, data) => handleDbAction(() => updateDoc(doc(db, "expenses", id), data));
 
             const resolveExpense = (id, status) => handleDbAction(() => updateDoc(doc(db, "expenses", id), {
@@ -1018,11 +1039,11 @@ Firma: __________________
             const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
 
             const value = {
-                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, cashCounts, cashDrops, cashIns,
+                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, businessExpenses, cashCounts, cashDrops, cashIns,
                 prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
-                addExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
+                addExpense, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
                 updateEmployee,
                 getOpeningCash,
                 db, isSubmitting
@@ -1522,36 +1543,36 @@ Firma: __________________
                                     <div className="text-xl text-green-600 font-medium">${(t.price / exRate).toFixed(2)} USD</div>
                                 </div>
                                 <p className="text-center text-gray-500 mb-6 font-medium">{t.vehicleDesc} • {t.washers?.join(', ')}</p>
-                                
+
                                 <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                     <h4 className="font-bold text-gray-500 text-xs uppercase mb-3 text-center tracking-wider">Add-ons Rápidos (Comisión $0)</h4>
                                     <div className="grid grid-cols-1 gap-3">
                                         {/* Row 1: Pinos */}
                                         <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
-                                             <span className="font-bold text-gray-700 pl-2">Pinos (${pinoPrice})</span>
-                                             <div className="flex items-center gap-3">
-                                                 <button onClick={() => updateQuickItem(t.id, 'PINO', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
-                                                 <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_PINO').length}</span>
-                                                 <button onClick={() => updateQuickItem(t.id, 'PINO', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
-                                             </div>
+                                            <span className="font-bold text-gray-700 pl-2">Pinos (${pinoPrice})</span>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => updateQuickItem(t.id, 'PINO', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                                                <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_PINO').length}</span>
+                                                <button onClick={() => updateQuickItem(t.id, 'PINO', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
+                                            </div>
                                         </div>
                                         {/* Row 2: Boleadas */}
                                         <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
-                                             <span className="font-bold text-gray-700 pl-2">Boleada (${boleadaPrice})</span>
-                                             <div className="flex items-center gap-3">
-                                                 <button onClick={() => updateQuickItem(t.id, 'BOLEADA', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
-                                                 <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_BOLEADA').length}</span>
-                                                 <button onClick={() => updateQuickItem(t.id, 'BOLEADA', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
-                                             </div>
+                                            <span className="font-bold text-gray-700 pl-2">Boleada (${boleadaPrice})</span>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => updateQuickItem(t.id, 'BOLEADA', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                                                <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_BOLEADA').length}</span>
+                                                <button onClick={() => updateQuickItem(t.id, 'BOLEADA', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
+                                            </div>
                                         </div>
                                         {/* Row 3: Snacks (Existing) */}
                                         <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
-                                             <span className="font-bold text-gray-700 pl-2">Snacks (${snackPrice})</span>
-                                             <div className="flex items-center gap-3">
-                                                 <button onClick={() => updateQuickItem(t.id, 'SNACKS', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
-                                                 <span className="w-4 text-center font-bold">{t.snackCount || 0}</span>
-                                                 <button onClick={() => updateQuickItem(t.id, 'SNACKS', 1)} className="w-8 h-8 bg-orange-100 rounded-full font-bold text-orange-600 hover:bg-orange-200">+</button>
-                                             </div>
+                                            <span className="font-bold text-gray-700 pl-2">Snacks (${snackPrice})</span>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => updateQuickItem(t.id, 'SNACKS', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                                                <span className="w-4 text-center font-bold">{t.snackCount || 0}</span>
+                                                <button onClick={() => updateQuickItem(t.id, 'SNACKS', 1)} className="w-8 h-8 bg-orange-100 rounded-full font-bold text-orange-600 hover:bg-orange-200">+</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1758,35 +1779,35 @@ Firma: __________________
             const [editExpAmt, setEditExpAmt] = useState('');
 
             const allPaidForCorte = history.concat(tickets.filter(t => t.status === 'PAID'));
-            
+
             // Filter Tickets by Date
-            const corteTickets = allPaidForCorte.filter(t => { 
-                const d = new Date(t.paidAt ? t.paidAt : t.timestamp); 
-                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; 
+            const corteTickets = allPaidForCorte.filter(t => {
+                const d = new Date(t.paidAt ? t.paidAt : t.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth;
             });
 
             // Filter Expenses by Date
-            const corteExpenses = expenses.filter(e => { 
-                const d = new Date(e.timestamp); 
-                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; 
+            const corteExpenses = expenses.filter(e => {
+                const d = new Date(e.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth;
             });
 
             // Filter Drops by Date
-            const corteDrops = cashDrops.filter(d => { 
-                const dte = new Date(d.timestamp); 
-                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; 
+            const corteDrops = cashDrops.filter(d => {
+                const dte = new Date(d.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth;
             });
 
             // Filter Cash Ins by Date
-            const corteCashIns = cashIns.filter(d => { 
-                const dte = new Date(d.timestamp); 
-                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; 
+            const corteCashIns = cashIns.filter(d => {
+                const dte = new Date(d.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth;
             });
 
             // Filter Deductions by Date (For internal snacks)
-            const corteDeductions = deductions.filter(d => { 
-                const dte = new Date(d.timestamp); 
-                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; 
+            const corteDeductions = deductions.filter(d => {
+                const dte = new Date(d.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth;
             });
 
             const calculateItemStats = () => {
@@ -2359,6 +2380,60 @@ Firma: __________________
             );
         };
 
+        const AdminBusinessExpenses = () => {
+            const { businessExpenses, addBusinessExpense } = useContext(AppContext);
+            const [desc, setDesc] = useState('');
+            const [amt, setAmt] = useState('');
+
+            const handleSubmit = () => {
+                if (!desc || !amt) return;
+                addBusinessExpense(desc, amt);
+                setDesc('');
+                setAmt('');
+            }
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-purple-50 border-purple-200 border p-4 rounded-xl shadow-sm">
+                        <h3 className="font-bold text-purple-800 mb-2 flex items-center gap-2"><Briefcase size={20} /> Registrar Gasto Administrativo</h3>
+                        <p className="text-sm text-purple-600 mb-4 font-medium">Estos gastos son pagados externamente (banco, tarjeta del dueño, efectivo externo) y NO afectan el corte de caja diario.</p>
+                        <div className="flex gap-2 flex-col md:flex-row">
+                            <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción del gasto" className="border p-3 rounded-lg flex-1 shadow-sm" />
+                            <input type="number" value={amt} onChange={e => setAmt(e.target.value)} placeholder="Monto ($)" className="border p-3 rounded-lg w-full md:w-40 shadow-sm" />
+                            <Button onClick={handleSubmit} variant="primary" className="bg-purple-600 hover:bg-purple-700 shadow-md">Guardar</Button>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+                        <h4 className="font-bold text-gray-700 mb-4">Historial de Gastos Administrativos</h4>
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-500 border-b">
+                                <tr>
+                                    <th className="p-3">Fecha</th>
+                                    <th className="p-3">Descripción</th>
+                                    <th className="p-3 text-right">Monto</th>
+                                    <th className="p-3 text-right">Registrado Por</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {businessExpenses.length === 0 ? <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay gastos registrados.</td></tr> : businessExpenses.map(e => (
+                                    <tr key={e.id} className="border-b hover:bg-gray-50 last:border-b-0">
+                                        <td className="p-3 text-gray-600">
+                                            <div>{e.timestamp.toLocaleDateString()}</div>
+                                            <div className="text-xs">{e.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                        </td>
+                                        <td className="p-3 font-medium text-gray-800">{e.description}</td>
+                                        <td className="p-3 text-right font-bold text-purple-700">{formatCurrency(e.amount)}</td>
+                                        <td className="p-3 text-right text-xs text-gray-400 uppercase">{e.createdBy}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
         const AdminPanel = () => {
             const { addCashIn } = useContext(AppContext);
             const [tab, setTab] = useState('CORTE');
@@ -2377,7 +2452,7 @@ Firma: __________________
             return (
                 <div className="p-4 md:p-6 h-full overflow-y-auto">
                     <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1 items-center">
-                        {['CORTE', 'NOMINA', 'ASISTENCIA', 'CONFIG', 'PRECIOS'].map(t => <button key={t} onClick={() => setTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === t ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>{t}</button>)}
+                        {['CORTE', 'NOMINA', 'ASISTENCIA', 'GASTOS_ADM', 'CONFIG', 'PRECIOS'].map(t => <button key={t} onClick={() => setTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === t ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>{t === 'GASTOS_ADM' ? 'GASTOS NEGOCIO' : t}</button>)}
                         <button onClick={() => setShowAddCash(true)} className="px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors bg-green-600 text-white shadow-md flex items-center gap-2 hover:bg-green-700">
                             <PlusCircle size={18} /> AGREGAR EFECTIVO
                         </button>
@@ -2385,6 +2460,7 @@ Firma: __________________
                     {tab === 'CORTE' && <AdminCorte />}
                     {tab === 'NOMINA' && <AdminNomina />}
                     {tab === 'ASISTENCIA' && <AdminAsistencia />}
+                    {tab === 'GASTOS_ADM' && <AdminBusinessExpenses />}
                     {tab === 'CONFIG' && <AdminConfig />}
                     {tab === 'PRECIOS' && <AdminPrecios />}
 
