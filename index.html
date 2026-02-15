@@ -851,8 +851,10 @@ Firma: __________________
                 let newExtras = [...(t.extras || [])];
                 const targetId = type === 'PINO' ? 'QA_PINO' : 'QA_BOLEADA';
                 const label = type === 'PINO' ? 'Pino (Caja)' : 'Boleada (Caja)';
-                // Fixed prices as requested for quick add items, commissioning 0
-                const price = type === 'PINO' ? 35 : 60; 
+                
+                // Pull price from DB extrasList
+                const dbExtra = extrasList.find(e => e.id === (type === 'PINO' ? 'PINO' : 'BOLEADA'));
+                const price = dbExtra ? dbExtra.price : (type === 'PINO' ? 35 : 60);
 
                 if (change > 0) {
                     newExtras.push({ id: targetId, label, price, commission: 0 });
@@ -1310,7 +1312,7 @@ Firma: __________________
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showVarios, setShowVarios] = useState(false);
@@ -1480,6 +1482,10 @@ Firma: __________________
             const changeUsd = changeMxn / exRate;
             const isOnlyUsd = usdVal > 0 && mxnVal === 0;
 
+            // Get dynamic prices for display
+            const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
+            const boleadaPrice = extrasList.find(e => e.id === 'BOLEADA')?.price || 60;
+
             return (
                 <div className="flex flex-col md:flex-row h-full gap-4 p-4 overflow-hidden">
                     <div className="w-full md:w-1/3 bg-white rounded-xl shadow border overflow-hidden flex flex-col h-1/3 md:h-full shrink-0">
@@ -1522,7 +1528,7 @@ Firma: __________________
                                     <div className="grid grid-cols-1 gap-3">
                                         {/* Row 1: Pinos */}
                                         <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
-                                             <span className="font-bold text-gray-700 pl-2">Pinos ($35)</span>
+                                             <span className="font-bold text-gray-700 pl-2">Pinos (${pinoPrice})</span>
                                              <div className="flex items-center gap-3">
                                                  <button onClick={() => updateQuickItem(t.id, 'PINO', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
                                                  <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_PINO').length}</span>
@@ -1531,7 +1537,7 @@ Firma: __________________
                                         </div>
                                         {/* Row 2: Boleadas */}
                                         <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
-                                             <span className="font-bold text-gray-700 pl-2">Boleada ($60)</span>
+                                             <span className="font-bold text-gray-700 pl-2">Boleada (${boleadaPrice})</span>
                                              <div className="flex items-center gap-3">
                                                  <button onClick={() => updateQuickItem(t.id, 'BOLEADA', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
                                                  <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_BOLEADA').length}</span>
@@ -1752,11 +1758,36 @@ Firma: __________________
             const [editExpAmt, setEditExpAmt] = useState('');
 
             const allPaidForCorte = history.concat(tickets.filter(t => t.status === 'PAID'));
-            const corteTickets = allPaidForCorte.filter(t => { const d = new Date(t.paidAt ? t.paidAt : t.timestamp); return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; });
-            const corteExpenses = expenses.filter(e => { const d = new Date(e.timestamp); return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; });
-            const corteDrops = cashDrops.filter(d => { const dte = new Date(d.timestamp); return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; });
-            const corteCashIns = cashIns.filter(d => { const dte = new Date(d.timestamp); return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; });
-            const corteDeductions = deductions.filter(d => { const dte = new Date(d.timestamp); return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; });
+            
+            // Filter Tickets by Date
+            const corteTickets = allPaidForCorte.filter(t => { 
+                const d = new Date(t.paidAt ? t.paidAt : t.timestamp); 
+                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; 
+            });
+
+            // Filter Expenses by Date
+            const corteExpenses = expenses.filter(e => { 
+                const d = new Date(e.timestamp); 
+                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth; 
+            });
+
+            // Filter Drops by Date
+            const corteDrops = cashDrops.filter(d => { 
+                const dte = new Date(d.timestamp); 
+                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; 
+            });
+
+            // Filter Cash Ins by Date
+            const corteCashIns = cashIns.filter(d => { 
+                const dte = new Date(d.timestamp); 
+                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; 
+            });
+
+            // Filter Deductions by Date (For internal snacks)
+            const corteDeductions = deductions.filter(d => { 
+                const dte = new Date(d.timestamp); 
+                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth; 
+            });
 
             const calculateItemStats = () => {
                 const stats = {
@@ -1768,7 +1799,7 @@ Firma: __________________
                 // 1. From Tickets (Customers)
                 corteTickets.forEach(t => {
                     // Pinos & Boleadas
-                    if (t.extras) {
+                    if (t.extras && Array.isArray(t.extras)) {
                         t.extras.forEach(e => {
                             if (['PINO', 'QA_PINO'].includes(e.id)) {
                                 stats.pinos.count += 1;
@@ -1784,7 +1815,8 @@ Firma: __________________
                     // Snacks (Customer)
                     if (t.snackCount > 0) {
                         stats.snacks.customerCount += t.snackCount;
-                        // Derived revenue
+                        // Derived revenue: Total Price - Base Price - Sum of Extras Prices
+                        // This ensures we get the actual money attributed to snacks for this ticket
                         const extrasTotal = (t.extras || []).reduce((a, b) => a + (b.price || 0), 0);
                         const serviceTotal = t.basePrice || 0;
                         const impliedSnackRevenue = (t.price || 0) - serviceTotal - extrasTotal;
@@ -1794,7 +1826,8 @@ Firma: __________________
 
                 // 2. From Deductions (Employees)
                 corteDeductions.forEach(d => {
-                    if (d.description === 'Snack') {
+                    const desc = (d.description || '').toLowerCase().trim();
+                    if (desc === 'snack' || desc === 'snacks') {
                         stats.snacks.internalCount += 1;
                         stats.snacks.money += (d.amount || 0);
                     }
@@ -1925,14 +1958,17 @@ Firma: __________________
                                     <span>Empleado:</span>
                                     <span className="font-bold text-gray-800">{itemStats.snacks.internalCount}</span>
                                 </div>
+                                <div className="text-xl font-bold text-green-700">{formatCurrency(itemStats.snacks.money)}</div>
                             </div>
                             <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex flex-col items-center justify-center">
                                 <div className="text-green-800 font-bold text-xs uppercase mb-1">Pinos</div>
                                 <div className="text-3xl font-bold text-gray-800">{itemStats.pinos.count}</div>
+                                <div className="text-sm text-green-600 font-bold">{formatCurrency(itemStats.pinos.money)}</div>
                             </div>
                             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex flex-col items-center justify-center">
                                 <div className="text-blue-800 font-bold text-xs uppercase mb-1">Boleadas</div>
                                 <div className="text-3xl font-bold text-gray-800">{itemStats.boleadas.count}</div>
+                                <div className="text-sm text-green-600 font-bold">{formatCurrency(itemStats.boleadas.money)}</div>
                             </div>
                         </div>
                     </div>
