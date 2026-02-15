@@ -103,9 +103,9 @@
 
         const DEFAULTS = {
             PINS: {
-                GREETER: 'MDAwMA==', // 0000
-                CASHIER: 'MTIzNA==', // 1234
-                ADMIN: 'OTk5OQ=='    // 9999
+                GREETER: ['bWVsdnkxMDYx', 'NXJpdG83'], // melvy1061, 5rito7
+                CASHIER: 'c2VyZ2lvOTE5MUA=', // sergio9191@
+                ADMIN: 'Y292aW5ndG9uNTIx'    // covington521
             },
             EXCHANGE_RATE: 18.10,
             SNACK_PRICE: 30,
@@ -281,8 +281,9 @@
 
         const validatePin = (input) => {
             try {
-                const encoded = btoa(input);
-                if (encoded === DEFAULTS.PINS.GREETER) return 'GREETER';
+                // Case-insensitive validation: convert input to lowercase
+                const encoded = btoa(input.toLowerCase().trim());
+                if (DEFAULTS.PINS.GREETER.includes(encoded)) return 'GREETER';
                 if (encoded === DEFAULTS.PINS.CASHIER) return 'CASHIER';
                 if (encoded === DEFAULTS.PINS.ADMIN) return 'ADMIN';
             } catch (e) { return null; }
@@ -403,7 +404,7 @@ ${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
 Gracias por su preferencia
       .--------.
  ____/_____|___ \\___
-O    _        - |    _,*
+O    _         - |    _,*
  '--(_)-------(_)--' </div>`;
             },
 
@@ -1352,8 +1353,8 @@ Firma: __________________
                     expectedUsd,
                     diffMxn,
                     diffUsd,
-                    card: totalCard,
-                    exchangeRate: exRate,
+                    card: totalCard, // Saving card amount for history
+                    exchangeRate: exRate, // Save rate for historical accuracy
                     user: role,
                     timestamp: new Date()
                 });
@@ -2246,7 +2247,6 @@ Firma: __________________
                     const now = new Date();
                     const hours = now.getHours();
                     const outsideHours = hours < 7 || hours >= 19;
-                    // setIsLocked(role !== 'ADMIN' && outsideHours); //KEEP
                     setIsLocked(false);
                 };
 
