@@ -2372,8 +2372,10 @@ Firma: __________________
             const [previewData, setPreviewData] = useState(null);
             const [previewName, setPreviewName] = useState(null);
 
-            const start = new Date(startDate); start.setHours(0, 0, 0, 0);
-            const end = new Date(endDate); end.setHours(23, 59, 59, 999);
+            // FIX: Append time to force local time interpretation, ensuring endDate is inclusive
+            const start = new Date(startDate + 'T00:00:00');
+            const end = new Date(endDate + 'T23:59:59.999');
+
             const filterRange = (ts) => { if (!ts) return true; const date = new Date(ts.toDate ? ts.toDate() : ts); return date >= start && date <= end; };
 
             const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
