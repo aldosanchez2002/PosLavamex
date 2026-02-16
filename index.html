@@ -189,7 +189,7 @@
         const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
             const payroll = {};
             const initPayrollItem = () => {
-                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0 };
+                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, debugDetails: [] };
                 SERVICES.forEach(svc => {
                     item.serviceGrid[svc.id] = {};
                     SIZES.forEach(sz => item.serviceGrid[svc.id][sz.id] = 0);
@@ -197,52 +197,83 @@
                 return item;
             };
 
+            // Step 1 & 2: Initialize payroll for all employees
             employees.forEach(emp => {
                 payroll[emp.name] = initPayrollItem();
             });
 
             const totalGrossSales = history.reduce((acc, t) => acc + (t.price || 0), 0);
 
-            history.forEach(item => {
-                const washersList = item.washers || (item.washer ? [item.washer] : []);
-                if (washersList.length === 0) return;
-                const washerCount = washersList.length;
+            // Step 3: Iterate through employees (as requested in new logic)
+            employees.forEach(emp => {
+                const empName = emp.name;
+                const p = payroll[empName];
 
-                let extrasCommissionTotal = 0;
-                const extrasShares = (item.extras || []).map(ex => {
-                    const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
-                    const commissionValue = dbExtra ? (dbExtra.commission || 0) : (ex.commission || 0);
-                    const share = commissionValue / washerCount;
-                    extrasCommissionTotal += commissionValue;
-                    return { label: ex.label, share };
-                });
+                // Step 4: Iterate through paid tickets (nested)
+                history.forEach(item => {
+                    const washersList = item.washers || (item.washer ? [item.washer] : []);
 
-                let baseCommissionTotal = 0;
-                if (item.service && item.size && currentCommissions && currentCommissions[item.service.id]) {
-                    baseCommissionTotal = currentCommissions[item.service.id][item.size.id] || 0;
-                } else {
-                    const totalStoredCommission = item.commission || 0;
-                    const storedExtrasTotal = (item.extras || []).reduce((acc, e) => acc + (e.commission || 0), 0);
-                    baseCommissionTotal = Math.max(0, totalStoredCommission - storedExtrasTotal);
-                }
-                const baseShare = baseCommissionTotal / washerCount;
+                    // Step 5: If ticket contains washer's name
+                    if (washersList.includes(empName)) {
+                        const washerCount = washersList.length;
+                        if (washerCount === 0) return;
 
-                washersList.forEach(washerName => {
-                    if (!payroll[washerName]) payroll[washerName] = initPayrollItem();
-                    const p = payroll[washerName];
+                        // FIX: Prioritize Stored Commission to respect history, fallback to calculation if missing/zero
+                        let totalTicketCommission = item.commission || 0;
 
-                    p.count += 1;
-                    if (item.service && item.size) {
-                        p.serviceGrid[item.service.id][item.size.id] = (p.serviceGrid[item.service.id][item.size.id] || 0) + 1;
+                        if (!totalTicketCommission || totalTicketCommission === 0) {
+                            // Recalculate if not found in history (legacy support or data repair)
+                            let base = 0;
+                            if (item.service && item.size && currentCommissions && currentCommissions[item.service.id]) {
+                                base = currentCommissions[item.service.id][item.size.id] || 0;
+                            }
+                            const extrasTotal = (item.extras || []).reduce((acc, e) => {
+                                const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === e.id) : null;
+                                const val = dbExtra ? (dbExtra.commission || 0) : (e.commission || 0);
+                                return acc + val;
+                            }, 0);
+                            totalTicketCommission = base + extrasTotal;
+                        }
+
+                        // Divide commission by amount of washers
+                        const sharePerWasher = totalTicketCommission / washerCount;
+
+                        // Add quotient to employee's total pay
+                        p.total += sharePerWasher;
+                        p.count += 1;
+
+                        // --- DEBUG: Track ticket details ---
+                        const debugNomina = false;
+                        if (debugNomina) {
+                            p.debugDetails.push({
+                                id: item.id ? item.id.slice(-4).toUpperCase() : '???',
+                                desc: item.vehicleDesc || 'Sin descripción',
+                                amount: sharePerWasher
+                            });
+                        }
+                        // -----------------------------------
+
+                        // --- Stats & Breakdown Logic (Visuals) ---
+                        // Count service participation
+                        if (item.service && item.size) {
+                            if (p.serviceGrid[item.service.id] && p.serviceGrid[item.service.id][item.size.id] !== undefined) {
+                                p.serviceGrid[item.service.id][item.size.id] += 1;
+                            }
+                        }
+
+                        // Add Extra Details for Payslip
+                        if (item.extras && item.extras.length > 0) {
+                            item.extras.forEach(ex => {
+                                const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
+                                const commissionValue = dbExtra ? (dbExtra.commission || 0) : (ex.commission || 0);
+                                const share = commissionValue / washerCount;
+
+                                if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
+                                p.extrasData[ex.label].count += 1;
+                                p.extrasData[ex.label].total += share;
+                            });
+                        }
                     }
-
-                    p.total += (baseShare + (extrasCommissionTotal / washerCount));
-
-                    extrasShares.forEach(ex => {
-                        if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
-                        p.extrasData[ex.label].count += 1;
-                        p.extrasData[ex.label].total += ex.share;
-                    });
                 });
             });
 
@@ -512,6 +543,32 @@ Firma: __________________
                         doc.setTextColor(0);
                         currentY += 10;
                     }
+
+                    // --- DEBUG TABLE SECTION ---
+                    if (p.debugDetails && p.debugDetails.length > 0) {
+                        doc.setFontSize(8);
+                        doc.setTextColor(255, 0, 0); // Red title to indicate debug
+                        doc.text("DEBUG: Detalle por Ticket (Vehículo | Comisión)", 14, currentY);
+                        doc.setTextColor(0);
+
+                        const debugBody = p.debugDetails.map(d => [
+                            d.id,
+                            d.desc,
+                            formatCurrency(d.amount)
+                        ]);
+
+                        autoTable(doc, {
+                            startY: currentY + 2,
+                            head: [['ID', 'Vehículo', 'Comisión']],
+                            body: debugBody,
+                            theme: 'grid',
+                            styles: { fontSize: 7, cellPadding: 1 },
+                            headStyles: { fillColor: [220, 50, 50], textColor: [255, 255, 255] }, // Red header
+                            margin: { right: 100 } // Keep it on the left side
+                        });
+                        currentY = doc.lastAutoTable.finalY + 10;
+                    }
+                    // ---------------------------
 
                     doc.setFontSize(8);
                     const legalText = "Recibí la cantidad descrita a mi entera satisfacción. Recibi el importe indicado a el periodo señalado por jornada  diurna. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral o civil";
@@ -1133,7 +1190,7 @@ Firma: __________________
                     </h3>
                     <div className="mb-6">{children}</div>
                     {footer ? footer : (
-                        <Button onClick={onClose} variant="secondary" className="w-full">Cerrar</Button>
+                        <button onClick={onClose} variant="secondary" className="w-full">Cerrar</button>
                     )}
                 </div>
             </div>
