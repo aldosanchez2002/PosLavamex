@@ -653,7 +653,7 @@ Firma: __________________
 
             generateCorte: (data) => {
                 const doc = new jsPDF();
-                const { totals, itemStats, expenses, cashIns } = data;
+                const { totals, itemStats, expenses, cashIns, arqueos } = data;
                 const pageWidth = doc.internal.pageSize.width;
 
                 // Helper for centering text
@@ -667,18 +667,14 @@ Firma: __________________
                 centerText(`Fecha: ${data.dateLabel}`, 28, 12);
 
                 // --- SECTION 1: BALANCE DE CAJA (The "Register" info) ---
-                // How much was in register (Initial)
-                // How much came in (Sales + CashIns)
-                // How much left (Drops, Expenses)
-                // How much is there now (Net)
 
                 const balanceBody = [
-                    ['FONDO INICIAL', formatCurrency(totals.initialMxn), `$${totals.initialUsd.toFixed(2)}`],
+                    ['FONDO INICIAL (SISTEMA)', formatCurrency(totals.initialMxn), `$${totals.initialUsd.toFixed(2)}`],
                     ['+ VENTAS (EFECTIVO)', formatCurrency(totals.cashMxn), `$${totals.cashUsd.toFixed(2)}`],
                     ['+ INGRESOS EXTRA', formatCurrency(totals.cashInsMxn), `$${totals.cashInsUsd.toFixed(2)}`],
                     ['- GASTOS', `(${formatCurrency(totals.expenses)})`, `$0.00`],
                     ['- ENVÍOS (RETIROS)', `(${formatCurrency(totals.dropsMxn)})`, `($${totals.dropsUsd.toFixed(2)})`],
-                    ['= TOTAL EN CAJA', formatCurrency(totals.cashNetMxn), `$${totals.cashNetUsd.toFixed(2)}`]
+                    ['= TOTAL EN CAJA (ESPERADO)', formatCurrency(totals.cashNetMxn), `$${totals.cashNetUsd.toFixed(2)}`]
                 ];
 
                 autoTable(doc, {
@@ -753,6 +749,97 @@ Firma: __________________
                             }
                         }
                     });
+                }
+
+                // --- SECTION 4: VERIFICACIÓN DE ARQUEOS (NEW SECTION) ---
+                currentY = doc.lastAutoTable.finalY + 15;
+
+                if (arqueos && arqueos.first && arqueos.last) {
+                    doc.setFontSize(14);
+                    doc.text("Análisis de Flujo de Efectivo (Arqueo Inicial vs Final)", 14, currentY);
+
+                    const first = arqueos.first;
+                    const last = arqueos.last;
+                    const isSame = first.id === last.id;
+
+                    // Physical Movement
+                    const physDeltaMxn = last.declaredMxn - first.declaredMxn;
+                    const physDeltaUsd = last.declaredUsd - first.declaredUsd;
+
+                    // System Expected Movement (Net Change)
+                    // Expected Net Change = (Sales + CashIns) - (Expenses + Drops)
+                    // We can also derive it: Expected End (cashNetMxn) - Initial (initialMxn)
+                    // However, to be strict with the "comparison" request, we compare the physical flow to the system flow.
+                    const sysDeltaMxn = totals.cashNetMxn - totals.initialMxn;
+                    const sysDeltaUsd = totals.cashNetUsd - totals.initialUsd;
+
+                    // The Discrepancy
+                    const diffMxn = physDeltaMxn - sysDeltaMxn;
+                    const diffUsd = physDeltaUsd - sysDeltaUsd;
+
+                    // Final Total Discrepancy in MXN (using current rate roughly, or just displaying both)
+                    // User asked for "diferencia de caja total MXN"
+                    // We typically use the rate from the last arqueo or current rate
+                    const finalRate = last.exchangeRate || totals.exchangeRate || 18.0;
+                    const totalDiffMxn = diffMxn + (diffUsd * finalRate);
+
+                    const formatTime = (ts) => ts && ts.toDate ? ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (ts instanceof Date ? ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+
+                    const arqueoBody = [
+                        [`Arqueo Inicial (${formatTime(first.timestamp)})`, formatCurrency(first.declaredMxn), `$${first.declaredUsd.toFixed(2)}`],
+                        [`Arqueo Final (${formatTime(last.timestamp)})`, formatCurrency(last.declaredMxn), `$${last.declaredUsd.toFixed(2)}`],
+                        ['', '', ''],
+                        ['Flujo Físico (Final - Inicial)', formatCurrency(physDeltaMxn), `$${physDeltaUsd.toFixed(2)}`],
+                        ['Flujo Esperado (Ventas - Gastos)', formatCurrency(sysDeltaMxn), `$${sysDeltaUsd.toFixed(2)}`],
+                        ['', '', ''],
+                        ['DIFERENCIA OPERATIVA', formatCurrency(diffMxn), `$${diffUsd.toFixed(2)}`]
+                    ];
+
+                    autoTable(doc, {
+                        startY: currentY + 5,
+                        head: [['CONCEPTO', 'MXN', 'USD']],
+                        body: arqueoBody,
+                        theme: 'grid',
+                        headStyles: { fillColor: [44, 62, 80] },
+                        columnStyles: {
+                            1: { halign: 'right' },
+                            2: { halign: 'right' }
+                        },
+                        didParseCell: (data) => {
+                            if (data.row.index === arqueoBody.length - 1) {
+                                data.cell.styles.fontStyle = 'bold';
+                                if (totalDiffMxn < -5) data.cell.styles.textColor = [200, 0, 0]; // Red if short
+                                else if (totalDiffMxn > 5) data.cell.styles.textColor = [0, 100, 0]; // Green if over
+                            }
+                        }
+                    });
+
+                    // Final Total Number Box
+                    const boxY = doc.lastAutoTable.finalY + 10;
+                    doc.setDrawColor(0);
+                    doc.setFillColor(totalDiffMxn < -10 ? 255 : (totalDiffMxn > 10 ? 255 : 240), totalDiffMxn < -10 ? 230 : 255, totalDiffMxn < -10 ? 230 : 240); // Slight red tint if negative
+                    doc.roundedRect(pageWidth - 90, boxY, 80, 25, 3, 3, 'FD');
+
+                    doc.setFontSize(10);
+                    doc.setTextColor(100);
+                    doc.text("DIFERENCIA TOTAL (MXN)", pageWidth - 50, boxY + 8, { align: 'center' });
+
+                    doc.setFontSize(16);
+                    doc.setFont(undefined, 'bold');
+                    doc.setTextColor(totalDiffMxn < -5 ? 200 : (totalDiffMxn > 5 ? 0 : 50), totalDiffMxn < -5 ? 0 : 100, 0);
+                    doc.text(formatCurrency(totalDiffMxn), pageWidth - 50, boxY + 18, { align: 'center' });
+                    doc.setTextColor(0);
+                    doc.setFont(undefined, 'normal');
+
+                    if (isSame) {
+                        doc.setFontSize(8);
+                        doc.text("* Nota: Solo se registró un arqueo en este periodo. La comparación asume que el inicial es igual al final o no aplica flujo.", 14, boxY + 5);
+                    }
+
+                } else {
+                    doc.setFontSize(10);
+                    doc.setTextColor(150);
+                    doc.text("No hay suficientes registros de arqueo para calcular el flujo comparativo.", 14, currentY + 10);
                 }
 
                 doc.save(`Corte_${data.dateLabel}.pdf`);
@@ -2038,12 +2125,19 @@ Firma: __________________
                     dropsMxn,
                     dropsUsd,
                     cashInsMxn,
-                    cashInsUsd
+                    cashInsUsd,
+                    exchangeRate: exRate // Pass current rate for final calc
                 };
             };
             const corteTotals = calculateCorteTotals();
 
             const printCorte = () => {
+                // Filter Arqueos specifically for this
+                const relevantArqueos = cashCounts.filter(c => {
+                    const d = new Date(c.timestamp);
+                    return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth;
+                }).sort((a, b) => a.timestamp - b.timestamp); // Ascending order
+
                 const data = {
                     type: corteMode === 'DAY' ? 'Diario' : 'Mensual',
                     dateLabel: corteMode === 'DAY' ? corteDate : corteMonth,
@@ -2051,7 +2145,11 @@ Firma: __________________
                     tickets: corteTickets,
                     expenses: corteExpenses.filter(e => e.status === 'APPROVED'),
                     cashIns: corteCashIns,
-                    itemStats: itemStats
+                    itemStats: itemStats,
+                    arqueos: {
+                        first: relevantArqueos.length > 0 ? relevantArqueos[0] : null,
+                        last: relevantArqueos.length > 0 ? relevantArqueos[relevantArqueos.length - 1] : null
+                    }
                 };
                 PdfService.generateCorte(data);
             };
