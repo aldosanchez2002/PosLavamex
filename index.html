@@ -656,17 +656,25 @@ Firma: __________________
                 const { totals, itemStats, expenses, cashIns, arqueos } = data;
                 const pageWidth = doc.internal.pageSize.width;
 
+                // Ink-saving colors
+                const lightGrey = [240, 240, 240];
+                const black = [0, 0, 0];
+
                 // Helper for centering text
                 const centerText = (text, y, size = 12) => {
                     doc.setFontSize(size);
                     doc.text(text, pageWidth / 2, y, { align: 'center' });
                 };
 
-                // Title
-                centerText(`CORTE ${data.type.toUpperCase()}`, 15, 18);
-                centerText(`Fecha: ${data.dateLabel}`, 22, 10);
+                // Title - Reduced sizes
+                centerText(`CORTE ${data.type.toUpperCase()}`, 15, 18); // y=20->15, size=22->18
+                centerText(`Fecha: ${data.dateLabel}`, 22, 10); // y=28->22, size=12->10
 
                 // --- SECTION 1: BALANCE DE CAJA (The "Register" info) ---
+                // How much was in register (Initial)
+                // How much came in (Sales + CashIns)
+                // How much left (Drops, Expenses)
+                // How much is there now (Net)
 
                 const balanceBody = [
                     ['FONDO INICIAL (SISTEMA)', formatCurrency(totals.initialMxn), `$${totals.initialUsd.toFixed(2)}`],
@@ -678,29 +686,29 @@ Firma: __________________
                 ];
 
                 autoTable(doc, {
-                    startY: 28,
+                    startY: 28, // 35 -> 28
                     head: [['CONCEPTO', 'MXN', 'USD']],
                     body: balanceBody,
                     theme: 'grid',
-                    headStyles: { fillColor: [52, 73, 94], halign: 'center', fontSize: 9 },
+                    headStyles: { fillColor: lightGrey, textColor: black, halign: 'center', fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
                     columnStyles: {
                         0: { cellWidth: 80 },
                         1: { halign: 'right', cellWidth: 50 },
                         2: { halign: 'right', cellWidth: 50 }
                     },
-                    styles: { fontSize: 8, cellPadding: 1.5 },
+                    styles: { fontSize: 8, cellPadding: 1.5, textColor: black },
                     didParseCell: (data) => {
                         if (data.row.index === balanceBody.length - 1) { // Total row
                             data.cell.styles.fontStyle = 'bold';
-                            data.cell.styles.fillColor = [240, 240, 240];
+                            data.cell.styles.fillColor = [250, 250, 250];
                         }
                     }
                 });
 
                 // --- SECTION 2: ESTADÍSTICAS OPERATIVAS ---
                 // Total tickets, card, snacks, pinos, boleadas
-                let currentY = doc.lastAutoTable.finalY + 6;
-                doc.setFontSize(11);
+                let currentY = doc.lastAutoTable.finalY + 6; // 10 -> 6
+                doc.setFontSize(11); // 14 -> 11
                 doc.text("Resumen Operativo", 14, currentY);
 
                 const statsBody = [
@@ -713,22 +721,22 @@ Firma: __________________
                 ];
 
                 autoTable(doc, {
-                    startY: currentY + 2,
+                    startY: currentY + 2, // + 4 -> + 2
                     head: [['CONCEPTO', 'CANTIDAD', 'TOTAL (MXN)']],
                     body: statsBody,
                     theme: 'striped',
-                    headStyles: { fillColor: [46, 204, 113], fontSize: 9 },
+                    headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
                     columnStyles: {
                         1: { halign: 'center' },
                         2: { halign: 'right' }
                     },
-                    styles: { fontSize: 8, cellPadding: 1.5 }
+                    styles: { fontSize: 8, cellPadding: 1.5, textColor: black } // Added styles
                 });
 
                 // --- SECTION 3: DETALLE DE GASTOS ---
-                currentY = doc.lastAutoTable.finalY + 6;
+                currentY = doc.lastAutoTable.finalY + 6; // 10 -> 6
                 if (expenses.length > 0) {
-                    doc.setFontSize(11);
+                    doc.setFontSize(11); // Ensure font size
                     doc.text("Desglose de Gastos", 14, currentY);
                     const expenseBody = expenses.map(e => [
                         e.description,
@@ -739,13 +747,13 @@ Firma: __________________
                     expenseBody.push(['TOTAL GASTOS', '', formatCurrency(totals.expenses)]);
 
                     autoTable(doc, {
-                        startY: currentY + 2,
+                        startY: currentY + 2, // + 4 -> + 2
                         head: [['DESCRIPCIÓN', 'ESTADO', 'MONTO']],
                         body: expenseBody,
                         theme: 'striped',
-                        headStyles: { fillColor: [231, 76, 60], fontSize: 9 },
+                        headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
                         columnStyles: { 2: { halign: 'right' } },
-                        styles: { fontSize: 8, cellPadding: 1.5 },
+                        styles: { fontSize: 8, cellPadding: 1.5, textColor: black }, // Added styles
                         didParseCell: (data) => {
                             if (data.row.index === expenseBody.length - 1) { // Total row
                                 data.cell.styles.fontStyle = 'bold';
@@ -755,12 +763,12 @@ Firma: __________________
                 }
 
                 // --- SECTION 4: VERIFICACIÓN DE ARQUEOS (NEW SECTION) ---
-                currentY = doc.lastAutoTable.finalY + 10;
-
+                currentY = doc.lastAutoTable.finalY + 10; // 15 -> 10
+                
                 if (arqueos && arqueos.first && arqueos.last) {
-                    doc.setFontSize(11);
+                    doc.setFontSize(11); // 14 -> 11
                     doc.text("Análisis de Flujo de Efectivo (Arqueo Inicial vs Final)", 14, currentY);
-
+                    
                     const first = arqueos.first;
                     const last = arqueos.last;
                     const isSame = first.id === last.id;
@@ -773,75 +781,92 @@ Firma: __________________
                     // Expected Net Change = (Sales + CashIns) - (Expenses + Drops)
                     // We can also derive it: Expected End (cashNetMxn) - Initial (initialMxn)
                     // However, to be strict with the "comparison" request, we compare the physical flow to the system flow.
-                    const sysDeltaMxn = totals.cashNetMxn - totals.initialMxn;
+                    const sysDeltaMxn = totals.cashNetMxn - totals.initialMxn; 
                     const sysDeltaUsd = totals.cashNetUsd - totals.initialUsd;
 
                     // The Discrepancy
                     const diffMxn = physDeltaMxn - sysDeltaMxn;
                     const diffUsd = physDeltaUsd - sysDeltaUsd;
-
+                    
                     // Final Total Discrepancy in MXN (using current rate roughly, or just displaying both)
                     // User asked for "diferencia de caja total MXN"
                     // We typically use the rate from the last arqueo or current rate
                     const finalRate = last.exchangeRate || totals.exchangeRate || 18.0;
                     const totalDiffMxn = diffMxn + (diffUsd * finalRate);
 
-                    const formatTime = (ts) => ts && ts.toDate ? ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (ts instanceof Date ? ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+                    const formatTime = (ts) => ts && ts.toDate ? ts.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : (ts instanceof Date ? ts.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '');
 
                     const arqueoBody = [
                         [`Arqueo Inicial (${formatTime(first.timestamp)})`, formatCurrency(first.declaredMxn), `$${first.declaredUsd.toFixed(2)}`],
                         [`Arqueo Final (${formatTime(last.timestamp)})`, formatCurrency(last.declaredMxn), `$${last.declaredUsd.toFixed(2)}`],
                         ['', '', ''],
-                        ['Flujo Físico (Final - Inicial)', formatCurrency(physDeltaMxn), `$${physDeltaUsd.toFixed(2)}`],
+                        ['Flujo Real (Final - Inicial)', formatCurrency(physDeltaMxn), `$${physDeltaUsd.toFixed(2)}`],
                         ['Flujo Esperado (Ventas - Gastos)', formatCurrency(sysDeltaMxn), `$${sysDeltaUsd.toFixed(2)}`],
                         ['', '', ''],
                         ['DIFERENCIA OPERATIVA', formatCurrency(diffMxn), `$${diffUsd.toFixed(2)}`]
                     ];
 
                     autoTable(doc, {
-                        startY: currentY + 3,
+                        startY: currentY + 3, // + 5 -> + 3
                         head: [['CONCEPTO', 'MXN', 'USD']],
                         body: arqueoBody,
                         theme: 'grid',
-                        headStyles: { fillColor: [44, 62, 80], fontSize: 9 },
+                        headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
                         columnStyles: {
                             1: { halign: 'right' },
                             2: { halign: 'right' }
                         },
-                        styles: { fontSize: 8, cellPadding: 1.5 },
+                        styles: { fontSize: 8, cellPadding: 1.5, textColor: black }, // Added styles
                         didParseCell: (data) => {
                             if (data.row.index === arqueoBody.length - 1) {
                                 data.cell.styles.fontStyle = 'bold';
-                                if (totalDiffMxn < -5) data.cell.styles.textColor = [200, 0, 0]; // Red if short
-                                else if (totalDiffMxn > 5) data.cell.styles.textColor = [0, 100, 0]; // Green if over
+                                if (totalDiffMxn < -5) data.cell.styles.textColor = [0, 0, 0]; // Keep black for ink saving, maybe bold/italic?
+                                else if (totalDiffMxn > 5) data.cell.styles.textColor = [0, 0, 0]; 
                             }
                         }
                     });
 
-                    // Final Total Number Box
-                    const boxY = doc.lastAutoTable.finalY + 6;
+                    // Final Total Number Box (Diferencia)
+                    const boxY = doc.lastAutoTable.finalY + 6; // + 10 -> + 6
                     doc.setDrawColor(0);
-                    doc.setFillColor(totalDiffMxn < -10 ? 255 : (totalDiffMxn > 10 ? 255 : 240), totalDiffMxn < -10 ? 230 : 255, totalDiffMxn < -10 ? 230 : 240); // Slight red tint if negative
-                    doc.roundedRect(pageWidth - 90, boxY, 80, 20, 3, 3, 'FD'); // height 25 -> 20
-
-                    doc.setFontSize(9);
-                    doc.setTextColor(100);
+                    // Lightest grey for box
+                    doc.setFillColor(252, 252, 252); 
+                    
+                    // Box 1: Diferencia Total (Right side)
+                    doc.roundedRect(pageWidth - 90, boxY, 80, 20, 3, 3, 'S'); // 'S' for Stroke only to save ink
+                    
+                    doc.setFontSize(9); // 10 -> 9
+                    doc.setTextColor(50); // Dark grey text
                     doc.text("DIFERENCIA TOTAL (MXN)", pageWidth - 50, boxY + 6, { align: 'center' }); // + 8 -> + 6
-
-                    doc.setFontSize(14);
+                    
+                    doc.setFontSize(14); // 16 -> 14
                     doc.setFont(undefined, 'bold');
-                    doc.setTextColor(totalDiffMxn < -5 ? 200 : (totalDiffMxn > 5 ? 0 : 50), totalDiffMxn < -5 ? 0 : 100, 0);
+                    doc.setTextColor(0); // Black text
                     doc.text(formatCurrency(totalDiffMxn), pageWidth - 50, boxY + 14, { align: 'center' }); // + 18 -> + 14
-                    doc.setTextColor(0);
                     doc.setFont(undefined, 'normal');
 
+                    // Box 2: Total Tickets Pagado (Left side) - Similar style
+                    // Placing it to the left, e.g., at x = 14
+                    doc.roundedRect(14, boxY, 80, 20, 3, 3, 'S'); // Stroke only
+                    
+                    doc.setFontSize(9);
+                    doc.setTextColor(50);
+                    doc.text("TOTAL VENTAS (MXN)", 54, boxY + 6, { align: 'center' }); // 14 + 40 = 54 center
+                    
+                    doc.setFontSize(14);
+                    doc.setFont(undefined, 'bold');
+                    doc.setTextColor(0);
+                    doc.text(formatCurrency(totals.total), 54, boxY + 14, { align: 'center' });
+                    doc.setFont(undefined, 'normal');
+
+
                     if (isSame) {
-                        doc.setFontSize(7);
-                        doc.text("* Nota: Solo se registró un arqueo en este periodo. La comparación asume que el inicial es igual al final o no aplica flujo.", 14, boxY + 5);
+                        doc.setFontSize(7); // 8 -> 7
+                        doc.text("* Nota: Solo se registró un arqueo en este periodo.", 14, boxY + 25);
                     }
 
                 } else {
-                    doc.setFontSize(9);
+                    doc.setFontSize(9); // 10 -> 9
                     doc.setTextColor(150);
                     doc.text("No hay suficientes registros de arqueo para calcular el flujo comparativo.", 14, currentY + 6);
                 }
