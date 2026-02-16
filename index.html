@@ -764,11 +764,11 @@ Firma: __________________
 
                 // --- SECTION 4: VERIFICACIÓN DE ARQUEOS (NEW SECTION) ---
                 currentY = doc.lastAutoTable.finalY + 10; // 15 -> 10
-                
+
                 if (arqueos && arqueos.first && arqueos.last) {
                     doc.setFontSize(11); // 14 -> 11
                     doc.text("Análisis de Flujo de Efectivo (Arqueo Inicial vs Final)", 14, currentY);
-                    
+
                     const first = arqueos.first;
                     const last = arqueos.last;
                     const isSame = first.id === last.id;
@@ -781,20 +781,20 @@ Firma: __________________
                     // Expected Net Change = (Sales + CashIns) - (Expenses + Drops)
                     // We can also derive it: Expected End (cashNetMxn) - Initial (initialMxn)
                     // However, to be strict with the "comparison" request, we compare the physical flow to the system flow.
-                    const sysDeltaMxn = totals.cashNetMxn - totals.initialMxn; 
+                    const sysDeltaMxn = totals.cashNetMxn - totals.initialMxn;
                     const sysDeltaUsd = totals.cashNetUsd - totals.initialUsd;
 
                     // The Discrepancy
                     const diffMxn = physDeltaMxn - sysDeltaMxn;
                     const diffUsd = physDeltaUsd - sysDeltaUsd;
-                    
+
                     // Final Total Discrepancy in MXN (using current rate roughly, or just displaying both)
                     // User asked for "diferencia de caja total MXN"
                     // We typically use the rate from the last arqueo or current rate
                     const finalRate = last.exchangeRate || totals.exchangeRate || 18.0;
                     const totalDiffMxn = diffMxn + (diffUsd * finalRate);
 
-                    const formatTime = (ts) => ts && ts.toDate ? ts.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : (ts instanceof Date ? ts.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '');
+                    const formatTime = (ts) => ts && ts.toDate ? ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (ts instanceof Date ? ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
 
                     const arqueoBody = [
                         [`Arqueo Inicial (${formatTime(first.timestamp)})`, formatCurrency(first.declaredMxn), `$${first.declaredUsd.toFixed(2)}`],
@@ -821,7 +821,7 @@ Firma: __________________
                             if (data.row.index === arqueoBody.length - 1) {
                                 data.cell.styles.fontStyle = 'bold';
                                 if (totalDiffMxn < -5) data.cell.styles.textColor = [0, 0, 0]; // Keep black for ink saving, maybe bold/italic?
-                                else if (totalDiffMxn > 5) data.cell.styles.textColor = [0, 0, 0]; 
+                                else if (totalDiffMxn > 5) data.cell.styles.textColor = [0, 0, 0];
                             }
                         }
                     });
@@ -830,15 +830,15 @@ Firma: __________________
                     const boxY = doc.lastAutoTable.finalY + 6; // + 10 -> + 6
                     doc.setDrawColor(0);
                     // Lightest grey for box
-                    doc.setFillColor(252, 252, 252); 
-                    
+                    doc.setFillColor(252, 252, 252);
+
                     // Box 1: Diferencia Total (Right side)
                     doc.roundedRect(pageWidth - 90, boxY, 80, 20, 3, 3, 'S'); // 'S' for Stroke only to save ink
-                    
+
                     doc.setFontSize(9); // 10 -> 9
                     doc.setTextColor(50); // Dark grey text
                     doc.text("DIFERENCIA TOTAL (MXN)", pageWidth - 50, boxY + 6, { align: 'center' }); // + 8 -> + 6
-                    
+
                     doc.setFontSize(14); // 16 -> 14
                     doc.setFont(undefined, 'bold');
                     doc.setTextColor(0); // Black text
@@ -848,11 +848,11 @@ Firma: __________________
                     // Box 2: Total Tickets Pagado (Left side) - Similar style
                     // Placing it to the left, e.g., at x = 14
                     doc.roundedRect(14, boxY, 80, 20, 3, 3, 'S'); // Stroke only
-                    
+
                     doc.setFontSize(9);
                     doc.setTextColor(50);
                     doc.text("TOTAL VENTAS (MXN)", 54, boxY + 6, { align: 'center' }); // 14 + 40 = 54 center
-                    
+
                     doc.setFontSize(14);
                     doc.setFont(undefined, 'bold');
                     doc.setTextColor(0);
@@ -1786,7 +1786,7 @@ Firma: __________________
                                         <span className="truncate pr-2">#{ticket.id.slice(-4).toUpperCase()}{ticket.vehicleDesc ? <span className="uppercase"> - {ticket.vehicleDesc}</span> : ''}</span>
                                         <div className="text-right">
                                             <div className="whitespace-nowrap">{formatCurrency(ticket.price)} MXN</div>
-                                            <div className="text-xs text-green-600 font-normal">${(ticket.price / exRate).toFixed(2)} USD</div>
+                                            <div className="text-xs text-green-600 font-normal">${(Math.ceil((ticket.price / exRate) * 4) / 4).toFixed(2)} USD</div>
                                         </div>
                                     </div>
                                     <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || 'Extras'} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size?.label || '-'}</span></div>
@@ -1799,7 +1799,7 @@ Firma: __________________
                             <div className="w-full max-w-md my-auto">
                                 <div className="text-center mb-2">
                                     <h2 className="text-4xl font-bold text-gray-800">{formatCurrency(t.price)}</h2>
-                                    <div className="text-xl text-green-600 font-medium">${(t.price / exRate).toFixed(2)} USD</div>
+                                    <div className="text-xl text-green-600 font-medium">${(Math.ceil((t.price / exRate) * 4) / 4).toFixed(2)} USD</div>
                                 </div>
                                 <p className="text-center text-gray-500 mb-6 font-medium">{t.vehicleDesc} • {t.washers?.join(', ')}</p>
 
@@ -2359,9 +2359,6 @@ Firma: __________________
                 </div>
             );
         };
-
-        // ... (Remaining AdminNomina, AdminAsistencia, AdminConfig, AdminPrecios, AdminBusinessExpenses, AdminPanel, LavamexPOS, root.render)
-        // I will include these to ensure the file is complete as requested.
 
         const AdminNomina = () => {
             const { employees, history, deductions, commissions, extrasList, db, tickets } = useContext(AppContext);
