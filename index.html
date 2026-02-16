@@ -653,84 +653,106 @@ Firma: __________________
 
             generateCorte: (data) => {
                 const doc = new jsPDF();
+                const { totals, itemStats, expenses, cashIns } = data;
+                const pageWidth = doc.internal.pageSize.width;
 
-                doc.setFontSize(22);
-                doc.text(`CORTE ${data.type.toUpperCase()}`, 105, 20, { align: 'center' });
-                doc.setFontSize(12);
-                doc.text(`Fecha: ${data.dateLabel}`, 105, 28, { align: 'center' });
+                // Helper for centering text
+                const centerText = (text, y, size = 12) => {
+                    doc.setFontSize(size);
+                    doc.text(text, pageWidth / 2, y, { align: 'center' });
+                };
 
-                const mainBody = [
-                    ['Venta Total', formatCurrency(data.totals.total)],
-                    ['Neto en Caja USD', `$${data.totals.cashNetUsd.toFixed(2)} USD`],
-                    ['Neto en Caja MXN', formatCurrency(data.totals.cashNetMxn)],
-                    ['', ''],
-                    ['Fondo Inicial Pesos', formatCurrency(data.totals.initialMxn)],
-                    ['Fondo Inicial Dólares', `$${data.totals.initialUsd.toFixed(2)} USD`],
-                    ['Pagado Pesos (Ventas)', formatCurrency(data.totals.cashMxn)],
-                    ['Pagado Dólares (Ventas)', `$${data.totals.cashUsd.toFixed(2)} USD`],
-                    ['Pagado Tarjeta', formatCurrency(data.totals.card)],
-                    ['Gastos Totales', `-${formatCurrency(data.totals.expenses)}`],
-                    ['', ''],
-                    ['En Caja Pesos', formatCurrency(data.totals.cashNetMxn)],
-                    ['En Caja Dólares', `$${data.totals.cashNetUsd.toFixed(2)} USD`],
-                    ['Ingresos Efectivo', `${formatCurrency(data.totals.cashInsMxn)} / $${data.totals.cashInsUsd.toFixed(2)} USD`],
-                    ['Envíos (Retiros)', `${formatCurrency(data.totals.dropsMxn)} / $${data.totals.dropsUsd.toFixed(2)} USD`]
+                // Title
+                centerText(`CORTE ${data.type.toUpperCase()}`, 20, 22);
+                centerText(`Fecha: ${data.dateLabel}`, 28, 12);
+
+                // --- SECTION 1: BALANCE DE CAJA (The "Register" info) ---
+                // How much was in register (Initial)
+                // How much came in (Sales + CashIns)
+                // How much left (Drops, Expenses)
+                // How much is there now (Net)
+
+                const balanceBody = [
+                    ['FONDO INICIAL', formatCurrency(totals.initialMxn), `$${totals.initialUsd.toFixed(2)}`],
+                    ['+ VENTAS (EFECTIVO)', formatCurrency(totals.cashMxn), `$${totals.cashUsd.toFixed(2)}`],
+                    ['+ INGRESOS EXTRA', formatCurrency(totals.cashInsMxn), `$${totals.cashInsUsd.toFixed(2)}`],
+                    ['- GASTOS', `(${formatCurrency(totals.expenses)})`, `$0.00`],
+                    ['- ENVÍOS (RETIROS)', `(${formatCurrency(totals.dropsMxn)})`, `($${totals.dropsUsd.toFixed(2)})`],
+                    ['= TOTAL EN CAJA', formatCurrency(totals.cashNetMxn), `$${totals.cashNetUsd.toFixed(2)}`]
                 ];
 
                 autoTable(doc, {
                     startY: 35,
-                    head: [['Concepto', 'Monto']],
-                    body: mainBody,
+                    head: [['CONCEPTO', 'MXN', 'USD']],
+                    body: balanceBody,
                     theme: 'grid',
-                    headStyles: { fillColor: [220, 220, 220], halign: 'center', textColor: [0, 0, 0] },
+                    headStyles: { fillColor: [52, 73, 94], halign: 'center' }, // Dark blue/grey
                     columnStyles: {
-                        0: { cellWidth: 100 },
-                        1: { halign: 'right', fontStyle: 'bold' }
+                        0: { cellWidth: 80 },
+                        1: { halign: 'right', cellWidth: 50 },
+                        2: { halign: 'right', cellWidth: 50 }
                     },
-                    styles: { fontSize: 11, cellPadding: 1.5 },
-                    didParseCell: function (data) {
-                        if ([0, 1, 2, 11, 12].includes(data.row.index)) {
+                    styles: { fontSize: 10, cellPadding: 2 },
+                    didParseCell: (data) => {
+                        if (data.row.index === balanceBody.length - 1) { // Total row
                             data.cell.styles.fontStyle = 'bold';
-                            if (data.row.index === 0) data.cell.styles.textColor = [0, 0, 0];
-                            if ([1, 12].includes(data.row.index)) data.cell.styles.textColor = [0, 100, 0];
-                            if ([2, 11].includes(data.row.index)) data.cell.styles.textColor = [0, 0, 139];
+                            data.cell.styles.fillColor = [240, 240, 240];
                         }
                     }
                 });
 
+                // --- SECTION 2: ESTADÍSTICAS OPERATIVAS ---
+                // Total tickets, card, snacks, pinos, boleadas
                 let currentY = doc.lastAutoTable.finalY + 10;
+                doc.setFontSize(14);
+                doc.text("Resumen Operativo", 14, currentY);
 
-                if (data.expenses.length > 0) {
-                    doc.setFontSize(14);
+                const statsBody = [
+                    ['Tickets Pagados', data.tickets.length, formatCurrency(totals.total)],
+                    ['Venta Tarjeta', '-', formatCurrency(totals.card)],
+                    ['Pinos', itemStats.pinos.count, formatCurrency(itemStats.pinos.money)],
+                    ['Boleadas', itemStats.boleadas.count, formatCurrency(itemStats.boleadas.money)],
+                    ['Snacks (Clientes)', itemStats.snacks.customerCount, formatCurrency(itemStats.snacks.moneyCustomer)],
+                    ['Snacks (Interno)', itemStats.snacks.internalCount, formatCurrency(itemStats.snacks.moneyInternal)],
+                ];
+
+                autoTable(doc, {
+                    startY: currentY + 4,
+                    head: [['CONCEPTO', 'CANTIDAD', 'TOTAL (MXN)']],
+                    body: statsBody,
+                    theme: 'striped',
+                    headStyles: { fillColor: [46, 204, 113] }, // Green
+                    columnStyles: {
+                        1: { halign: 'center' },
+                        2: { halign: 'right' }
+                    }
+                });
+
+                // --- SECTION 3: DETALLE DE GASTOS ---
+                currentY = doc.lastAutoTable.finalY + 10;
+                if (expenses.length > 0) {
                     doc.text("Desglose de Gastos", 14, currentY);
-                    const expBody = data.expenses.map(e => [e.description, formatCurrency(e.amount), e.status]);
-                    autoTable(doc, {
-                        startY: currentY + 3,
-                        head: [['Concepto', 'Monto', 'Estado']],
-                        body: expBody,
-                        theme: 'striped',
-                        headStyles: { fillColor: [192, 57, 43] }
-                    });
-                    currentY = doc.lastAutoTable.finalY + 10;
-                }
-
-                if (data.cashIns && data.cashIns.length > 0) {
-                    doc.setFontSize(14);
-                    doc.text("Desglose de Ingresos de efectivo", 14, currentY);
-                    const cashInBody = data.cashIns.map(c => [
-                        c.reason || 'Ingreso',
-                        c.user,
-                        formatCurrency(c.amountMxn),
-                        `$${c.amountUsd.toFixed(2)}`
+                    const expenseBody = expenses.map(e => [
+                        e.description,
+                        e.status,
+                        formatCurrency(e.amount)
                     ]);
+                    // Add total row
+                    expenseBody.push(['TOTAL GASTOS', '', formatCurrency(totals.expenses)]);
+
                     autoTable(doc, {
-                        startY: currentY + 3,
-                        head: [['Razón', 'Usuario', 'MXN', 'USD']],
-                        body: cashInBody,
+                        startY: currentY + 4,
+                        head: [['DESCRIPCIÓN', 'ESTADO', 'MONTO']],
+                        body: expenseBody,
                         theme: 'striped',
-                        headStyles: { fillColor: [46, 204, 113] }
+                        headStyles: { fillColor: [231, 76, 60] }, // Red
+                        columnStyles: { 2: { halign: 'right' } },
+                        didParseCell: (data) => {
+                            if (data.row.index === expenseBody.length - 1) { // Total row
+                                data.cell.styles.fontStyle = 'bold';
+                            }
+                        }
                     });
-                    currentY = doc.lastAutoTable.finalY + 10;
                 }
 
                 doc.save(`Corte_${data.dateLabel}.pdf`);
@@ -1933,7 +1955,7 @@ Firma: __________________
 
             const calculateItemStats = () => {
                 const stats = {
-                    snacks: { customerCount: 0, internalCount: 0, totalCount: 0, money: 0 },
+                    snacks: { customerCount: 0, internalCount: 0, totalCount: 0, moneyCustomer: 0, moneyInternal: 0 },
                     pinos: { count: 0, money: 0 },
                     boleadas: { count: 0, money: 0 }
                 };
@@ -1957,12 +1979,11 @@ Firma: __________________
                     // Snacks (Customer)
                     if (t.snackCount > 0) {
                         stats.snacks.customerCount += t.snackCount;
-                        // Derived revenue: Total Price - Base Price - Sum of Extras Prices
-                        // This ensures we get the actual money attributed to snacks for this ticket
+                        // Revenue calc
                         const extrasTotal = (t.extras || []).reduce((a, b) => a + (b.price || 0), 0);
                         const serviceTotal = t.basePrice || 0;
                         const impliedSnackRevenue = (t.price || 0) - serviceTotal - extrasTotal;
-                        stats.snacks.money += Math.max(0, impliedSnackRevenue);
+                        stats.snacks.moneyCustomer += Math.max(0, impliedSnackRevenue);
                     }
                 });
 
@@ -1971,7 +1992,7 @@ Firma: __________________
                     const desc = (d.description || '').toLowerCase().trim();
                     if (desc === 'snack' || desc === 'snacks') {
                         stats.snacks.internalCount += 1;
-                        stats.snacks.money += (d.amount || 0);
+                        stats.snacks.moneyInternal += (d.amount || 0);
                     }
                 });
 
@@ -2029,7 +2050,8 @@ Firma: __________________
                     totals: corteTotals,
                     tickets: corteTickets,
                     expenses: corteExpenses.filter(e => e.status === 'APPROVED'),
-                    cashIns: corteCashIns
+                    cashIns: corteCashIns,
+                    itemStats: itemStats
                 };
                 PdfService.generateCorte(data);
             };
@@ -2100,7 +2122,7 @@ Firma: __________________
                                     <span>Empleado:</span>
                                     <span className="font-bold text-gray-800">{itemStats.snacks.internalCount}</span>
                                 </div>
-                                <div className="text-xl font-bold text-green-700">{formatCurrency(itemStats.snacks.money)}</div>
+                                <div className="text-xl font-bold text-green-700">{formatCurrency(itemStats.snacks.moneyCustomer + itemStats.snacks.moneyInternal)}</div>
                             </div>
                             <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex flex-col items-center justify-center">
                                 <div className="text-green-800 font-bold text-xs uppercase mb-1">Pinos</div>
@@ -2210,6 +2232,9 @@ Firma: __________________
                 </div>
             );
         };
+
+        // ... (Remaining AdminNomina, AdminAsistencia, AdminConfig, AdminPrecios, AdminBusinessExpenses, AdminPanel, LavamexPOS, root.render)
+        // I will include these to ensure the file is complete as requested.
 
         const AdminNomina = () => {
             const { employees, history, deductions, commissions, extrasList, db, tickets } = useContext(AppContext);
