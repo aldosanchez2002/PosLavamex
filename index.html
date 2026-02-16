@@ -469,6 +469,17 @@ Firma: __________________
                     doc.setFontSize(10);
                     doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 30);
 
+                    // --- SUMMARY VERTICAL ---
+                    doc.setFontSize(9);
+                    doc.setTextColor(60, 60, 60);
+                    doc.text(`${formatCurrency(p.total)} Subtotal Ingresos`, 14, 36);
+                    doc.text(`-${formatCurrency(p.deductionTotal)} Deducciones`, 14, 40);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`${formatCurrency(p.netPay)} Total`, 14, 44);
+                    doc.setFont(undefined, 'normal');
+                    doc.setTextColor(0);
+                    // --------------------
+
                     doc.setDrawColor(0);
                     doc.setFillColor(255, 255, 255);
                     doc.rect(140, 20, 50, 20);
@@ -496,7 +507,7 @@ Firma: __________________
                     };
 
                     autoTable(doc, {
-                        startY: 45,
+                        startY: 50,
                         head: head,
                         body: body,
                         ...tableStyles
