@@ -154,9 +154,11 @@
 
                 // --- 1. Financials ---
                 const totalRevenue = fTickets.reduce((acc, t) => acc + (t.price || 0), 0);
-                const laborCommission = fTickets.reduce((acc, t) => acc + (t.commission || 0), 0); // Variable labor from commissions
 
-                // Calculate Fixed Salaries (Estimate based on duration)
+                // 1. Labor: Washer Commissions (Direct per ticket)
+                const laborCommission = fTickets.reduce((acc, t) => acc + (t.commission || 0), 0);
+
+                // 2. Labor: Fixed Salaries (Estimate based on duration)
                 const activeSupervisors = employees.filter(e => e.active && e.role === 'SUPERVISOR');
                 const weeklyFixedLabor = activeSupervisors.reduce((acc, e) => acc + (parseFloat(e.baseSalary) || 0), 0);
 
@@ -165,11 +167,18 @@
                     const dates = fTickets.map(t => t.date);
                     const minD = new Date(Math.min(...dates));
                     const maxD = new Date(Math.max(...dates));
-                    // Calculate days difference + 1 to include the day itself
                     daysInRange = Math.max(1, Math.ceil((maxD - minD) / (1000 * 60 * 60 * 24)) + 1);
                 }
                 const laborSalary = (weeklyFixedLabor / 7) * daysInRange;
-                const totalLabor = laborCommission + laborSalary;
+
+                // 3. Labor: Supervisor Sales Commissions (% of Total Revenue)
+                const supervisorSalesCommTotal = activeSupervisors.reduce((acc, emp) => {
+                    const pct = parseFloat(emp.commissionPct) || 0;
+                    return acc + (totalRevenue * (pct / 100));
+                }, 0);
+
+                // Total Labor Cost
+                const totalLabor = laborCommission + laborSalary + supervisorSalesCommTotal;
 
                 const operationalExp = fExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
                 const adminExp = fBizExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
@@ -179,6 +188,7 @@
 
                 // Labor Percentages
                 const laborCommPct = totalRevenue > 0 ? (laborCommission / totalRevenue) * 100 : 0;
+                const laborSupCommPct = totalRevenue > 0 ? (supervisorSalesCommTotal / totalRevenue) * 100 : 0;
                 const laborSalaryPct = totalRevenue > 0 ? (laborSalary / totalRevenue) * 100 : 0;
                 const totalLaborPct = totalRevenue > 0 ? (totalLabor / totalRevenue) * 100 : 0;
 
@@ -197,14 +207,15 @@
                 fExpenses.forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
                 fBizExpenses.forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
 
-                // Calculate profit per month (Simplified for chart - uses only commissions for labor to avoid complexity of date ranges per month bucket)
+                // Calculate profit per month (Simplified for chart)
                 Object.values(monthlyStats).forEach(m => { m.profit = m.revenue - m.expenses - m.labor; });
                 const chartFinancials = Object.values(monthlyStats).sort((a, b) => a.name.localeCompare(b.name));
 
                 // --- 3. Expense Composition ---
                 const chartExpenses = [
-                    { name: 'Comisiones', value: laborCommission },
-                    { name: 'Salarios (Est.)', value: laborSalary },
+                    { name: 'Comisión Lavadores', value: laborCommission },
+                    { name: 'Comisión Supervisores', value: supervisorSalesCommTotal },
+                    { name: 'Salarios Base', value: laborSalary },
                     { name: 'Gastos Operativos', value: operationalExp },
                     { name: 'Gastos Admin', value: adminExp }
                 ].filter(i => i.value > 0);
@@ -255,8 +266,8 @@
 
                 return {
                     totalRevenue, totalExpenses, netProfit, avgTicket, ticketCount: fTickets.length,
-                    laborCommission, laborSalary, totalLabor,
-                    laborCommPct, laborSalaryPct, totalLaborPct,
+                    laborCommission, laborSalary, supervisorSalesCommTotal, totalLabor,
+                    laborCommPct, laborSalaryPct, laborSupCommPct, totalLaborPct,
                     chartFinancials, chartExpenses, chartArqueos, chartPayments, chartEmployees, chartServices, totalShortage
                 };
 
@@ -352,19 +363,27 @@
                         </div>
 
                         {/* LABOR BREAKDOWN CARDS */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                             <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex flex-col items-center text-center">
-                                <div className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-1">Solo Comisiones</div>
+                                <div className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-1">Comisión Lavadores</div>
                                 <div className="text-2xl font-bold text-orange-700">{processed.laborCommPct.toFixed(1)}%</div>
                                 <div className="text-xs text-orange-600">{formatCurrency(processed.laborCommission)}</div>
                             </div>
+
                             <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex flex-col items-center text-center">
-                                <div className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-1">Solo Salarios</div>
+                                <div className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-1">Comisión Ventas (Sup)</div>
+                                <div className="text-2xl font-bold text-orange-700">{processed.laborSupCommPct.toFixed(1)}%</div>
+                                <div className="text-xs text-orange-600">{formatCurrency(processed.supervisorSalesCommTotal)}</div>
+                            </div>
+
+                            <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex flex-col items-center text-center">
+                                <div className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-1">Salarios Base</div>
                                 <div className="text-2xl font-bold text-orange-700">{processed.laborSalaryPct.toFixed(1)}%</div>
                                 <div className="text-xs text-orange-600">{formatCurrency(processed.laborSalary)}</div>
                             </div>
+
                             <div className="bg-orange-100 border border-orange-200 p-4 rounded-xl flex flex-col items-center text-center">
-                                <div className="text-xs font-bold text-orange-500 uppercase tracking-wide mb-1">Costo Laboral Combinado</div>
+                                <div className="text-xs font-bold text-orange-500 uppercase tracking-wide mb-1">Total Mano de Obra</div>
                                 <div className="text-2xl font-bold text-orange-800">{processed.totalLaborPct.toFixed(1)}%</div>
                                 <div className="text-xs text-orange-700">{formatCurrency(processed.totalLabor)}</div>
                             </div>
