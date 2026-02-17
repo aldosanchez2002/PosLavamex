@@ -2321,18 +2321,15 @@ Firma: __________________
                                         <th className="p-3 text-right">Declarado USD</th>
                                         <th className="p-3 text-right">Esperado USD</th>
                                         <th className="p-3 text-right">Dif USD</th>
-                                        <th className="p-3 text-right">Recibido Tarjeta</th>
                                         <th className="p-3 text-right">Dif Total</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {cashCounts.map(c => {
-                                        const cardAmount = c.card || 0;
                                         // Use historical exchange rate if available, otherwise current
                                         const rate = c.exchangeRate || exRate;
-                                        // Dif Total formula: Dif MXN + (Dif USD * Rate) + Card
-                                        // Note: Assuming "Dif Total" is Net (Revenue + Difference) based on user prompt logic
-                                        const totalDiffVal = c.diffMxn + (c.diffUsd * rate) + cardAmount;
+                                        // Dif Total formula: Dif MXN + (Dif USD * Rate)
+                                        const totalDiffVal = c.diffMxn + (c.diffUsd * rate);
 
                                         const isBad = Math.abs(c.diffMxn) > 1 || Math.abs(c.diffUsd) > 0.1;
 
@@ -2350,7 +2347,6 @@ Firma: __________________
                                                 <td className="p-3 text-right text-gray-500">${(c.expectedUsd || 0).toFixed(2)}</td>
                                                 <td className={`p-3 text-right font-bold ${(c.diffUsd || 0) < 0 ? 'text-red-600' : ((c.diffUsd || 0) > 0 ? 'text-blue-600' : 'text-gray-400')}`}>{(c.diffUsd || 0) > 0 ? '+' : ''}${(c.diffUsd || 0).toFixed(2)}</td>
 
-                                                <td className="p-3 text-right font-bold text-blue-800">{formatCurrency(cardAmount)}</td>
                                                 <td className={`p-3 text-right font-black ${totalDiffVal < 0 ? 'text-red-700' : 'text-green-700'}`}>{formatCurrency(totalDiffVal)}</td>
                                             </tr>
                                         );
