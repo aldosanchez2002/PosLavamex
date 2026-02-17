@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lavamex Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0,react-dom@18.2.0",
+        "recharts": "https://esm.sh/recharts@2.12.2?deps=react@18.2.0,react-dom@18.2.0",
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+      }
+    }
+    </script>
+</head>
+
+<body class="bg-slate-50">
+    <div id="root"></div>
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import {
+            LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+            XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
+            ReferenceLine, ComposedChart
+        } from 'recharts';
+        import {
+            TrendingUp, Users, Calendar, Clock, DollarSign, Activity,
+            Award, ArrowUpRight, ArrowDownRight, Filter, Wallet, ShieldAlert, PiggyBank, Lock
+        } from 'lucide-react';
+        import { initializeApp } from 'firebase/app';
+        import { getFirestore, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyByIvJpBZv32Zd22fxlYWL9etzBa66Q2rE",
+            authDomain: "poslavamex.firebaseapp.com",
+            projectId: "poslavamex",
+            storageBucket: "poslavamex.firebasestorage.app",
+            messagingSenderId: "883264129",
+            appId: "1:883264129:web:39a352e2ade3888b4f1b80"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- Helpers ---
+        const formatCurrency = (val) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val);
+        const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ef4444'];
+
+        const KPICard = ({ title, value, subtext, icon: Icon, trend, color = "blue" }) => {
+            const colorClasses = {
+                blue: "bg-blue-100 text-blue-600",
+                green: "bg-green-100 text-green-600",
+                red: "bg-red-100 text-red-600",
+                orange: "bg-orange-100 text-orange-600",
+                purple: "bg-purple-100 text-purple-600",
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className={`p-3 rounded-lg ${colorClasses[color] || colorClasses.blue}`}>
+                            <Icon size={24} />
+                        </div>
+                        {trend && (
+                            <span className={`flex items-center text-sm font-bold ${trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                                {trend === 'up' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                            </span>
+                        )}
+                    </div>
+                    <h3 className="text-slate-500 text-sm font-medium mb-1 uppercase tracking-wide">{title}</h3>
+                    <div className="text-3xl font-bold text-slate-800 mb-1">{value}</div>
+                    {subtext && <div className="text-slate-400 text-xs">{subtext}</div>}
+                </div>
+            );
+        };
+
+        const AnalyticsDashboard = () => {
+            // Authentication State
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [passwordInput, setPasswordInput] = useState('');
+
+            // Data State
+            const [tickets, setTickets] = useState([]);
+            const [expenses, setExpenses] = useState([]);
+            const [bizExpenses, setBizExpenses] = useState([]);
+            const [cashCounts, setCashCounts] = useState([]);
+            const [employees, setEmployees] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [timeRange, setTimeRange] = useState('MONTH'); // Default to MONTH for better relevance
+
+            useEffect(() => {
+                if (!isAuthenticated) return; // Don't fetch data until logged in
+
+                const fetchData = async () => {
+                    try {
+                        const ticketsPromise = getDocs(query(collection(db, "tickets"), orderBy("timestamp", "desc")));
+                        const expensesPromise = getDocs(query(collection(db, "expenses"), orderBy("timestamp", "desc")));
+                        const bizExpPromise = getDocs(query(collection(db, "business_expenses"), orderBy("timestamp", "desc")));
+                        const cashCountsPromise = getDocs(query(collection(db, "cash_counts"), orderBy("timestamp", "desc")));
+                        const empPromise = getDocs(query(collection(db, "employees")));
+
+                        const [tSnap, eSnap, beSnap, ccSnap, empSnap] = await Promise.all([ticketsPromise, expensesPromise, bizExpPromise, cashCountsPromise, empPromise]);
+
+                        setTickets(tSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })).filter(t => t.status === 'PAID' || t.status === 'ARCHIVED'));
+                        setExpenses(eSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })).filter(e => e.status === 'APPROVED'));
+                        setBizExpenses(beSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })));
+                        setCashCounts(ccSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })));
+                        setEmployees(empSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+                    } catch (err) {
+                        console.error(err);
+                        alert("Error cargando datos");
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+                fetchData();
+            }, [isAuthenticated]);
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (passwordInput === 'covington521') {
+                    setIsAuthenticated(true);
+                } else {
+                    alert('Contraseña incorrecta');
+                    setPasswordInput('');
+                }
+            };
+
+            const processed = useMemo(() => {
+                if (tickets.length === 0) return null;
+
+                const now = new Date();
+                const filterDate = (item) => {
+                    if (timeRange === 'ALL') return true;
+                    if (timeRange === 'YEAR') return item.date.getFullYear() === now.getFullYear();
+                    if (timeRange === 'MONTH') return item.date.getMonth() === now.getMonth() && item.date.getFullYear() === now.getFullYear();
+                    return true;
+                };
+
+                const fTickets = tickets.filter(filterDate);
+                const fExpenses = expenses.filter(filterDate);
+                const fBizExpenses = bizExpenses.filter(filterDate);
+                const fCashCounts = cashCounts.filter(filterDate);
+
+                // --- 1. Financials ---
+                const totalRevenue = fTickets.reduce((acc, t) => acc + (t.price || 0), 0);
+                const laborCommission = fTickets.reduce((acc, t) => acc + (t.commission || 0), 0); // Variable labor from commissions
+
+                // Calculate Fixed Salaries (Estimate based on duration)
+                const activeSupervisors = employees.filter(e => e.active && e.role === 'SUPERVISOR');
+                const weeklyFixedLabor = activeSupervisors.reduce((acc, e) => acc + (parseFloat(e.baseSalary) || 0), 0);
+
+                let daysInRange = 1;
+                if (fTickets.length > 0) {
+                    const dates = fTickets.map(t => t.date);
+                    const minD = new Date(Math.min(...dates));
+                    const maxD = new Date(Math.max(...dates));
+                    // Calculate days difference + 1 to include the day itself
+                    daysInRange = Math.max(1, Math.ceil((maxD - minD) / (1000 * 60 * 60 * 24)) + 1);
+                }
+                const laborSalary = (weeklyFixedLabor / 7) * daysInRange;
+                const totalLabor = laborCommission + laborSalary;
+
+                const operationalExp = fExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
+                const adminExp = fBizExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
+
+                const totalExpenses = totalLabor + operationalExp + adminExp;
+                const netProfit = totalRevenue - totalExpenses;
+
+                // Labor Percentages
+                const laborCommPct = totalRevenue > 0 ? (laborCommission / totalRevenue) * 100 : 0;
+                const laborSalaryPct = totalRevenue > 0 ? (laborSalary / totalRevenue) * 100 : 0;
+                const totalLaborPct = totalRevenue > 0 ? (totalLabor / totalRevenue) * 100 : 0;
+
+                const avgTicket = totalRevenue / (fTickets.length || 1);
+
+                // --- 2. Trends (Monthly) ---
+                const monthlyStats = {};
+                // Helper to init month object
+                const getMonthObj = (date) => {
+                    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    if (!monthlyStats[key]) monthlyStats[key] = { name: key, revenue: 0, expenses: 0, profit: 0, labor: 0 };
+                    return monthlyStats[key];
+                }
+
+                fTickets.forEach(t => { const m = getMonthObj(t.date); m.revenue += (t.price || 0); m.labor += (t.commission || 0); });
+                fExpenses.forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
+                fBizExpenses.forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
+
+                // Calculate profit per month (Simplified for chart - uses only commissions for labor to avoid complexity of date ranges per month bucket)
+                Object.values(monthlyStats).forEach(m => { m.profit = m.revenue - m.expenses - m.labor; });
+                const chartFinancials = Object.values(monthlyStats).sort((a, b) => a.name.localeCompare(b.name));
+
+                // --- 3. Expense Composition ---
+                const chartExpenses = [
+                    { name: 'Comisiones', value: laborCommission },
+                    { name: 'Salarios (Est.)', value: laborSalary },
+                    { name: 'Gastos Operativos', value: operationalExp },
+                    { name: 'Gastos Admin', value: adminExp }
+                ].filter(i => i.value > 0);
+
+                // --- 4. Cash Control (Arqueos) ---
+                // We want to see the trend of 'diffMxn' to spot theft/errors
+                const chartArqueos = fCashCounts
+                    .sort((a, b) => a.date - b.date)
+                    .map(c => ({
+                        date: c.date.toLocaleDateString(),
+                        diff: c.diffMxn + (c.diffUsd * (c.exchangeRate || 18)), // Normalize to MXN
+                        user: c.user
+                    }));
+
+                const totalShortage = chartArqueos.reduce((acc, c) => acc + (c.diff < 0 ? c.diff : 0), 0);
+
+                // --- 5. Payment Methods ---
+                const payments = { 'Efectivo MXN': 0, 'Efectivo USD': 0, 'Tarjeta': 0 };
+                fTickets.forEach(t => {
+                    const p = t.paymentDetails || {};
+                    if (p.method === 'CARD') payments['Tarjeta'] += t.price;
+                    else {
+                        payments['Efectivo MXN'] += (p.mxn || 0) - (p.changeMxn || 0);
+                        payments['Efectivo USD'] += ((p.usd || 0) - (p.changeUsd || 0)) * (p.rate || 18);
+                    }
+                });
+                const chartPayments = Object.keys(payments).map(k => ({ name: k, value: payments[k] }));
+
+                // --- 6. Employee Performance ---
+                const empStats = {};
+                fTickets.forEach(t => {
+                    const washers = t.washers || (t.washer ? [t.washer] : []);
+                    washers.forEach(w => {
+                        if (!empStats[w]) empStats[w] = { name: w, tickets: 0 };
+                        empStats[w].tickets += 1;
+                    });
+                });
+                const chartEmployees = Object.values(empStats).sort((a, b) => b.tickets - a.tickets).slice(0, 10);
+
+                // --- 7. Service Popularity ---
+                const serviceStats = {};
+                fTickets.forEach(t => {
+                    const svcName = t.service?.label || 'Solo Extras';
+                    if (!serviceStats[svcName]) serviceStats[svcName] = { name: svcName, value: 0 };
+                    serviceStats[svcName].value += 1;
+                });
+                const chartServices = Object.values(serviceStats).sort((a, b) => b.value - a.value);
+
+                return {
+                    totalRevenue, totalExpenses, netProfit, avgTicket, ticketCount: fTickets.length,
+                    laborCommission, laborSalary, totalLabor,
+                    laborCommPct, laborSalaryPct, totalLaborPct,
+                    chartFinancials, chartExpenses, chartArqueos, chartPayments, chartEmployees, chartServices, totalShortage
+                };
+
+            }, [tickets, expenses, bizExpenses, cashCounts, employees, timeRange]);
+
+            // Authentication View
+            if (!isAuthenticated) {
+                return (
+                    <div className="flex h-screen items-center justify-center bg-slate-100 p-4">
+                        <form onSubmit={handleLogin} className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
+                            <div className="flex justify-center mb-6">
+                                <div className="bg-slate-100 p-4 rounded-full">
+                                    <Lock size={32} className="text-slate-600" />
+                                </div>
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-800 mb-2 text-center">Acceso Restringido</h2>
+                            <p className="text-slate-500 text-center mb-6 text-sm">Ingrese contraseña para ver la analítica.</p>
+                            <input
+                                type="password"
+                                value={passwordInput}
+                                onChange={(e) => setPasswordInput(e.target.value)}
+                                placeholder="Contraseña"
+                                className="w-full border p-4 rounded-xl mb-4 bg-slate-50 focus:bg-white transition-colors"
+                                autoFocus
+                            />
+                            <button type="submit" className="w-full bg-slate-900 text-white p-4 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">
+                                ENTRAR
+                            </button>
+                        </form>
+                    </div>
+                );
+            }
+
+            if (loading) return (
+                <div className="flex h-screen items-center justify-center text-slate-500">
+                    <Activity className="animate-spin mr-2" /> Cargando inteligencia de negocio...
+                </div>
+            );
+
+            if (!processed) return <div className="p-10 text-center">No hay datos disponibles.</div>;
+
+            return (
+                <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+                    <header className="flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-2">
+                                <Activity className="text-blue-600" /> Dashboard Gerencial
+                            </h1>
+                            <p className="text-slate-500 mt-1">Rentabilidad y Control Operativo</p>
+                        </div>
+                        <div className="bg-white p-1 rounded-lg border flex shadow-sm">
+                            {['ALL', 'YEAR', 'MONTH'].map(range => (
+                                <button
+                                    key={range}
+                                    onClick={() => setTimeRange(range)}
+                                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${timeRange === range ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
+                                >
+                                    {range === 'ALL' ? 'Histórico' : (range === 'YEAR' ? 'Este Año' : 'Este Mes')}
+                                </button>
+                            ))}
+                        </div>
+                    </header>
+
+                    {/* SECTION 1: FINANCIAL HEALTH */}
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2"><PiggyBank size={20} /> Salud Financiera</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                            <KPICard
+                                title="Ingreso Bruto"
+                                value={formatCurrency(processed.totalRevenue)}
+                                subtext={`${processed.ticketCount} vehículos`}
+                                icon={DollarSign}
+                                color="blue"
+                            />
+                            <KPICard
+                                title="Utilidad Neta (Est.)"
+                                value={formatCurrency(processed.netProfit)}
+                                subtext="Ingresos - (Labor + Gastos)"
+                                icon={Wallet}
+                                color={processed.netProfit > 0 ? "green" : "red"}
+                            />
+                            <KPICard
+                                title="Costo Laboral Total"
+                                value={`${processed.totalLaborPct.toFixed(1)}%`}
+                                subtext={`Total: ${formatCurrency(processed.totalLabor)}`}
+                                icon={Users}
+                                color="orange"
+                            />
+                            <KPICard
+                                title="Ticket Promedio"
+                                value={formatCurrency(processed.avgTicket)}
+                                subtext="Eficiencia de venta"
+                                icon={TrendingUp}
+                                color="purple"
+                            />
+                        </div>
+
+                        {/* LABOR BREAKDOWN CARDS */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex flex-col items-center text-center">
+                                <div className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-1">Solo Comisiones</div>
+                                <div className="text-2xl font-bold text-orange-700">{processed.laborCommPct.toFixed(1)}%</div>
+                                <div className="text-xs text-orange-600">{formatCurrency(processed.laborCommission)}</div>
+                            </div>
+                            <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex flex-col items-center text-center">
+                                <div className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-1">Solo Salarios</div>
+                                <div className="text-2xl font-bold text-orange-700">{processed.laborSalaryPct.toFixed(1)}%</div>
+                                <div className="text-xs text-orange-600">{formatCurrency(processed.laborSalary)}</div>
+                            </div>
+                            <div className="bg-orange-100 border border-orange-200 p-4 rounded-xl flex flex-col items-center text-center">
+                                <div className="text-xs font-bold text-orange-500 uppercase tracking-wide mb-1">Costo Laboral Combinado</div>
+                                <div className="text-2xl font-bold text-orange-800">{processed.totalLaborPct.toFixed(1)}%</div>
+                                <div className="text-xs text-orange-700">{formatCurrency(processed.totalLabor)}</div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-96 lg:col-span-2">
+                                <h3 className="font-bold text-slate-700 mb-4">Rentabilidad Mensual</h3>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={processed.chartFinancials}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="name" style={{ fontSize: '12px' }} />
+                                        <YAxis style={{ fontSize: '12px' }} tickFormatter={(val) => `$${val / 1000}k`} />
+                                        <Tooltip formatter={(val) => formatCurrency(val)} />
+                                        <Legend />
+                                        <Area type="monotone" dataKey="revenue" fill="#bfdbfe" stroke="#3b82f6" name="Ingresos" />
+                                        <Line type="monotone" dataKey="profit" stroke="#16a34a" strokeWidth={3} name="Utilidad Neta" />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-96">
+                                <h3 className="font-bold text-slate-700 mb-4">Distribución de Costos</h3>
+                                <ResponsiveContainer width="100%" height="80%">
+                                    <PieChart>
+                                        <Pie
+                                            data={processed.chartExpenses}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={60}
+                                            outerRadius={80}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            {processed.chartExpenses.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(val) => formatCurrency(val)} />
+                                        <Legend style={{ fontSize: '10px' }} layout="vertical" verticalAlign="bottom" align="center" />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECTION 2: OPERATIONAL CONTROL */}
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><ShieldAlert size={20} /> Control Operativo</h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-slate-700">Tendencia de Arqueos (Descuadres)</h3>
+                                    <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded">Faltante Acum: {formatCurrency(processed.totalShortage)}</span>
+                                </div>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={processed.chartArqueos}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="date" style={{ fontSize: '10px' }} />
+                                        <YAxis />
+                                        <ReferenceLine y={0} stroke="#000" />
+                                        <Tooltip formatter={(val) => formatCurrency(val)} />
+                                        <Line type="step" dataKey="diff" stroke="#ef4444" dot={false} strokeWidth={2} name="Diferencia" />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                                <p className="text-xs text-slate-400 mt-2 text-center">Valores negativos indican faltante de dinero en caja.</p>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
+                                <h3 className="font-bold text-slate-700 mb-4">Métodos de Pago (Flujo)</h3>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={processed.chartPayments} layout="vertical" margin={{ left: 40 }}>
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                                        <XAxis type="number" hide />
+                                        <YAxis dataKey="name" type="category" style={{ fontSize: '12px', fontWeight: 'bold' }} />
+                                        <Tooltip formatter={(val) => formatCurrency(val)} />
+                                        <Bar dataKey="value" fill="#8884d8" radius={[0, 4, 4, 0]} barSize={40}>
+                                            {processed.chartPayments.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={index === 0 ? '#16a34a' : (index === 1 ? '#22c55e' : '#3b82f6')} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECTION 3: STAFF & PRODUCT */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border h-96">
+                            <h3 className="font-bold text-slate-700 mb-4">Top Empleados (Vehículos Lavados)</h3>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={processed.chartEmployees} layout="vertical" margin={{ left: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="name" type="category" width={150} style={{ fontSize: '11px', fontWeight: 'bold' }} />
+                                    <Tooltip />
+                                    <Bar dataKey="tickets" fill="#6366f1" radius={[0, 4, 4, 0]} name="Vehículos" barSize={20} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-xl shadow-sm border h-96">
+                            <h3 className="font-bold text-slate-700 mb-4">Servicios Más Vendidos</h3>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={processed.chartServices} margin={{ bottom: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="name" style={{ fontSize: '10px' }} interval={0} angle={-15} textAnchor="end" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Bar dataKey="value" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Cantidad" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<AnalyticsDashboard />);
+    </script>
+</body>
+
+</html>
