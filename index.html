@@ -1685,10 +1685,10 @@ Firma: __________________
                 });
 
                 if (role === 'ADMIN') {
-                    if (isMatch) {
-                        alert("✅ CORTE CORRECTO. El dinero en caja coincide.");
-                    } else {
+                    if (totalDiff < -1) {
                         alert(`⚠️ DESCUADRE DETECTADO.\n\nDiferencia MXN: ${formatCurrency(diffMxn)}\nDiferencia USD: $${diffUsd.toFixed(2)}`);
+                    } else {
+                        alert("✅ CORTE CORRECTO. El dinero en caja coincide (o sobra).");
                     }
                 } else {
                     alert("✅ Corte registrado.");
@@ -2218,7 +2218,7 @@ Firma: __________________
                         <div onClick={() => setView('HISTORY')} className="cursor-pointer hover:scale-105 transition-transform bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div><div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div><div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div></div>
 
                         <div onClick={printCorte} className="cursor-pointer hover:scale-105 transition-transform bg-white p-4 rounded-xl shadow border border-gray-100 flex flex-col justify-center">
-                            <div className="flex items-center gap-2 mb-2 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja (Neto) </div>
+                            <div className="flex items-center gap-2 mb-2 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja </div>
                             <div className="mb-2">
                                 <div className="flex justify-between items-end">
                                     <span className="text-xs text-gray-400 font-bold">MXN</span>
