@@ -235,14 +235,36 @@
                 // --- 5. Payment Methods ---
                 const payments = { 'Efectivo MXN': 0, 'Efectivo USD': 0, 'Tarjeta': 0 };
                 fTickets.forEach(t => {
-                    const p = t.paymentDetails || {};
-                    if (p.method === 'CARD') payments['Tarjeta'] += t.price;
-                    else {
-                        payments['Efectivo MXN'] += (p.mxn || 0) - (p.changeMxn || 0);
-                        payments['Efectivo USD'] += ((p.usd || 0) - (p.changeUsd || 0)) * (p.rate || 18);
+                    const p = t.paymentDetails;
+
+                    // Fallback for legacy tickets without payment details (Assume Cash MXN)
+                    if (!p) {
+                        payments['Efectivo MXN'] += t.price || 0;
+                        return;
+                    }
+
+                    if (p.method === 'CARD') {
+                        payments['Tarjeta'] += t.price;
+                    } else {
+                        // Cash Logic: Correctly attribute change
+                        if (p.isOnlyUsd) {
+                            // Customer paid only in USD, change is given in USD
+                            payments['Efectivo USD'] += ((p.usd || 0) - (p.changeUsd || 0)) * (p.rate || 18);
+                        } else {
+                            // Customer paid mixed or MXN, change is given in MXN
+                            payments['Efectivo MXN'] += (p.mxn || 0) - (p.changeMxn || 0);
+                            payments['Efectivo USD'] += (p.usd || 0) * (p.rate || 18);
+                        }
                     }
                 });
-                const chartPayments = Object.keys(payments).map(k => ({ name: k, value: payments[k] }));
+
+                // Filter out zero values to prevent legend duplication/ghosting
+                const chartPayments = Object.keys(payments)
+                    .map(k => ({ name: k, value: payments[k] }))
+                    .filter(item => item.value > 0);
+
+                // Calculate total for percentage display
+                const totalPaymentFlow = chartPayments.reduce((acc, item) => acc + item.value, 0);
 
                 // --- 6. Employee Performance ---
                 const empStats = {};
@@ -268,7 +290,7 @@
                     totalRevenue, totalExpenses, netProfit, avgTicket, ticketCount: fTickets.length,
                     laborCommission, laborSalary, supervisorSalesCommTotal, totalLabor,
                     laborCommPct, laborSalaryPct, laborSupCommPct, totalLaborPct,
-                    chartFinancials, chartExpenses, chartArqueos, chartPayments, chartEmployees, chartServices, totalShortage
+                    chartFinancials, chartExpenses, chartArqueos, chartPayments, totalPaymentFlow, chartEmployees, chartServices, totalShortage
                 };
 
             }, [tickets, expenses, bizExpenses, cashCounts, employees, timeRange]);
@@ -454,17 +476,23 @@
                             <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
                                 <h3 className="font-bold text-slate-700 mb-4">Métodos de Pago (Flujo)</h3>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={processed.chartPayments} layout="vertical" margin={{ left: 40 }}>
-                                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" style={{ fontSize: '12px', fontWeight: 'bold' }} />
-                                        <Tooltip formatter={(val) => formatCurrency(val)} />
-                                        <Bar dataKey="value" fill="#8884d8" radius={[0, 4, 4, 0]} barSize={40}>
+                                    <PieChart>
+                                        <Pie
+                                            data={processed.chartPayments}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={60}
+                                            outerRadius={80}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
                                             {processed.chartPayments.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={index === 0 ? '#16a34a' : (index === 1 ? '#22c55e' : '#3b82f6')} />
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
-                                        </Bar>
-                                    </BarChart>
+                                        </Pie>
+                                        <Tooltip formatter={(val) => `${((val / processed.totalPaymentFlow) * 100).toFixed(1)}%`} />
+                                        <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                    </PieChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
