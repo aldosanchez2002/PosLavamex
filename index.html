@@ -2137,9 +2137,38 @@ Firma: __________________
             const itemStats = calculateItemStats();
 
             const calculateCorteTotals = () => {
-                let revenueCard = 0, revenueCashTickets = 0, collectedUsd = 0;
-                corteTickets.forEach(t => { if (t.paymentDetails?.method === 'CARD') revenueCard += t.price; else { revenueCashTickets += t.price; collectedUsd += (t.paymentDetails?.usd || 0); } });
-                const impliedMxnSales = revenueCashTickets - (collectedUsd * exRate);
+                let revenueCard = 0;
+                let revenueCashTickets = 0;
+                let netMxnFlow = 0;
+                let netUsdFlow = 0;
+
+                corteTickets.forEach(t => {
+                    if (t.paymentDetails?.method === 'CARD') {
+                        revenueCard += t.price;
+                    } else {
+                        revenueCashTickets += t.price;
+
+                        // Calculate actual cash movement based on what was received and given back
+                        const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false };
+
+                        const mxnIn = parseFloat(pay.mxn) || 0;
+                        const usdIn = parseFloat(pay.usd) || 0;
+
+                        let mxnOut = 0;
+                        let usdOut = 0;
+
+                        // Deduct change from the appropriate currency
+                        if (pay.isOnlyUsd) {
+                            usdOut = parseFloat(pay.changeUsd) || 0;
+                        } else {
+                            mxnOut = parseFloat(pay.changeMxn) || 0;
+                        }
+
+                        netMxnFlow += (mxnIn - mxnOut);
+                        netUsdFlow += (usdIn - usdOut);
+                    }
+                });
+
                 const approvedExpensesTotal = corteExpenses.filter(e => e.status === 'APPROVED').reduce((a, b) => a + (b.amount || 0), 0);
 
                 let startDateObj;
@@ -2162,13 +2191,13 @@ Firma: __________________
                     total: revenueCard + revenueCashTickets,
                     card: revenueCard,
                     cashTotal: revenueCashTickets,
-                    cashMxn: impliedMxnSales,
-                    cashUsd: collectedUsd,
+                    cashMxn: netMxnFlow, // Actual MXN collected
+                    cashUsd: netUsdFlow, // Actual USD collected (net)
                     expenses: approvedExpensesTotal,
                     initialMxn: initMxn,
                     initialUsd: initUsd,
-                    cashNetMxn: (impliedMxnSales + initMxn + cashInsMxn) - approvedExpensesTotal - dropsMxn,
-                    cashNetUsd: collectedUsd + initUsd + cashInsUsd - dropsUsd,
+                    cashNetMxn: (netMxnFlow + initMxn + cashInsMxn) - approvedExpensesTotal - dropsMxn,
+                    cashNetUsd: netUsdFlow + initUsd + cashInsUsd - dropsUsd,
                     dropsMxn,
                     dropsUsd,
                     cashInsMxn,
