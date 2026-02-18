@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { PrintService } from '../../services/PrintService';
-import { Car, User, FileText, PlusCircle, Trash2, Save, Printer, Loader2, Pencil } from 'lucide-react';
+import { Car, User, FileText, PlusCircle, Trash2, Save, Printer, Loader2, Pencil, Activity } from 'lucide-react';
 import Button from '../common/Button';
 import { SIZES, SERVICES } from '../../config/constants';
 import { toggleSelection } from '../../utils/helpers';
