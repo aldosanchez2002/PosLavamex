@@ -683,7 +683,7 @@ Firma: __________________
                     ['+ INGRESOS EXTRA', formatCurrency(totals.cashInsMxn), `$${totals.cashInsUsd.toFixed(2)}`],
                     ['- GASTOS', `(${formatCurrency(totals.expenses)})`, `$0.00`],
                     ['- ENVÍOS (RETIROS)', `(${formatCurrency(totals.dropsMxn)})`, `($${totals.dropsUsd.toFixed(2)})`],
-                    ['= TOTAL EN CAJA (ESPERADO)', formatCurrency(totals.cashNetMxn), `$${totals.cashNetUsd.toFixed(2)}`]
+                    ['= TOTAL EN CAJA (DEBE HABER)', formatCurrency(totals.cashNetMxn), `$${totals.cashNetUsd.toFixed(2)}`]
                 ];
 
                 autoTable(doc, {
@@ -768,7 +768,7 @@ Firma: __________________
 
                 if (arqueos && arqueos.first && arqueos.last) {
                     doc.setFontSize(11); // 14 -> 11
-                    doc.text("Análisis de Flujo de Efectivo (Arqueo Inicial vs Final)", 14, currentY);
+                    doc.text("Corte de Caja", 14, currentY);
 
                     const first = arqueos.first;
                     const last = arqueos.last;
@@ -801,8 +801,8 @@ Firma: __________________
                         [`Arqueo Inicial (${formatTime(first.timestamp)})`, formatCurrency(first.declaredMxn), `$${first.declaredUsd.toFixed(2)}`],
                         [`Arqueo Final (${formatTime(last.timestamp)})`, formatCurrency(last.declaredMxn), `$${last.declaredUsd.toFixed(2)}`],
                         ['', '', ''],
-                        ['Flujo Real (Final - Inicial)', formatCurrency(physDeltaMxn), `$${physDeltaUsd.toFixed(2)}`],
-                        ['Flujo Esperado (Ventas - Gastos)', formatCurrency(sysDeltaMxn), `$${sysDeltaUsd.toFixed(2)}`],
+                        ['Diferencia de Arqueos', formatCurrency(physDeltaMxn), `$${physDeltaUsd.toFixed(2)}`],
+                        ['Diferencia debe ser', formatCurrency(sysDeltaMxn), `$${sysDeltaUsd.toFixed(2)}`],
                         ['', '', ''],
                         ['DIFERENCIA OPERATIVA', formatCurrency(diffMxn), `$${diffUsd.toFixed(2)}`]
                     ];
@@ -842,8 +842,23 @@ Firma: __________________
 
                     doc.setFontSize(14); // 16 -> 14
                     doc.setFont(undefined, 'bold');
-                    doc.setTextColor(0); // Black text
-                    doc.text(formatCurrency(totalDiffMxn), pageWidth - 50, boxY + 14, { align: 'center' }); // + 18 -> + 14
+
+                    // --- COLOR LOGIC FOR DIFFERENCE ---
+                    // Allow small float errors (e.g. +/- 1 peso is acceptable as neutral)
+                    let diffColor = [0, 0, 0]; // Default Black
+                    let diffPrefix = "";
+
+                    if (totalDiffMxn > 1) {
+                        diffColor = [0, 150, 0]; // Green for Extra
+                        diffPrefix = "+";
+                    } else if (totalDiffMxn < -1) {
+                        diffColor = [200, 0, 0]; // Red for Missing
+                        // Negative number standard formatting usually includes '-', but verify logic
+                    }
+
+                    doc.setTextColor(...diffColor);
+                    doc.text(`${diffPrefix}${formatCurrency(totalDiffMxn)}`, pageWidth - 50, boxY + 14, { align: 'center' }); // + 18 -> + 14
+                    doc.setTextColor(0); // Reset
                     doc.setFont(undefined, 'normal');
 
                     // Box 2: Total Tickets Pagado (Left side) - Similar style
