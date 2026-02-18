@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Lavamex POS</title>
+
+    <!-- UTILITIES: Tailwind for styling -->
+    <!-- Kept CDN for immediate compatibility with your refactor. 
+         For production, consider installing via npm and removing this line. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        /* Utility to hide scrollbars while maintaining functionality */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+  </head>
+  <body class="bg-gray-100">
+    <div id="root"></div>
+    <!-- Module Entry Point -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
