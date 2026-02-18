@@ -34,7 +34,8 @@
         } from 'recharts';
         import {
             TrendingUp, Users, Calendar, Clock, DollarSign, Activity,
-            Award, ArrowUpRight, ArrowDownRight, Filter, Wallet, ShieldAlert, PiggyBank, Lock
+            Award, ArrowUpRight, ArrowDownRight, Filter, Wallet, ShieldAlert, PiggyBank, Lock,
+            Droplets, Percent, Briefcase, Car
         } from 'lucide-react';
         import { initializeApp } from 'firebase/app';
         import { getFirestore, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
@@ -62,6 +63,9 @@
                 red: "bg-red-100 text-red-600",
                 orange: "bg-orange-100 text-orange-600",
                 purple: "bg-purple-100 text-purple-600",
+                indigo: "bg-indigo-100 text-indigo-600",
+                pink: "bg-pink-100 text-pink-600",
+                cyan: "bg-cyan-100 text-cyan-600",
             };
 
             return (
@@ -159,8 +163,13 @@
                 const laborCommission = fTickets.reduce((acc, t) => acc + (t.commission || 0), 0);
 
                 // 2. Labor: Fixed Salaries (Estimate based on duration)
-                const activeSupervisors = employees.filter(e => e.active && e.role === 'SUPERVISOR');
-                const weeklyFixedLabor = activeSupervisors.reduce((acc, e) => acc + (parseFloat(e.baseSalary) || 0), 0);
+                // MODIFIED: Filter first to get count, then sum
+                const salariedEmployees = employees.filter(e => e.active && (parseFloat(e.baseSalary) || 0) > 0);
+                const weeklyFixedLabor = salariedEmployees.reduce((acc, e) => acc + (parseFloat(e.baseSalary) || 0), 0);
+                const salariedCount = salariedEmployees.length;
+
+                // Filter for supervisors only for the Sales Commission calculation below
+                const activeSupervisors = employees.filter(e => e.active && (e.role === 'SUPERVISOR' || e.isSupervisor === true));
 
                 let daysInRange = 1;
                 if (fTickets.length > 0) {
@@ -173,26 +182,49 @@
 
                 // 3. Labor: Supervisor Sales Commissions (% of Total Revenue)
                 const supervisorSalesCommTotal = activeSupervisors.reduce((acc, emp) => {
-                    const pct = parseFloat(emp.commissionPct) || 0;
+                    // MODIFIED: Check both naming conventions for commission percentage
+                    const pct = parseFloat(emp.commissionPct) || parseFloat(emp.commissionPercent) || 0;
                     return acc + (totalRevenue * (pct / 100));
                 }, 0);
 
                 // Total Labor Cost
                 const totalLabor = laborCommission + laborSalary + supervisorSalesCommTotal;
 
+                // Operating Expenses (Non-Labor)
                 const operationalExp = fExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
                 const adminExp = fBizExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
+                const totalOpExpenses = operationalExp + adminExp;
 
-                const totalExpenses = totalLabor + operationalExp + adminExp;
+                const totalExpenses = totalLabor + totalOpExpenses;
                 const netProfit = totalRevenue - totalExpenses;
 
-                // Labor Percentages
+                // Percentages
+                const profitMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+                const totalLaborPct = totalRevenue > 0 ? (totalLabor / totalRevenue) * 100 : 0;
+                const totalOpExpensesPct = totalRevenue > 0 ? (totalOpExpenses / totalRevenue) * 100 : 0;
+
+                // Detailed Labor Percentages
                 const laborCommPct = totalRevenue > 0 ? (laborCommission / totalRevenue) * 100 : 0;
                 const laborSupCommPct = totalRevenue > 0 ? (supervisorSalesCommTotal / totalRevenue) * 100 : 0;
                 const laborSalaryPct = totalRevenue > 0 ? (laborSalary / totalRevenue) * 100 : 0;
-                const totalLaborPct = totalRevenue > 0 ? (totalLabor / totalRevenue) * 100 : 0;
 
                 const avgTicket = totalRevenue / (fTickets.length || 1);
+                const avgTicketsPerDay = fTickets.length > 0 ? fTickets.length / daysInRange : 0;
+
+                // --- NEW: Armor All Analysis ---
+                // Regex to catch "armorall", "armor all", "armor-all", case insensitive
+                const armorRegex = /armor\s*-?all/i;
+
+                // Scan both operational and business expenses just in case it was categorized wrong
+                const allExpensesForPeriod = [...fExpenses, ...fBizExpenses];
+
+                const armorAllExpenses = allExpensesForPeriod.filter(e => {
+                    const desc = e.description || e.note || e.concept || '';
+                    return armorRegex.test(desc);
+                });
+
+                const totalArmorAllCost = armorAllExpenses.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
+                const armorAllPerWash = fTickets.length > 0 ? totalArmorAllCost / fTickets.length : 0;
 
                 // --- 2. Trends (Monthly) ---
                 const monthlyStats = {};
@@ -287,9 +319,12 @@
                 const chartServices = Object.values(serviceStats).sort((a, b) => b.value - a.value);
 
                 return {
-                    totalRevenue, totalExpenses, netProfit, avgTicket, ticketCount: fTickets.length,
+                    totalRevenue, totalExpenses, netProfit, profitMarginPct, avgTicket, ticketCount: fTickets.length,
+                    avgTicketsPerDay,
                     laborCommission, laborSalary, supervisorSalesCommTotal, totalLabor,
                     laborCommPct, laborSalaryPct, laborSupCommPct, totalLaborPct,
+                    totalOpExpenses, totalOpExpensesPct,
+                    armorAllPerWash, totalArmorAllCost, salariedCount,
                     chartFinancials, chartExpenses, chartArqueos, chartPayments, totalPaymentFlow, chartEmployees, chartServices, totalShortage
                 };
 
@@ -362,25 +397,50 @@
                                 color="blue"
                             />
                             <KPICard
-                                title="Utilidad Neta "
-                                value={formatCurrency(processed.netProfit)}
-                                subtext="Ingresos - Labor - Gastos"
-                                icon={Wallet}
-                                color={processed.netProfit > 0 ? "green" : "red"}
-                            />
-                            <KPICard
-                                title="Costo Laboral Total"
-                                value={`${processed.totalLaborPct.toFixed(1)}%`}
-                                subtext={`Total: ${formatCurrency(processed.totalLabor)}`}
+                                title="Nómina"
+                                value={formatCurrency(processed.totalLabor)}
+                                subtext={`${processed.totalLaborPct.toFixed(1)}% de Ingreso`}
                                 icon={Users}
                                 color="orange"
                             />
                             <KPICard
+                                title="Gastos Operativos"
+                                value={formatCurrency(processed.totalOpExpenses)}
+                                subtext={`${processed.totalOpExpensesPct.toFixed(1)}% de Ingreso`}
+                                icon={ArrowDownRight}
+                                color="red"
+                            />
+                            <KPICard
+                                title="Utilidad Neta"
+                                value={formatCurrency(processed.netProfit)}
+                                subtext={`${processed.profitMarginPct.toFixed(1)}% de Ingreso`}
+                                icon={Wallet}
+                                color={processed.netProfit > 0 ? "green" : "red"}
+                            />
+                        </div>
+
+                        {/* SECONDARY METRICS: ARMOR ALL & TICKET AVG */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <KPICard
                                 title="Ticket Promedio"
                                 value={formatCurrency(processed.avgTicket)}
-                                subtext="Eficiencia de venta"
+                                subtext="Ingreso por auto"
                                 icon={TrendingUp}
                                 color="purple"
+                            />
+                            <KPICard
+                                title="Promedio Autos/Día"
+                                value={processed.avgTicketsPerDay.toFixed(1)}
+                                subtext="Vehículos diarios"
+                                icon={Car}
+                                color="cyan"
+                            />
+                            <KPICard
+                                title="ArmorAll / Lavado"
+                                value={formatCurrency(processed.armorAllPerWash)}
+                                subtext={`Gasto Total: ${formatCurrency(processed.totalArmorAllCost)}`}
+                                icon={Droplets}
+                                color="indigo"
                             />
                         </div>
 
@@ -399,7 +459,7 @@
                             </div>
 
                             <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex flex-col items-center text-center">
-                                <div className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-1">Salarios Base</div>
+                                <div className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-1">Salarios Base ({processed.salariedCount})</div>
                                 <div className="text-2xl font-bold text-orange-700">{processed.laborSalaryPct.toFixed(1)}%</div>
                                 <div className="text-xs text-orange-600">{formatCurrency(processed.laborSalary)}</div>
                             </div>
@@ -412,21 +472,23 @@
                         </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border h-96 lg:col-span-2">
-                                <h3 className="font-bold text-slate-700 mb-4">Rentabilidad Mensual</h3>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart data={processed.chartFinancials}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                        <XAxis dataKey="name" style={{ fontSize: '12px' }} />
-                                        <YAxis style={{ fontSize: '12px' }} tickFormatter={(val) => `$${val / 1000}k`} />
-                                        <Tooltip formatter={(val) => formatCurrency(val)} />
-                                        <Legend />
-                                        <Area type="monotone" dataKey="revenue" fill="#bfdbfe" stroke="#3b82f6" name="Ingresos" />
-                                        <Line type="monotone" dataKey="profit" stroke="#16a34a" strokeWidth={3} name="Utilidad Neta" />
-                                    </ComposedChart>
-                                </ResponsiveContainer>
-                            </div>
-                            <div className="bg-white p-6 rounded-xl shadow-sm border h-96">
+                            {timeRange !== 'MONTH' && (
+                                <div className="bg-white p-6 rounded-xl shadow-sm border h-96 lg:col-span-2">
+                                    <h3 className="font-bold text-slate-700 mb-4">Rentabilidad Mensual</h3>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <ComposedChart data={processed.chartFinancials}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="name" style={{ fontSize: '12px' }} />
+                                            <YAxis style={{ fontSize: '12px' }} tickFormatter={(val) => `$${val / 1000}k`} />
+                                            <Tooltip formatter={(val) => formatCurrency(val)} />
+                                            <Legend />
+                                            <Area type="monotone" dataKey="revenue" fill="#bfdbfe" stroke="#3b82f6" name="Ingresos" />
+                                            <Line type="monotone" dataKey="profit" stroke="#16a34a" strokeWidth={3} name="Utilidad Neta" />
+                                        </ComposedChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            )}
+                            <div className={`bg-white p-6 rounded-xl shadow-sm border h-96 ${timeRange === 'MONTH' ? 'lg:col-span-3' : ''}`}>
                                 <h3 className="font-bold text-slate-700 mb-4">Distribución de Costos</h3>
                                 <ResponsiveContainer width="100%" height="80%">
                                     <PieChart>
