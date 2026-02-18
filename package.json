@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "firebase": "^12.9.0",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
+    "lucide-react": "^0.574.0",
+    "react-router-dom": "^7.13.0"
+  }
+}
