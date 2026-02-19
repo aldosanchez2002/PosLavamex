@@ -137,6 +137,7 @@
                 { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
                 { id: 'LIMP_FOCOS', label: 'Limpieza de Focos', price: 340, commission: 120 },
                 { id: 'ASPIRADO_CAJUELA', label: 'Aspirado de Cajuela', price: 40, commission: 14 },
+                { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
             ]
         };
 
@@ -1271,7 +1272,8 @@ Firma: __________________
             const processPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA'].includes(e.id));
+                // EDIT: Added 'BOLEADA' to exception list
+                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA', 'BOLEADA'].includes(e.id));
                 if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
@@ -1296,7 +1298,8 @@ Firma: __________________
             const processCardPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA'].includes(e.id));
+                // EDIT: Added 'BOLEADA' to exception list
+                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA', 'BOLEADA'].includes(e.id));
                 if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
@@ -1699,6 +1702,9 @@ Firma: __________________
                     timestamp: new Date()
                 });
 
+                // Calculate a rough total difference value for the alert
+                const totalDiff = diffMxn + (diffUsd * exRate);
+
                 if (role === 'ADMIN') {
                     if (totalDiff < -1) {
                         alert(`⚠️ DESCUADRE DETECTADO.\n\nDiferencia MXN: ${formatCurrency(diffMxn)}\nDiferencia USD: $${diffUsd.toFixed(2)}`);
@@ -1752,6 +1758,29 @@ Firma: __________________
                 });
 
                 expectedMxn -= expensesToday;
+                expectedMxn -= dropsTodayMxn;
+                expectedMxn -= dropsTodayUsd; // Assuming drops can be USD, but logic here mixes currencies. Wait, the drop logic separates them.
+                // Correction: Deduct drops in their respective currency
+                // Re-calculating properly
+                // Since the above lines deducted dropsTodayUsd from expectedMxn, that was a bug in previous logic or just simplified.
+                // Let's fix it here:
+                // Resetting and applying correctly:
+                expectedMxn = openingCash.mxn;
+                expectedUsd = openingCash.usd;
+
+                allToday.forEach(t => {
+                    const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false, method: 'CASH' };
+                    if (pay.method === 'CARD') {
+                        totalCard += t.price;
+                    } else {
+                        expectedMxn += (pay.mxn || 0);
+                        expectedUsd += (pay.usd || 0);
+                        if (pay.isOnlyUsd) expectedUsd -= (pay.changeUsd || 0);
+                        else expectedMxn -= (pay.changeMxn || 0);
+                    }
+                });
+
+                expectedMxn -= expensesToday; // Expenses usually paid in MXN
                 expectedMxn -= dropsTodayMxn;
                 expectedUsd -= dropsTodayUsd;
                 expectedMxn += cashInsTodayMxn;
@@ -1819,7 +1848,31 @@ Firma: __________________
                                     {/* ROUND UP TO NEAREST QUARTER FOR DISPLAY */}
                                     <div className="text-xl text-green-600 font-medium">${(Math.ceil((t.price / exRate) * 4) / 4).toFixed(2)} USD</div>
                                 </div>
-                                <p className="text-center text-gray-500 mb-6 font-medium">{t.vehicleDesc} • {t.washers?.join(', ')}</p>
+                                <div className="text-center mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-inner">
+                                    <div className="text-lg font-bold text-gray-800 uppercase tracking-wide border-b border-gray-200 pb-2 mb-2">
+                                        {t.vehicleDesc || 'VEHÍCULO SIN NOMBRE'}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-sm text-left">
+                                        <div><span className="text-gray-500 font-bold">Tamaño:</span> <span className="text-gray-800">{t.size?.label || 'N/A'}</span></div>
+                                        <div><span className="text-gray-500 font-bold">Paquete:</span> <span className="text-gray-800 font-bold text-blue-700">{t.service?.label || 'Solo Extras'}</span></div>
+                                    </div>
+                                    {t.extras && t.extras.length > 0 && (
+                                        <div className="mt-3 text-left">
+                                            <div className="text-gray-500 font-bold text-xs uppercase mb-1">Extras:</div>
+                                            <div className="flex flex-wrap gap-1">
+                                                {t.extras.map((e, i) => (
+                                                    <span key={i} className="bg-indigo-50 text-indigo-800 text-xs px-2 py-1 rounded border border-indigo-100 font-medium">
+                                                        {e.label}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="mt-3 text-left border-t border-gray-200 pt-2">
+                                        <div className="text-gray-500 font-bold text-xs uppercase mb-1">Lavadores:</div>
+                                        <div className="text-gray-800 text-sm">{t.washers && t.washers.length > 0 ? t.washers.join(', ') : 'Sin Asignar'}</div>
+                                    </div>
+                                </div>
 
                                 <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                     <h4 className="font-bold text-gray-500 text-xs uppercase mb-3 text-center tracking-wider">Add-ons Rápidos (Comisión $0)</h4>
