@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Users, FileText, Calendar, PlusCircle, UserCog, EyeOff, Upload, Briefcase, Banknote, TrendingUp, ShieldCheck, CreditCard, AlertTriangle, Printer, Save, X, Check, ClipboardList } from 'lucide-react';
+import { Users, FileText, Calendar, PlusCircle, UserCog, EyeOff, Upload, Briefcase, Banknote, TrendingUp, ShieldCheck, CreditCard, AlertTriangle, Printer, Save, X, Check, ClipboardList, Pencil, Archive } from 'lucide-react';
 import { collection, addDoc, doc, writeBatch, getDocs, query, where } from 'firebase/firestore';
 
 const { AppContext, Button, Modal } = window;
@@ -138,8 +138,8 @@ const AdminCorte = () => {
             total: revenueCard + revenueCashTickets,
             card: revenueCard,
             cashTotal: revenueCashTickets,
-            cashMxn: netMxnFlow, 
-            cashUsd: netUsdFlow, 
+            cashMxn: netMxnFlow,
+            cashUsd: netUsdFlow,
             expenses: approvedExpensesTotal,
             initialMxn: initMxn,
             initialUsd: initUsd,
