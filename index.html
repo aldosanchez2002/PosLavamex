@@ -1,12 +1,18 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Lavamex POS</title>
+
+    <!-- UTILITIES: Tailwind for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- COMPILER: Babel for in-browser JSX transformation (Dev only) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link rel="stylesheet" href="css/styles.css">
+
+    <!-- IMPORTS: ES Modules for React, Firebase, and PDF generation -->
     <script type="importmap">
     {
       "imports": {
@@ -20,16 +26,2935 @@
       }
     }
     </script>
+
+    <style>
+        /* Utility to hide scrollbars while maintaining functionality */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
 </head>
+
 <body class="bg-gray-100">
     <div id="root"></div>
-    
-    <script type="module" src="js/core.js"></script>
 
-    <script type="text/babel" data-type="module" src="js/app-context.jsx"></script>
-    <script type="text/babel" data-type="module" src="js/views-greeter.jsx"></script>
-    <script type="text/babel" data-type="module" src="js/views-cashier.jsx"></script>
-    <script type="text/babel" data-type="module" src="js/views-admin.jsx"></script>
-    <script type="text/babel" data-type="module" src="js/app.jsx"></script>
+    <script type="text/babel" data-type="module">
+        // ------------------------------------------------------------------
+        // SECTION 1: IMPORTS & SETUP
+        // ------------------------------------------------------------------
+        import React, { useState, useEffect, useContext, createContext } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import {
+            User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2,
+            LogOut, Users, Calculator, Printer, Wifi, Lock, Archive, Pencil,
+            PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
+            Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
+            TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
+            EyeOff, ClipboardList, ShieldCheck, UserCog, Zap
+        } from 'lucide-react';
+
+        import { jsPDF } from 'jspdf';
+        import autoTable from 'jspdf-autotable';
+
+        import { initializeApp, getApps, getApp } from 'firebase/app';
+        import {
+            getFirestore, collection, addDoc, updateDoc, doc, onSnapshot,
+            query, orderBy, serverTimestamp, writeBatch, setDoc, getDocs,
+            where, deleteDoc, limit
+        } from 'firebase/firestore';
+
+        // ------------------------------------------------------------------
+        // SECTION 2: FIREBASE CONFIGURATION
+        // ------------------------------------------------------------------
+        const firebaseConfig = {
+            apiKey: "AIzaSyByIvJpBZv32Zd22fxlYWL9etzBa66Q2rE",
+            authDomain: "poslavamex.firebaseapp.com",
+            projectId: "poslavamex",
+            storageBucket: "poslavamex.firebasestorage.app",
+            messagingSenderId: "883264129",
+            appId: "1:883264129:web:39a352e2ade3888b4f1b80"
+        };
+
+        const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+        const db = getFirestore(app);
+
+        // ------------------------------------------------------------------
+        // SECTION 3: CONSTANTS & DEFAULTS
+        // ------------------------------------------------------------------
+        const SIZES = [
+            { id: 'AUTO', label: 'Auto' },
+            { id: 'SUV_CHICA', label: 'SUV Chica' },
+            { id: 'PICKUP', label: 'Pick-Up / SUV MD' },
+            { id: 'SUV_GDE', label: 'SUV Gde' }
+        ];
+
+        const SERVICES = [
+            { id: 'GENERAL', label: 'Lavado General' },
+            { id: 'WAX', label: 'Lavado + Cera' },
+            { id: 'COMPLETE', label: 'Paquete Completo' },
+            { id: 'PREMIUM', label: 'Paquete Premium' },
+            { id: 'PRESIDENTIAL', label: 'Paquete Presidencial' }
+        ];
+
+        const DEFAULTS = {
+            PINS: {
+                GREETER: ['bWVsdnkxMDYx', 'NXJpdG83'], // melvy1061, 5rito7
+                CASHIER: 'c2VyZ2lvOTE5MQ==', // sergio9191
+                ADMIN: 'Y292aW5ndG9uNTIx'    // covington521
+            },
+            EXCHANGE_RATE: 18.10,
+            SNACK_PRICE: 30,
+            INITIAL_EMPLOYEES: [
+                { name: 'Aldo', active: true, role: 'WASHER' },
+                { name: 'Sergio', active: true, role: 'WASHER' },
+                { name: 'Juan', active: true, role: 'WASHER' },
+                { name: 'Rodrigo', active: true, role: 'WASHER' }
+            ],
+            PRICES: {
+                GENERAL: { AUTO: 200, SUV_CHICA: 240, PICKUP: 360, SUV_GDE: 360 },
+                WAX: { AUTO: 540, SUV_CHICA: 640, PICKUP: 820, SUV_GDE: 820 },
+                COMPLETE: { AUTO: 840, SUV_CHICA: 1040, PICKUP: 1160, SUV_GDE: 1640 },
+                PREMIUM: { AUTO: 1180, SUV_CHICA: 1440, PICKUP: 1620, SUV_GDE: 2100 },
+                PRESIDENTIAL: { AUTO: 1540, SUV_CHICA: 1940, PICKUP: 2320, SUV_GDE: 2320 },
+            },
+            COMMISSIONS: {
+                GENERAL: { AUTO: 70, SUV_CHICA: 84, PICKUP: 126, SUV_GDE: 126 },
+                WAX: { AUTO: 189, SUV_CHICA: 224, PICKUP: 287, SUV_GDE: 287 },
+                COMPLETE: { AUTO: 294, SUV_CHICA: 364, PICKUP: 406, SUV_GDE: 574 },
+                PREMIUM: { AUTO: 413, SUV_CHICA: 504, PICKUP: 567, SUV_GDE: 735 },
+                PRESIDENTIAL: { AUTO: 539, SUV_CHICA: 679, PICKUP: 812, SUV_GDE: 812 },
+            },
+            EXTRAS: [
+                { id: 'MOTOR', label: 'Lavado Motor', price: 400, commission: 140 },
+                { id: 'CHASIS', label: 'Chasis', price: 400, commission: 140 },
+                { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
+                { id: 'ARMORALL', label: 'Armor-All', price: 40, commission: 14 },
+                { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
+                { id: 'LIMP_FOCOS', label: 'Limpieza de Focos', price: 340, commission: 120 },
+                { id: 'ASPIRADO_CAJUELA', label: 'Aspirado de Cajuela', price: 40, commission: 14 },
+            ]
+        };
+
+        // ------------------------------------------------------------------
+        // SECTION 4: HELPER FUNCTIONS (Business Logic & DB Wrapper)
+        // ------------------------------------------------------------------
+
+        const handleDbAction = async (actionFn) => {
+            try {
+                await actionFn();
+            } catch (e) {
+                alert("Error: " + e.message);
+                console.error(e);
+            }
+        };
+
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('es-MX', {
+                style: 'currency',
+                currency: 'MXN'
+            }).format(amount);
+        };
+
+        const getLocalDateStr = (d = new Date()) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
+
+        const getMonthStr = (d = new Date()) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            return `${y}-${m}`;
+        };
+
+        const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0, currentSnackPrice = 30) => {
+            const basePrice = (serviceId && sizeId && prices[serviceId]?.[sizeId]) || 0;
+            const baseComm = (serviceId && sizeId && commissions[serviceId]?.[sizeId]) || 0;
+            const extrasPrice = extraList.reduce((a, b) => a + b.price, 0);
+            const extrasComm = extraList.reduce((a, b) => a + b.commission, 0);
+            const snackCost = snackCount * currentSnackPrice;
+
+            return {
+                basePrice,
+                totalPrice: basePrice + extrasPrice + snackCost,
+                totalCommission: baseComm + extrasComm
+            };
+        };
+
+        const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
+            const payroll = {};
+            const initPayrollItem = () => {
+                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, debugDetails: [] };
+                SERVICES.forEach(svc => {
+                    item.serviceGrid[svc.id] = {};
+                    SIZES.forEach(sz => item.serviceGrid[svc.id][sz.id] = 0);
+                });
+                return item;
+            };
+
+            // Step 1 & 2: Initialize payroll for all employees
+            employees.forEach(emp => {
+                payroll[emp.name] = initPayrollItem();
+            });
+
+            const totalGrossSales = history.reduce((acc, t) => acc + (t.price || 0), 0);
+
+            // Step 3: Iterate through employees (as requested in new logic)
+            employees.forEach(emp => {
+                const empName = emp.name;
+                const p = payroll[empName];
+
+                // Step 4: Iterate through paid tickets (nested)
+                history.forEach(item => {
+                    const washersList = item.washers || (item.washer ? [item.washer] : []);
+
+                    // Step 5: If ticket contains washer's name
+                    if (washersList.includes(empName)) {
+                        const washerCount = washersList.length;
+                        if (washerCount === 0) return;
+
+                        // FIX: Prioritize Stored Commission to respect history, fallback to calculation if missing/zero
+                        let totalTicketCommission = item.commission || 0;
+
+                        if (!totalTicketCommission || totalTicketCommission === 0) {
+                            // Recalculate if not found in history (legacy support or data repair)
+                            let base = 0;
+                            if (item.service && item.size && currentCommissions && currentCommissions[item.service.id]) {
+                                base = currentCommissions[item.service.id][item.size.id] || 0;
+                            }
+                            const extrasTotal = (item.extras || []).reduce((acc, e) => {
+                                const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === e.id) : null;
+                                const val = dbExtra ? (dbExtra.commission || 0) : (e.commission || 0);
+                                return acc + val;
+                            }, 0);
+                            totalTicketCommission = base + extrasTotal;
+                        }
+
+                        // Divide commission by amount of washers
+                        const sharePerWasher = totalTicketCommission / washerCount;
+
+                        // Add quotient to employee's total pay
+                        p.total += sharePerWasher;
+                        p.count += 1;
+
+                        // --- DEBUG: Track ticket details ---
+                        const debugNomina = false;
+                        if (debugNomina) {
+                            p.debugDetails.push({
+                                id: item.id ? item.id.slice(-4).toUpperCase() : '???',
+                                desc: item.vehicleDesc || 'Sin descripción',
+                                amount: sharePerWasher
+                            });
+                        }
+                        // -----------------------------------
+
+                        // --- Stats & Breakdown Logic (Visuals) ---
+                        // Count service participation
+                        if (item.service && item.size) {
+                            if (p.serviceGrid[item.service.id] && p.serviceGrid[item.service.id][item.size.id] !== undefined) {
+                                p.serviceGrid[item.service.id][item.size.id] += 1;
+                            }
+                        }
+
+                        // Add Extra Details for Payslip
+                        if (item.extras && item.extras.length > 0) {
+                            item.extras.forEach(ex => {
+                                const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
+                                const commissionValue = dbExtra ? (dbExtra.commission || 0) : (ex.commission || 0);
+                                const share = commissionValue / washerCount;
+
+                                if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
+                                p.extrasData[ex.label].count += 1;
+                                p.extrasData[ex.label].total += share;
+                            });
+                        }
+                    }
+                });
+            });
+
+            employees.forEach(emp => {
+                if (emp.role === 'SUPERVISOR' && payroll[emp.name]) {
+                    const baseSalary = parseFloat(emp.baseSalary) || 0;
+                    const commPct = parseFloat(emp.commissionPct) || 0;
+                    const salesComm = totalGrossSales * (commPct / 100);
+
+                    const newTotal = baseSalary + salesComm;
+
+                    payroll[emp.name].total = newTotal;
+
+                    payroll[emp.name].extrasData = {};
+                    if (baseSalary > 0) {
+                        payroll[emp.name].extrasData['SUELDO BASE'] = { count: 1, total: baseSalary };
+                    }
+                    if (salesComm > 0) {
+                        payroll[emp.name].extrasData['COMISIÓN VENTAS'] = { count: 1, total: salesComm };
+                    }
+                }
+            });
+
+            deductions.forEach(d => {
+                if (!payroll[d.employee]) payroll[d.employee] = initPayrollItem();
+                payroll[d.employee].deductionTotal += d.amount;
+                payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
+            });
+
+            Object.keys(payroll).forEach(key => { payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal; });
+            return payroll;
+        };
+
+        const validatePin = (input) => {
+            try {
+                // Case-insensitive validation: convert input to lowercase
+                const encoded = btoa(input.toLowerCase().trim());
+                if (DEFAULTS.PINS.GREETER.includes(encoded)) return 'GREETER';
+                if (encoded === DEFAULTS.PINS.CASHIER) return 'CASHIER';
+                if (encoded === DEFAULTS.PINS.ADMIN) return 'ADMIN';
+            } catch (e) { return null; }
+            return null;
+        };
+
+        const toggleSelection = (list, item, limit = null) => {
+            const isObj = typeof item !== 'string';
+            const exists = isObj ? list.some(x => x.id === item.id) : list.includes(item);
+            if (!exists && limit && list.length >= limit) return list;
+            return exists ? list.filter(x => isObj ? x.id !== item.id : x !== item) : [...list, item];
+        };
+
+        // ------------------------------------------------------------------
+        // SECTION 5: PRINTING SERVICE
+        // ------------------------------------------------------------------
+        const PrintService = {
+            normalizeText: (str) => {
+                if (!str) return '';
+                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            },
+
+            print: async (content, role) => {
+                if (role === 'CASHIER' || role === 'ADMIN') {
+                    const printWindow = window.open('', '_blank', 'width=400,height=600');
+                    if (printWindow) {
+                        printWindow.document.write(`
+                            <html>
+                                <head>
+                                    <title>Imprimir Ticket</title>
+                                    <style>
+                                        @page { margin: 0; } 
+                                        body { 
+                                            font-family: monospace; 
+                                            white-space: pre; 
+                                            margin: 10px; 
+                                            padding: 0; 
+                                            font-size: 12px; 
+                                        }
+                                    </style>
+                                </head>
+                                <body>
+                                    ${content}
+                                    <script>
+                                        window.onload = function() {
+                                            window.print();
+                                            setTimeout(function() { window.close(); }, 500);
+                                        }
+                                    <\/script>
+                                </body>
+                            </html>
+                        `);
+                        printWindow.document.close();
+                    } else {
+                        alert("Por favor permite ventanas emergentes para imprimir el ticket.");
+                    }
+                }
+                else {
+                    if (navigator.share) {
+                        try {
+                            await navigator.share({
+                                text: "<HTML>" + content
+                            });
+                        } catch (err) {
+                            console.error("Share failed:", err);
+                        }
+                    } else {
+                        alert("Tu navegador no soporta compartir. Copia el texto manualmente.");
+                        console.log("<HTML>" + content);
+                    }
+                }
+            },
+
+            getJobTicketHtml: (ticket, shortId) => {
+                const rawWashers = ticket.washers ? ticket.washers : (ticket.washer ? [ticket.washer] : []);
+                const cleanWashers = rawWashers.map(w => PrintService.normalizeText(w)).join(', ');
+
+                return `<div style="white-space: pre; font-family: monospace;">
+--------------------------------
+TICKET: #${shortId}
+${ticket.vehicleDesc ? ticket.vehicleDesc.toUpperCase() : ''}
+--------------------------------
+${cleanWashers}
+${ticket.size ? ticket.size.label : ''}
+${ticket.service ? ticket.service.label : 'Extras Only'}
+${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label}`).join('\n') : ''}
+--------------------------------</div>`;
+            },
+
+            getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
+                const isOnlyUsd = payment.isOnlyUsd;
+                const changeStr = isOnlyUsd
+                    ? `Cambio: $${(payment.changeUsd || 0).toFixed(2)} USD`
+                    : `Cambio: $${(payment.changeMxn || 0).toFixed(2)} MXN`;
+
+                const receivedStr = [
+                    payment.usd > 0 ? `$${payment.usd.toFixed(2)} USD` : null,
+                    payment.mxn > 0 ? `$${payment.mxn.toFixed(2)} MXN` : null
+                ].filter(Boolean).join(' / ');
+
+                return `<div style="white-space: pre; font-family: monospace;">
+CARWASH LAVAMEX
+WATERFILL 216 CP 32553
+CD. JUAREZ CHIH.
+RFC. CACN760904AN7
+--------------------------------
+Ticket: #${shortId}
+${ticket.vehicleDesc ? ticket.vehicleDesc.toUpperCase() : ''}
+Fecha: ${new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
+Metodo: ${payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO'}
+--------------------------------
+${ticket.service ? ticket.service.label : 'General'} $${ticket.basePrice || 0}
+${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label} $${e.price}`).join('\n') : ''}
+${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount}) $${ticket.snackCount * (currentSnackPrice || 30)}` : ''}
+--------------------------------
+TOTAL: $${ticket.price}
+${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
+Gracias por su preferencia
+      .--------.
+ ____/_____|___ \___
+O    _          - |    _,*
+ '--(_)-------(_)--' </div>`;
+            },
+
+            getCashDropTicketHtml: (dropData) => {
+                return `<div style="white-space: pre; font-family: monospace;">
+RETIRO DE EFECTIVO
+(Resguardo)
+--------------------------------
+CODIGO: ${dropData.code}
+FECHA: ${dropData.timestamp.toLocaleDateString()}
+HORA: ${dropData.timestamp.toLocaleTimeString()}
+USUARIO: ${dropData.user}
+--------------------------------
+MXN: ${formatCurrency(dropData.amountMxn)}
+USD: $${dropData.amountUsd.toFixed(2)}
+--------------------------------
+Firma: __________________
+</div>`;
+            }
+        };
+
+        const PdfService = {
+            generateNomina: (payroll, startDate, endDate, history = []) => {
+                const doc = new jsPDF();
+                const formatDate = (s) => s ? s.split('-').reverse().join('-') : '';
+
+                Object.keys(payroll).forEach((name, index) => {
+                    const p = payroll[name];
+                    if (p.count === 0 && p.deductionTotal === 0 && p.total === 0) return;
+                    if (index > 0) doc.addPage();
+
+                    doc.setFontSize(14);
+                    doc.text(`${name}`, 14, 25);
+                    doc.setFontSize(10);
+                    doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 30);
+
+                    // --- SUMMARY VERTICAL ---
+                    doc.setFontSize(9);
+                    doc.setTextColor(60, 60, 60);
+                    doc.text(`${formatCurrency(p.total)} Subtotal Ingresos`, 14, 36);
+                    doc.text(`-${formatCurrency(p.deductionTotal)} Deducciones`, 14, 40);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`${formatCurrency(p.netPay)} Total`, 14, 44);
+                    doc.setFont(undefined, 'normal');
+                    doc.setTextColor(0);
+                    // --------------------
+
+                    doc.setDrawColor(0);
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(140, 20, 50, 20);
+                    doc.setFontSize(12);
+                    doc.text("TOTAL A PAGAR", 165, 26, { align: 'center' });
+                    doc.setFontSize(16);
+                    doc.setTextColor(0, 0, 0);
+                    doc.text(formatCurrency(p.netPay), 165, 35, { align: 'center' });
+                    doc.setTextColor(0);
+
+                    const head = [['Servicio', ...SIZES.map(s => s.label)]];
+                    const body = [];
+                    SERVICES.forEach(svc => {
+                        const rowCounts = SIZES.map(sz => p.serviceGrid[svc.id][sz.id] || 0);
+                        if (rowCounts.some(c => c > 0)) {
+                            body.push([svc.label, ...rowCounts.map(c => c || '-')]);
+                        }
+                    });
+
+                    const tableStyles = {
+                        theme: 'grid',
+                        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1, lineColor: [0, 0, 0] },
+                        bodyStyles: { textColor: [0, 0, 0], lineWidth: 0.1, lineColor: [0, 0, 0] },
+                        styles: { fontSize: 8, cellPadding: 1, lineColor: [0, 0, 0] }
+                    };
+
+                    autoTable(doc, {
+                        startY: 50,
+                        head: head,
+                        body: body,
+                        ...tableStyles
+                    });
+
+                    let currentY = doc.lastAutoTable.finalY + 10;
+
+                    const extraKeys = Object.keys(p.extrasData).sort();
+                    if (extraKeys.length > 0) {
+                        const extrasBody = extraKeys.map(k => [k, p.extrasData[k].count, formatCurrency(p.extrasData[k].total)]);
+                        autoTable(doc, {
+                            startY: currentY,
+                            head: [['Concepto', 'Cant', 'Total']],
+                            body: extrasBody,
+                            ...tableStyles,
+                            margin: { right: 100 }
+                        });
+                        currentY = doc.lastAutoTable.finalY + 10;
+                    }
+
+                    if (p.deductionDetails && p.deductionDetails.length > 0) {
+                        const dedBody = p.deductionDetails.map(d => [
+                            d.desc || 'Varios',
+                            formatCurrency(d.amount)
+                        ]);
+                        dedBody.push(['TOTAL DEDUCCIONES', formatCurrency(p.deductionTotal)]);
+
+                        autoTable(doc, {
+                            startY: currentY,
+                            head: [['Concepto', 'Monto']],
+                            body: dedBody,
+                            ...tableStyles,
+                            margin: { right: 100 },
+                            didParseCell: function (data) {
+                                if (data.row.index === dedBody.length - 1) {
+                                    data.cell.styles.fontStyle = 'bold';
+                                }
+                            }
+                        });
+                        currentY = doc.lastAutoTable.finalY + 10;
+                    } else if (p.deductionTotal > 0) {
+                        doc.setTextColor(0, 0, 0);
+                        doc.text(`Deducciones: -${formatCurrency(p.deductionTotal)}`, 14, currentY);
+                        doc.setTextColor(0);
+                        currentY += 10;
+                    }
+
+                    // --- DEBUG TABLE SECTION ---
+                    if (p.debugDetails && p.debugDetails.length > 0) {
+                        doc.setFontSize(8);
+                        doc.setTextColor(255, 0, 0); // Red title to indicate debug
+                        doc.text("DEBUG: Detalle por Ticket (Vehículo | Comisión)", 14, currentY);
+                        doc.setTextColor(0);
+
+                        const debugBody = p.debugDetails.map(d => [
+                            d.id,
+                            d.desc,
+                            formatCurrency(d.amount)
+                        ]);
+
+                        autoTable(doc, {
+                            startY: currentY + 2,
+                            head: [['ID', 'Vehículo', 'Comisión']],
+                            body: debugBody,
+                            theme: 'grid',
+                            styles: { fontSize: 7, cellPadding: 1 },
+                            headStyles: { fillColor: [220, 50, 50], textColor: [255, 255, 255] }, // Red header
+                            margin: { right: 100 } // Keep it on the left side
+                        });
+                        currentY = doc.lastAutoTable.finalY + 10;
+                    }
+                    // ---------------------------
+
+                    doc.setFontSize(8);
+                    const legalText = "Recibí la cantidad descrita a mi entera satisfacción. Recibi el importe indicado a el periodo señalado por jornada  diurna. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral o civil";
+                    const splitText = doc.splitTextToSize(legalText, 180);
+                    doc.text(splitText, 14, currentY + 10);
+
+                    doc.line(70, currentY + 40, 140, currentY + 40);
+                    doc.text(name, 105, currentY + 45, { align: 'center' });
+                    doc.text("Firma de Conformidad", 105, currentY + 50, { align: 'center' });
+                });
+
+                // --- BOLERO PAGE LOGIC ---
+                if (history && history.length > 0) {
+                    let boleadaCount = 0;
+                    history.forEach(t => {
+                        if (t.extras && Array.isArray(t.extras)) {
+                            t.extras.forEach(e => {
+                                if (['BOLEADA', 'QA_BOLEADA'].includes(e.id)) {
+                                    boleadaCount++;
+                                }
+                            });
+                        }
+                    });
+
+                    if (boleadaCount > 0) {
+                        doc.addPage();
+                        const boleroRate = 30;
+                        const boleroTotal = boleadaCount * boleroRate;
+
+                        doc.setFontSize(14);
+                        doc.text("Bolero - Raul Barron Reza", 14, 25);
+                        doc.setFontSize(10);
+                        doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 30);
+
+                        doc.setDrawColor(0);
+                        doc.setFillColor(255, 255, 255);
+                        doc.rect(140, 20, 50, 20);
+                        doc.setFontSize(12);
+                        doc.text("TOTAL A PAGAR", 165, 26, { align: 'center' });
+                        doc.setFontSize(16);
+                        doc.setTextColor(0, 0, 0);
+                        doc.text(formatCurrency(boleroTotal), 165, 35, { align: 'center' });
+                        doc.setTextColor(0);
+
+                        autoTable(doc, {
+                            startY: 45,
+                            head: [['Concepto', 'Cantidad', 'Tarifa', 'Total']],
+                            body: [
+                                ['Boleadas', boleadaCount, formatCurrency(boleroRate), formatCurrency(boleroTotal)]
+                            ],
+                            theme: 'grid',
+                            headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1, lineColor: [0, 0, 0] },
+                            bodyStyles: { textColor: [0, 0, 0], lineWidth: 0.1, lineColor: [0, 0, 0] },
+                            styles: { fontSize: 10, cellPadding: 1, lineColor: [0, 0, 0] }
+                        });
+
+                        let currentY = doc.lastAutoTable.finalY + 20;
+                        doc.setFontSize(8);
+                        const legalText = "Recibí de LAVAMEX la cantidad descrita a mi entera satisfacción por concepto de pago por servicios de boleado realizados. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.";
+                        const splitText = doc.splitTextToSize(legalText, 180);
+                        doc.text(splitText, 14, currentY);
+
+                        doc.line(70, currentY + 30, 140, currentY + 30);
+                        doc.text("Bolero - Raul Barron Reza", 105, currentY + 35, { align: 'center' });
+                        doc.text("Firma de Conformidad", 105, currentY + 40, { align: 'center' });
+                    }
+                }
+
+                doc.save(`Nomina_${startDate}_${endDate}.pdf`);
+            },
+
+            generateCorte: (data) => {
+                const doc = new jsPDF();
+                const { totals, itemStats, expenses, cashIns, arqueos } = data;
+                const pageWidth = doc.internal.pageSize.width;
+
+                // Ink-saving colors
+                const lightGrey = [240, 240, 240];
+                const black = [0, 0, 0];
+
+                // Helper for centering text
+                const centerText = (text, y, size = 12) => {
+                    doc.setFontSize(size);
+                    doc.text(text, pageWidth / 2, y, { align: 'center' });
+                };
+
+                // Title - Reduced sizes
+                centerText(`CORTE ${data.type.toUpperCase()}`, 15, 18); // y=20->15, size=22->18
+                centerText(`Fecha: ${data.dateLabel}`, 22, 10); // y=28->22, size=12->10
+
+                // --- SECTION 1: BALANCE DE CAJA (The "Register" info) ---
+                // How much was in register (Initial)
+                // How much came in (Sales + CashIns)
+                // How much left (Drops, Expenses)
+                // How much is there now (Net)
+
+                const balanceBody = [
+                    ['FONDO INICIAL (SISTEMA)', formatCurrency(totals.initialMxn), `$${totals.initialUsd.toFixed(2)}`],
+                    ['+ VENTAS (EFECTIVO)', formatCurrency(totals.cashMxn), `$${totals.cashUsd.toFixed(2)}`],
+                    ['+ INGRESOS EXTRA', formatCurrency(totals.cashInsMxn), `$${totals.cashInsUsd.toFixed(2)}`],
+                    ['- GASTOS', `(${formatCurrency(totals.expenses)})`, `$0.00`],
+                    ['- ENVÍOS (RETIROS)', `(${formatCurrency(totals.dropsMxn)})`, `($${totals.dropsUsd.toFixed(2)})`],
+                    ['= TOTAL EN CAJA (DEBE HABER)', formatCurrency(totals.cashNetMxn), `$${totals.cashNetUsd.toFixed(2)}`]
+                ];
+
+                autoTable(doc, {
+                    startY: 28, // 35 -> 28
+                    head: [['CONCEPTO', 'MXN', 'USD']],
+                    body: balanceBody,
+                    theme: 'grid',
+                    headStyles: { fillColor: lightGrey, textColor: black, halign: 'center', fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
+                    columnStyles: {
+                        0: { cellWidth: 80 },
+                        1: { halign: 'right', cellWidth: 50 },
+                        2: { halign: 'right', cellWidth: 50 }
+                    },
+                    styles: { fontSize: 8, cellPadding: 1.5, textColor: black },
+                    didParseCell: (data) => {
+                        if (data.row.index === balanceBody.length - 1) { // Total row
+                            data.cell.styles.fontStyle = 'bold';
+                            data.cell.styles.fillColor = [250, 250, 250];
+                        }
+                    }
+                });
+
+                // --- SECTION 2: ESTADÍSTICAS OPERATIVAS ---
+                // Total tickets, card, snacks, pinos, boleadas
+                let currentY = doc.lastAutoTable.finalY + 6; // 10 -> 6
+                doc.setFontSize(11); // 14 -> 11
+                doc.text("Resumen Operativo", 14, currentY);
+
+                const statsBody = [
+                    ['Tickets Pagados', data.tickets.length, formatCurrency(totals.total)],
+                    ['Venta Tarjeta', '-', formatCurrency(totals.card)],
+                    ['Pinos', itemStats.pinos.count, formatCurrency(itemStats.pinos.money)],
+                    ['Boleadas', itemStats.boleadas.count, formatCurrency(itemStats.boleadas.money)],
+                    ['Snacks (Clientes)', itemStats.snacks.customerCount, formatCurrency(itemStats.snacks.moneyCustomer)],
+                    ['Snacks (Interno)', itemStats.snacks.internalCount, formatCurrency(itemStats.snacks.moneyInternal)],
+                ];
+
+                autoTable(doc, {
+                    startY: currentY + 2, // + 4 -> + 2
+                    head: [['CONCEPTO', 'CANTIDAD', 'TOTAL (MXN)']],
+                    body: statsBody,
+                    theme: 'striped',
+                    headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
+                    columnStyles: {
+                        1: { halign: 'center' },
+                        2: { halign: 'right' }
+                    },
+                    styles: { fontSize: 8, cellPadding: 1.5, textColor: black } // Added styles
+                });
+
+                // --- SECTION 3: DETALLE DE GASTOS ---
+                currentY = doc.lastAutoTable.finalY + 6; // 10 -> 6
+                if (expenses.length > 0) {
+                    doc.setFontSize(11); // Ensure font size
+                    doc.text("Desglose de Gastos", 14, currentY);
+                    const expenseBody = expenses.map(e => [
+                        e.description,
+                        e.status,
+                        formatCurrency(e.amount)
+                    ]);
+                    // Add total row
+                    expenseBody.push(['TOTAL GASTOS', '', formatCurrency(totals.expenses)]);
+
+                    autoTable(doc, {
+                        startY: currentY + 2, // + 4 -> + 2
+                        head: [['DESCRIPCIÓN', 'ESTADO', 'MONTO']],
+                        body: expenseBody,
+                        theme: 'striped',
+                        headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
+                        columnStyles: { 2: { halign: 'right' } },
+                        styles: { fontSize: 8, cellPadding: 1.5, textColor: black }, // Added styles
+                        didParseCell: (data) => {
+                            if (data.row.index === expenseBody.length - 1) { // Total row
+                                data.cell.styles.fontStyle = 'bold';
+                            }
+                        }
+                    });
+                }
+
+                // --- SECTION 4: VERIFICACIÓN DE ARQUEOS (NEW SECTION) ---
+                currentY = doc.lastAutoTable.finalY + 10; // 15 -> 10
+
+                if (arqueos && arqueos.first && arqueos.last) {
+                    doc.setFontSize(11); // 14 -> 11
+                    doc.text("Corte de Caja", 14, currentY);
+
+                    const first = arqueos.first;
+                    const last = arqueos.last;
+                    const isSame = first.id === last.id;
+
+                    // Physical Movement
+                    const physDeltaMxn = last.declaredMxn - first.declaredMxn;
+                    const physDeltaUsd = last.declaredUsd - first.declaredUsd;
+
+                    // System Expected Movement (Net Change)
+                    // Expected Net Change = (Sales + CashIns) - (Expenses + Drops)
+                    // We can also derive it: Expected End (cashNetMxn) - Initial (initialMxn)
+                    // However, to be strict with the "comparison" request, we compare the physical flow to the system flow.
+                    const sysDeltaMxn = totals.cashNetMxn - totals.initialMxn;
+                    const sysDeltaUsd = totals.cashNetUsd - totals.initialUsd;
+
+                    // The Discrepancy
+                    const diffMxn = physDeltaMxn - sysDeltaMxn;
+                    const diffUsd = physDeltaUsd - sysDeltaUsd;
+
+                    // Final Total Discrepancy in MXN (using current rate roughly, or just displaying both)
+                    // User asked for "diferencia de caja total MXN"
+                    // We typically use the rate from the last arqueo or current rate
+                    const finalRate = last.exchangeRate || totals.exchangeRate || 18.0;
+                    const totalDiffMxn = diffMxn + (diffUsd * finalRate);
+
+                    const formatTime = (ts) => ts && ts.toDate ? ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (ts instanceof Date ? ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+
+                    const arqueoBody = [
+                        [`Arqueo Inicial (${formatTime(first.timestamp)})`, formatCurrency(first.declaredMxn), `$${first.declaredUsd.toFixed(2)}`],
+                        [`Arqueo Final (${formatTime(last.timestamp)})`, formatCurrency(last.declaredMxn), `$${last.declaredUsd.toFixed(2)}`],
+                        ['', '', ''],
+                        ['Diferencia de Arqueos', formatCurrency(physDeltaMxn), `$${physDeltaUsd.toFixed(2)}`],
+                        ['Diferencia debe ser', formatCurrency(sysDeltaMxn), `$${sysDeltaUsd.toFixed(2)}`],
+                        ['', '', ''],
+                        ['DIFERENCIA OPERATIVA', formatCurrency(diffMxn), `$${diffUsd.toFixed(2)}`]
+                    ];
+
+                    autoTable(doc, {
+                        startY: currentY + 3, // + 5 -> + 3
+                        head: [['CONCEPTO', 'MXN', 'USD']],
+                        body: arqueoBody,
+                        theme: 'grid',
+                        headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
+                        columnStyles: {
+                            1: { halign: 'right' },
+                            2: { halign: 'right' }
+                        },
+                        styles: { fontSize: 8, cellPadding: 1.5, textColor: black }, // Added styles
+                        didParseCell: (data) => {
+                            if (data.row.index === arqueoBody.length - 1) {
+                                data.cell.styles.fontStyle = 'bold';
+                                if (totalDiffMxn < -5) data.cell.styles.textColor = [0, 0, 0]; // Keep black for ink saving, maybe bold/italic?
+                                else if (totalDiffMxn > 5) data.cell.styles.textColor = [0, 0, 0];
+                            }
+                        }
+                    });
+
+                    // Final Total Number Box (Diferencia)
+                    const boxY = doc.lastAutoTable.finalY + 6; // + 10 -> + 6
+                    doc.setDrawColor(0);
+                    // Lightest grey for box
+                    doc.setFillColor(252, 252, 252);
+
+                    // Box 1: Diferencia Total (Right side)
+                    doc.roundedRect(pageWidth - 90, boxY, 80, 20, 3, 3, 'S'); // 'S' for Stroke only to save ink
+
+                    doc.setFontSize(9); // 10 -> 9
+                    doc.setTextColor(50); // Dark grey text
+                    doc.text("DIFERENCIA TOTAL (MXN)", pageWidth - 50, boxY + 6, { align: 'center' }); // + 8 -> + 6
+
+                    doc.setFontSize(14); // 16 -> 14
+                    doc.setFont(undefined, 'bold');
+
+                    // --- COLOR LOGIC FOR DIFFERENCE ---
+                    // Allow small float errors (e.g. +/- 1 peso is acceptable as neutral)
+                    let diffColor = [0, 0, 0]; // Default Black
+                    let diffPrefix = "";
+
+                    if (totalDiffMxn > 1) {
+                        diffColor = [0, 150, 0]; // Green for Extra
+                        diffPrefix = "+";
+                    } else if (totalDiffMxn < -1) {
+                        diffColor = [200, 0, 0]; // Red for Missing
+                        // Negative number standard formatting usually includes '-', but verify logic
+                    }
+
+                    doc.setTextColor(...diffColor);
+                    doc.text(`${diffPrefix}${formatCurrency(totalDiffMxn)}`, pageWidth - 50, boxY + 14, { align: 'center' }); // + 18 -> + 14
+                    doc.setTextColor(0); // Reset
+                    doc.setFont(undefined, 'normal');
+
+                    // Box 2: Total Tickets Pagado (Left side) - Similar style
+                    // Placing it to the left, e.g., at x = 14
+                    doc.roundedRect(14, boxY, 80, 20, 3, 3, 'S'); // Stroke only
+
+                    doc.setFontSize(9);
+                    doc.setTextColor(50);
+                    doc.text("TOTAL VENTAS (MXN)", 54, boxY + 6, { align: 'center' }); // 14 + 40 = 54 center
+
+                    doc.setFontSize(14);
+                    doc.setFont(undefined, 'bold');
+                    doc.setTextColor(0);
+                    doc.text(formatCurrency(totals.total), 54, boxY + 14, { align: 'center' });
+                    doc.setFont(undefined, 'normal');
+
+
+                    if (isSame) {
+                        doc.setFontSize(7); // 8 -> 7
+                        doc.text("* Nota: Solo se registró un arqueo en este periodo.", 14, boxY + 25);
+                    }
+
+                } else {
+                    doc.setFontSize(9); // 10 -> 9
+                    doc.setTextColor(150);
+                    doc.text("No hay suficientes registros de arqueo para calcular el flujo comparativo.", 14, currentY + 6);
+                }
+
+                doc.save(`Corte_${data.dateLabel}.pdf`);
+            },
+
+            generateAttendance: (monthLabel, employees, attendanceData, daysInMonth) => {
+                const doc = new jsPDF({ orientation: 'landscape' });
+
+                doc.setFontSize(18);
+                doc.text(`REPORTE DE ASISTENCIA: ${monthLabel}`, 14, 20);
+
+                const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+                const head = [['Empleado', ...days.map(d => String(d))]];
+                const body = employees.map(emp => {
+                    const row = [emp.name];
+                    days.forEach(day => {
+                        const dateStr = `${monthLabel}-${String(day).padStart(2, '0')}`;
+                        const isPresent = attendanceData[dateStr]?.[emp.name];
+                        row.push(isPresent ? 'X' : '');
+                    });
+                    return row;
+                });
+
+                autoTable(doc, {
+                    startY: 30,
+                    head: head,
+                    body: body,
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 1, halign: 'center' },
+                    columnStyles: { 0: { halign: 'left', fontStyle: 'bold', cellWidth: 40 } },
+                    headStyles: { fillColor: [44, 62, 80] }
+                });
+
+                doc.save(`Asistencia_${monthLabel}.pdf`);
+            }
+        };
+
+        // ------------------------------------------------------------------
+        // SECTION 7: CONTEXT & PROVIDER
+        // ------------------------------------------------------------------
+        const AppContext = createContext();
+
+        const AppProvider = ({ children }) => {
+            const [role, setRole] = useState(() => localStorage.getItem('lavamex_role') || null);
+            const [view, setView] = useState('GREETER');
+            const [employees, setEmployees] = useState([]);
+            const [tickets, setTickets] = useState([]);
+            const [history, setHistory] = useState([]);
+            const [deductions, setDeductions] = useState([]);
+            const [expenses, setExpenses] = useState([]);
+            const [businessExpenses, setBusinessExpenses] = useState([]); // New State
+            const [cashCounts, setCashCounts] = useState([]);
+            const [cashDrops, setCashDrops] = useState([]);
+            const [cashIns, setCashIns] = useState([]);
+            const [editingTicket, setEditingTicket] = useState(null);
+
+            const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
+            const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
+            const [prices, setPrices] = useState({});
+            const [commissions, setCommissions] = useState({});
+            const [extrasList, setExtrasList] = useState([]);
+
+            const [payment, setPayment] = useState({ mxn: '', usd: '' });
+            const [activeId, setActiveId] = useState(null);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            const login = (r) => {
+                setRole(r);
+                localStorage.setItem('lavamex_role', r);
+                if (r) setView(r === 'ADMIN' ? 'ADMIN' : (r === 'CASHIER' ? 'CASHIER' : 'GREETER'));
+            };
+
+            const logout = () => {
+                setRole(null);
+                localStorage.removeItem('lavamex_role');
+                setView('GREETER');
+            };
+
+            useEffect(() => {
+                const unsub = onSnapshot(query(collection(db, "employees"), orderBy("name")), (snap) => {
+                    if (snap.empty && employees.length === 0) {
+                        DEFAULTS.INITIAL_EMPLOYEES.forEach(e => addDoc(collection(db, "employees"), e));
+                    }
+                    setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => !e.archived));
+                });
+                return () => unsub();
+            }, []);
+
+            useEffect(() => {
+                const unsubP = onSnapshot(doc(db, "settings", "prices"), (docSnap) => {
+                    if (docSnap.exists()) setPrices(docSnap.data());
+                    else setDoc(doc(db, "settings", "prices"), DEFAULTS.PRICES);
+                });
+                const unsubC = onSnapshot(doc(db, "settings", "commissions"), (docSnap) => {
+                    if (docSnap.exists()) setCommissions(docSnap.data());
+                    else setDoc(doc(db, "settings", "commissions"), DEFAULTS.COMMISSIONS);
+                });
+                const unsubE = onSnapshot(collection(db, "extras"), (snap) => {
+                    const dbItems = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+                    const cleanList = DEFAULTS.EXTRAS.map(def => {
+                        const match = dbItems.find(item => item.id === def.id);
+                        return match ? { ...def, ...match } : def;
+                    });
+                    setExtrasList(cleanList);
+                    if (snap.empty) DEFAULTS.EXTRAS.forEach(e => addDoc(collection(db, "extras"), e));
+                });
+                const unsubG = onSnapshot(doc(db, "settings", "general"), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.exchangeRate) setExRate(data.exchangeRate);
+                        if (data.snackPrice) setSnackPrice(data.snackPrice);
+                    } else {
+                        setDoc(doc(db, "settings", "general"), {
+                            exchangeRate: DEFAULTS.EXCHANGE_RATE,
+                            snackPrice: DEFAULTS.SNACK_PRICE,
+                        });
+                    }
+                });
+                return () => { unsubP(); unsubC(); unsubE(); unsubG(); };
+            }, []);
+
+            useEffect(() => {
+                const qT = query(collection(db, "tickets"), orderBy("timestamp", "desc"));
+                const unsubT = onSnapshot(qT, (snap) => {
+                    const active = [], hist = [];
+                    snap.forEach(d => {
+                        const dat = {
+                            id: d.id, ...d.data(),
+                            timestamp: d.data().timestamp?.toDate() || new Date(),
+                            paidAt: d.data().paidAt?.toDate() || null
+                        };
+                        if (dat.status === 'PENDING') active.push(dat);
+                        else hist.push(dat);
+                    });
+                    setTickets(active);
+                    setHistory(hist);
+                });
+                const unsubD = onSnapshot(collection(db, "deductions"), (snap) => {
+                    setDeductions(snap.docs.map(d => {
+                        const data = d.data();
+                        return {
+                            id: d.id, ...data,
+                            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp || new Date())
+                        };
+                    }));
+                });
+                const qE = query(collection(db, "expenses"), orderBy("timestamp", "desc"));
+                const unsubE = onSnapshot(qE, (snap) => {
+                    setExpenses(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date()
+                    })));
+                });
+                // New Listener for Business Expenses
+                const qBE = query(collection(db, "business_expenses"), orderBy("timestamp", "desc"));
+                const unsubBE = onSnapshot(qBE, (snap) => {
+                    setBusinessExpenses(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date()
+                    })));
+                });
+
+                const qCC = query(collection(db, "cash_counts"), orderBy("timestamp", "desc"), limit(50));
+                const unsubCC = onSnapshot(qCC, (snap) => {
+                    setCashCounts(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date()
+                    })));
+                });
+                const qCD = query(collection(db, "cash_drops"), orderBy("timestamp", "desc"));
+                const unsubCD = onSnapshot(qCD, (snap) => {
+                    setCashDrops(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date()
+                    })));
+                });
+                const qCI = query(collection(db, "cash_ins"), orderBy("timestamp", "desc"));
+                const unsubCI = onSnapshot(qCI, (snap) => {
+                    setCashIns(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date()
+                    })));
+                });
+                return () => { unsubT(); unsubD(); unsubE(); unsubBE(); unsubCC(); unsubCD(); unsubCI(); };
+            }, []);
+
+            const updateGlobalSettings = (newRate, newSnackPrice) => handleDbAction(async () => {
+                await setDoc(doc(db, "settings", "general"), {
+                    exchangeRate: newRate, snackPrice: newSnackPrice
+                }, { merge: true });
+            });
+
+            const getOpeningCash = (targetDate) => {
+                if (!cashCounts || cashCounts.length === 0) {
+                    return { mxn: 0, usd: 0 };
+                }
+                const prevCount = cashCounts.find(c => c.timestamp < targetDate);
+                if (prevCount) {
+                    return { mxn: prevCount.declaredMxn || 0, usd: prevCount.declaredUsd || 0 };
+                }
+                return { mxn: 0, usd: 0 };
+            };
+
+            const saveTicket = (data) => handleDbAction(async () => {
+                if (isSubmitting) return;
+                setIsSubmitting(true);
+                try {
+                    const snacks = editingTicket ? (editingTicket.snackCount || 0) : 0;
+                    const serviceId = data.service ? data.service.id : null;
+                    const sizeId = data.size ? data.size.id : null;
+                    const totals = calculateTicketTotals(serviceId, sizeId, data.extras, prices, commissions, snacks, snackPrice);
+                    const ticketData = {
+                        ...data, price: totals.totalPrice, commission: totals.totalCommission, basePrice: totals.basePrice,
+                        snackCount: snacks, status: 'PENDING', timestamp: serverTimestamp()
+                    };
+
+                    if (editingTicket) {
+                        await updateDoc(doc(db, "tickets", editingTicket.id), ticketData);
+                        setEditingTicket(null);
+                        if (role === 'CASHIER') setView('CASHIER');
+                    } else {
+                        const ref = await addDoc(collection(db, "tickets"), ticketData);
+                        const html = PrintService.getJobTicketHtml({ ...ticketData, timestamp: new Date() }, ref.id.slice(-4).toUpperCase());
+                        PrintService.print(html, role);
+                    }
+                } finally { setIsSubmitting(false); }
+            });
+
+            const updateSnacks = (id, count) => handleDbAction(async () => {
+                const t = tickets.find(x => x.id === id); if (!t) return;
+                const newCount = Math.max(0, count);
+                const totals = calculateTicketTotals(t.service?.id, t.size?.id, t.extras || [], prices, commissions, newCount, snackPrice);
+                await updateDoc(doc(db, "tickets", id), { snackCount: newCount, price: totals.totalPrice });
+            });
+
+            const updateQuickItem = (ticketId, type, change) => handleDbAction(async () => {
+                const t = tickets.find(x => x.id === ticketId);
+                if (!t) return;
+
+                if (type === 'SNACKS') {
+                    const newCount = Math.max(0, (t.snackCount || 0) + change);
+                    const totals = calculateTicketTotals(t.service?.id, t.size?.id, t.extras || [], prices, commissions, newCount, snackPrice);
+                    await updateDoc(doc(db, "tickets", ticketId), { snackCount: newCount, price: totals.totalPrice });
+                    return;
+                }
+
+                // For Pinos and Boleadas, we modify the extras array
+                let newExtras = [...(t.extras || [])];
+                const targetId = type === 'PINO' ? 'QA_PINO' : 'QA_BOLEADA';
+                const label = type === 'PINO' ? 'Pino (Caja)' : 'Boleada (Caja)';
+
+                // Pull price from DB extrasList
+                const dbExtra = extrasList.find(e => e.id === (type === 'PINO' ? 'PINO' : 'BOLEADA'));
+                const price = dbExtra ? dbExtra.price : (type === 'PINO' ? 35 : 60);
+
+                if (change > 0) {
+                    newExtras.push({ id: targetId, label, price, commission: 0 });
+                } else {
+                    // Remove last instance of this item
+                    // reverse find index
+                    let idx = -1;
+                    for (let i = newExtras.length - 1; i >= 0; i--) {
+                        if (newExtras[i].id === targetId) {
+                            idx = i;
+                            break;
+                        }
+                    }
+
+                    if (idx !== -1) {
+                        newExtras.splice(idx, 1);
+                    } else {
+                        return; // Cannot remove if none exist
+                    }
+                }
+
+                const totals = calculateTicketTotals(t.service?.id, t.size?.id, newExtras, prices, commissions, t.snackCount || 0, snackPrice);
+                await updateDoc(doc(db, "tickets", ticketId), { extras: newExtras, price: totals.totalPrice, commission: totals.totalCommission });
+            });
+
+            const saveBatchAttendance = (updates) => handleDbAction(async () => {
+                const batch = writeBatch(db);
+                const dateKey = getLocalDateStr();
+                const monthKey = dateKey.slice(0, 7);
+                const records = {};
+
+                Object.values(updates).forEach(item => {
+                    records[item.name] = item.active;
+                    if (item.id) {
+                        const empRef = doc(db, "employees", item.id);
+                        batch.update(empRef, { active: item.active });
+                    }
+                });
+
+                const attendanceRef = doc(db, "attendance", dateKey);
+                batch.set(attendanceRef, {
+                    date: dateKey,
+                    month: monthKey,
+                    records: records
+                }, { merge: true });
+
+                await batch.commit();
+            });
+
+            const addCashCount = (data) => handleDbAction(async () => {
+                await addDoc(collection(db, "cash_counts"), {
+                    ...data, timestamp: serverTimestamp()
+                });
+            });
+
+            const addCashDrop = (amountMxn, amountUsd) => handleDbAction(async () => {
+                const timestamp = new Date();
+                const uniqueSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+                const code = `DROP-${uniqueSuffix}`;
+
+                const dropData = {
+                    amountMxn: parseFloat(amountMxn) || 0,
+                    amountUsd: parseFloat(amountUsd) || 0,
+                    timestamp: serverTimestamp(),
+                    user: role,
+                    code: code,
+                    status: 'PENDING_PICKUP'
+                };
+
+                await addDoc(collection(db, "cash_drops"), dropData);
+
+                const html = PrintService.getCashDropTicketHtml({ ...dropData, timestamp });
+                PrintService.print(html, role);
+
+                alert(`Retiro Registrado: ${code}`);
+            });
+
+            const addCashIn = (amountMxn, amountUsd, reason) => handleDbAction(async () => {
+                await addDoc(collection(db, "cash_ins"), {
+                    amountMxn: parseFloat(amountMxn) || 0,
+                    amountUsd: parseFloat(amountUsd) || 0,
+                    reason: reason || 'Ingreso Extra',
+                    user: role,
+                    timestamp: serverTimestamp()
+                });
+                alert("Efectivo agregado exitosamente.");
+            });
+
+            const addEmployee = (name) => handleDbAction(() => addDoc(collection(db, "employees"), { name, active: true, role: 'WASHER' }));
+
+            const updateEmployee = (id, data) => handleDbAction(() => updateDoc(doc(db, "employees", id), data));
+
+            const archiveEmployee = (id) => handleDbAction(() => updateDoc(doc(db, "employees", id), { archived: true }));
+
+            const deleteTicket = (id) => handleDbAction(async () => {
+                if (confirm("¿Seguro que deseas borrar este ticket?")) {
+                    await updateDoc(doc(db, "tickets", id), { status: 'CANCELLED' });
+                }
+            });
+
+            const addDeduction = (employee, amount, description) => handleDbAction(() => addDoc(collection(db, "deductions"), {
+                employee: employee, amount: parseFloat(amount), description: description, status: 'PENDING', timestamp: serverTimestamp()
+            }));
+
+            const addExpense = (desc, amount) => handleDbAction(async () => {
+                await addDoc(collection(db, "expenses"), {
+                    description: desc, amount: parseFloat(amount), status: 'PENDING', createdBy: role, timestamp: serverTimestamp()
+                });
+                alert("Gasto registrado, pendiente de aprobación.");
+            });
+
+            // New function for Admin Business Expenses
+            const addBusinessExpense = (desc, amount) => handleDbAction(async () => {
+                await addDoc(collection(db, "business_expenses"), {
+                    description: desc,
+                    amount: parseFloat(amount),
+                    timestamp: serverTimestamp(),
+                    createdBy: role
+                });
+                alert("Gasto administrativo registrado (externo).");
+            });
+
+            const updateExpense = (id, data) => handleDbAction(() => updateDoc(doc(db, "expenses", id), data));
+
+            const resolveExpense = (id, status) => handleDbAction(() => updateDoc(doc(db, "expenses", id), {
+                status: status, processedAt: serverTimestamp(), processedBy: role
+            }));
+
+            const processPayment = () => handleDbAction(async () => {
+                if (isSubmitting) return;
+                const t = tickets.find(x => x.id === activeId); if (!t) return;
+                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA'].includes(e.id));
+                if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
+                    return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
+                }
+                const mxnVal = parseFloat(payment.mxn) || 0;
+                const usdVal = parseFloat(payment.usd) || 0;
+                const isOnlyUsd = usdVal > 0 && mxnVal === 0;
+                const total = mxnVal + (usdVal * exRate);
+                if (total < t.price) return alert("Falta dinero");
+
+                setIsSubmitting(true);
+                try {
+                    const changeMxn = total - t.price;
+                    const changeUsd = changeMxn / exRate;
+                    const details = { mxn: mxnVal, usd: usdVal, rate: exRate, changeMxn, changeUsd, isOnlyUsd, method: 'CASH' };
+                    await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
+                    const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
+                    PrintService.print(html, role);
+                    setActiveId(null); setPayment({ mxn: '', usd: '' });
+                } finally { setIsSubmitting(false); }
+            });
+
+            const processCardPayment = () => handleDbAction(async () => {
+                if (isSubmitting) return;
+                const t = tickets.find(x => x.id === activeId); if (!t) return;
+                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA'].includes(e.id));
+                if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
+                    return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
+                }
+                setIsSubmitting(true);
+                try {
+                    const details = { mxn: t.price, usd: 0, rate: exRate, changeMxn: 0, changeUsd: 0, isOnlyUsd: false, method: 'CARD' };
+                    await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
+                    const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
+                    PrintService.print(html, role);
+                    setActiveId(null); setPayment({ mxn: '', usd: '' });
+                } finally { setIsSubmitting(false); }
+            });
+
+            const startEdit = (ticket) => { setEditingTicket(ticket); setView('GREETER'); };
+            const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
+
+            const value = {
+                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, businessExpenses, cashCounts, cashDrops, cashIns,
+                prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
+                editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
+                saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
+                addExpense, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
+                updateEmployee,
+                getOpeningCash,
+                db, isSubmitting
+            };
+
+            return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+        };
+
+        // ------------------------------------------------------------------
+        // SECTION 8: COMPONENTS
+        // ------------------------------------------------------------------
+
+        const Button = ({ onClick, children, variant = 'primary', className = '', ...props }) => {
+            const base = "p-3 rounded-xl font-bold transition-transform active:scale-95 shadow-sm flex items-center justify-center gap-2";
+            const styles = {
+                primary: "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300",
+                danger: "bg-red-100 text-red-700 border border-red-200 hover:bg-red-200",
+                secondary: "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50",
+                success: "bg-green-600 text-white hover:bg-green-700",
+                warning: "bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200",
+                ghost: "bg-transparent text-gray-500 hover:bg-gray-100",
+                blueLight: "bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200",
+                orangeLight: "bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200"
+            };
+            const variantStyle = styles[variant] || styles.primary;
+            return <button onClick={onClick} className={`${base} ${variantStyle} ${className}`} {...props}>{children}</button>;
+        };
+
+        const Modal = ({ title, onClose, children, icon: Icon, footer }) => (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm">
+                    <h3 className="font-bold mb-4 text-lg text-gray-800 flex items-center">
+                        {Icon && <Icon className="mr-2" />} {title}
+                    </h3>
+                    <div className="mb-6">{children}</div>
+                    {footer ? footer : (
+                        <button onClick={onClose} variant="secondary" className="w-full">Cerrar</button>
+                    )}
+                </div>
+            </div>
+        );
+
+        const LoginScreen = () => {
+            const { login } = useContext(AppContext);
+            const [pin, setPin] = useState('');
+            const handleLogin = () => {
+                const role = validatePin(pin);
+                if (role) login(role); else { alert('PIN Incorrecto'); setPin(''); }
+            };
+            return (
+                <div className="flex h-screen bg-gray-900 justify-center items-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center">
+                        <h1 className="text-3xl font-bold mb-6 text-gray-800">LAVAMEX POS</h1>
+                        <div className="flex flex-col gap-4">
+                            <input type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" className="w-full p-4 border rounded-lg text-center text-3xl tracking-widest mb-2" autoFocus />
+                            <Button onClick={handleLogin} className="w-full p-4 text-lg">ENTRAR</Button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const GreeterView = () => {
+            const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting, tickets, deleteTicket, startEdit, role } = useContext(AppContext);
+            const [subTab, setSubTab] = useState('FORM');
+            const [size, setSize] = useState(null);
+            const [service, setService] = useState(null);
+            const [washers, setWashers] = useState([]);
+            const [extras, setExtras] = useState([]);
+            const [desc, setDesc] = useState('');
+            const [vDesc, setVDesc] = useState('');
+            const [vPrice, setVPrice] = useState('');
+
+            const isDesktop = role === 'CASHIER' || role === 'ADMIN';
+
+            useEffect(() => {
+                if (editingTicket) {
+                    setSubTab('FORM');
+                    setSize(editingTicket.size || null);
+                    setService(editingTicket.service || null);
+                    setWashers(editingTicket.washers || []);
+                    setExtras(editingTicket.extras || []);
+                    setDesc(editingTicket.vehicleDesc || '');
+                } else {
+                    setSize(null); setService(null); setWashers([]); setExtras([]); setDesc('');
+                }
+            }, [editingTicket]);
+
+            const toggle = (item) => setWashers(prev => toggleSelection(prev, item, 3));
+            const toggleExtra = (item) => setExtras(prev => toggleSelection(prev, item));
+            const addExtra = (item) => setExtras(prev => [...prev, item]);
+            const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
+            const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: 0 }]); setVDesc(''); setVPrice(''); };
+            const canSubmit = ((size && service) || extras.length > 0);
+            const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
+            const handleReprint = (ticket) => {
+                const html = PrintService.getJobTicketHtml({ ...ticket, timestamp: ticket.timestamp || new Date() }, ticket.id.slice(-4).toUpperCase());
+                PrintService.print(html, role);
+            };
+
+            const renderSizes = () => (
+                <div className="bg-white p-4 rounded-xl shadow border h-fit">
+                    <h3 className="font-bold mb-3 text-gray-700 flex items-center"><Car className="w-5 h-5 mr-2" /> 1. Tamaño</h3>
+                    <div className={`grid ${isDesktop ? 'grid-cols-1 gap-2' : 'grid-cols-1 space-y-2'}`}>
+                        {SIZES.map(s => (
+                            <button key={s.id} onClick={() => setSize(s)}
+                                className={`w-full ${isDesktop ? 'p-2' : 'p-4'} text-left rounded-lg border-2 transition-all ${size?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                {s.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            const renderWashers = () => (
+                <div className="bg-white p-4 rounded-xl shadow border h-fit">
+                    <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 2. Lavadores ({washers.length}/3)</h3>
+                    <div className={`grid ${isDesktop ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-3'} mb-4`}>
+                        {employees.filter(e => e.active).map(e => (
+                            <button key={e.name} onClick={() => toggle(e.name)}
+                                className={`${isDesktop ? 'p-2 text-sm' : 'p-4'} rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                {e.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            const renderServices = () => (
+                <div className="bg-white p-4 rounded-xl shadow border h-fit">
+                    <h3 className="font-bold mb-3 text-gray-700 flex items-center"><FileText className="w-5 h-5 mr-2" /> 3. Servicio</h3>
+                    <div className={`space-y-2 mb-4 ${isDesktop ? 'text-sm' : ''}`}>
+                        {SERVICES.map(s => {
+                            const price = size && prices[s.id] ? prices[s.id][size.id] : null;
+                            return <button key={s.id} disabled={!size} onClick={() => setService(s)} className={`w-full ${isDesktop ? 'p-2' : 'p-3'} text-left rounded-lg border-2 flex justify-between items-center transition-all ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 opacity-90 hover:bg-gray-50'}`}><span>{s.label}</span>{price !== null && <span className="bg-white px-2 py-1 rounded text-sm shadow-sm border">${price}</span>}</button>;
+                        })}
+                    </div>
+                    <div className="mt-4 border-t pt-2">
+                        <h3 className="font-bold mb-2 text-gray-700 text-sm">Extras</h3>
+                        <div className={`grid ${isDesktop ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-2'}`}>
+                            {extrasList.map(e => {
+                                const count = extras.filter(x => x.id === e.id).length;
+                                if (e.id === 'BOLEADA') {
+                                    return (
+                                        <div key={e.id} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'} ${isDesktop ? 'col-span-2' : ''}`}>
+                                            <span className="flex-1">{e.label} (+${e.price})</span>
+                                            <div className="flex items-center gap-2"><button onClick={() => removeExtra(e)} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button><span className="w-6 text-center font-bold">{count}</span><button onClick={() => addExtra(e)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button></div>
+                                        </div>
+                                    );
+                                }
+                                return <button key={e.id} onClick={() => toggleExtra(e)} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>;
+                            })}
+                        </div>
+                    </div>
+                    <div className="mt-4 border-t pt-2">
+                        <h3 className="font-bold mb-2 text-gray-700 text-sm">Varios (Costo Extra)</h3>
+                        <div className="flex gap-2 mb-2"><input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Motivo" className="w-full p-2 border rounded text-sm" /><input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" /><Button onClick={addVarios} className="py-2 px-3"><PlusCircle size={16} /></Button></div>
+                        {extras.filter(e => e.id.startsWith('VARIOS')).map(e => (
+                            <div key={e.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 border rounded mb-1"><span>{e.label}</span><div className="flex items-center gap-2"><span className="font-bold">${e.price}</span><button onClick={() => setExtras(prev => prev.filter(x => x.id !== e.id))} className="text-red-500"><Trash2 size={14} /></button></div></div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            const renderActions = () => (
+                <div className="bg-white p-4 rounded-xl shadow border h-fit">
+                    <input
+                        value={desc}
+                        onChange={e => setDesc(e.target.value)}
+                        placeholder="DESCRIPCIÓN VISUAL"
+                        className="w-full p-4 border-4 border-blue-600 rounded-xl mb-4 text-xl font-bold bg-blue-50 text-blue-900 placeholder-blue-400 focus:bg-white transition-colors text-center uppercase"
+                    />
+                    <div className="space-y-2">
+                        {isDesktop && (
+                            <div className="bg-gray-50 p-3 rounded-lg border text-sm mb-4">
+                                <div className="flex justify-between mb-1"><span>Base:</span> <span>${(size && service && prices[service.id]?.[size.id]) || 0}</span></div>
+                                <div className="flex justify-between mb-1"><span>Extras:</span> <span>${extras.reduce((a, b) => a + b.price, 0)}</span></div>
+                                <div className="flex justify-between font-bold text-lg border-t pt-1 mt-1 text-green-700"><span>Total:</span> <span>${((size && service && prices[service.id]?.[size.id]) || 0) + extras.reduce((a, b) => a + b.price, 0)}</span></div>
+                            </div>
+                        )}
+                        <Button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className={`w-full py-5 text-xl shadow-lg ${!canSubmit ? 'bg-gray-300' : ''}`}>
+                            {isSubmitting ? <Loader2 className="animate-spin" /> : (editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR TICKET</>)}
+                        </Button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="flex flex-col h-full overflow-hidden bg-gray-100">
+                    <div className="flex bg-white shadow-sm border-b shrink-0">
+                        <button onClick={() => setSubTab('FORM')} className={`flex-1 py-4 text-center font-bold flex items-center justify-center gap-2 transition-colors ${subTab === 'FORM' ? 'text-blue-600 border-b-4 border-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>
+                            <PlusCircle size={20} /> Nueva Orden
+                        </button>
+                        {role !== 'CASHIER' && (
+                            <button onClick={() => setSubTab('LIST')} className={`flex-1 py-4 text-center font-bold flex items-center justify-center gap-2 transition-colors ${subTab === 'LIST' ? 'text-blue-600 border-b-4 border-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>
+                                <Activity size={20} /> En Proceso ({tickets.length})
+                            </button>
+                        )}
+                    </div>
+
+                    {editingTicket && subTab === 'FORM' && (
+                        <div className="bg-yellow-200 p-3 text-center font-bold text-yellow-900 flex justify-between items-center px-4 shadow-sm z-10 shrink-0">
+                            <span className="flex items-center gap-2 text-sm"><Pencil className="w-4 h-4" /> EDITANDO #{editingTicket.id.slice(-4).toUpperCase()}</span>
+                            <Button onClick={cancelEdit} variant="secondary" className="text-xs py-1 h-8">Cancelar</Button>
+                        </div>
+                    )}
+
+                    <div className="flex-1 overflow-y-auto p-4">
+                        {subTab === 'FORM' ? (
+                            isDesktop ? (
+                                <div className="grid grid-cols-3 gap-4 h-full content-start">
+                                    <div className="flex flex-col gap-4">
+                                        {renderSizes()}
+                                        {renderWashers()}
+                                    </div>
+                                    <div className="flex flex-col gap-4 h-full overflow-y-auto">
+                                        {renderServices()}
+                                    </div>
+                                    <div className="flex flex-col gap-4">
+                                        {renderActions()}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full content-start">
+                                    {renderSizes()}
+                                    {renderWashers()}
+                                    {renderServices()}
+                                    <div className="md:col-span-2 mt-auto">
+                                        {renderActions()}
+                                    </div>
+                                </div>
+                            )
+                        ) : (
+                            <div className="max-w-3xl mx-auto space-y-4">
+                                {tickets.length === 0 && <div className="text-center text-gray-400 py-10">No hay vehículos en proceso.</div>}
+                                {tickets.map(t => (
+                                    <div key={t.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                                        <div className="flex justify-between items-start mb-3 border-b pb-3">
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono font-bold text-xl text-gray-800 bg-gray-100 px-2 py-1 rounded">#{t.id.slice(-4).toUpperCase()}</span>
+                                                    <span className="text-xs font-bold text-gray-500 flex items-center bg-gray-50 px-2 py-1 rounded border"><Clock size={12} className="mr-1" /> {t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-2xl font-bold text-green-600">{formatCurrency(t.price)}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                                            <div>
+                                                <div className="text-xl font-bold text-gray-800 mb-1">{t.vehicleDesc || 'Sin descripción'}</div>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="font-bold text-blue-700 text-lg">{t.service?.label || 'Extras Solo'}</span>
+                                                    {t.size && <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">{t.size.label}</span>}
+                                                </div>
+                                                {t.extras && t.extras.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-2">
+                                                        {t.extras.map((e, idx) => (
+                                                            <span key={`${e.id}-${idx}`} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-1 rounded font-medium">+ {e.label}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                                <div className="text-xs font-bold text-gray-400 uppercase mb-2 tracking-wider">Lavadores Asignados</div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {t.washers?.map(w => <span key={w} className="bg-white text-gray-700 border border-gray-200 px-3 py-1 rounded-lg text-sm font-bold shadow-sm">{w}</span>)}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {role !== 'CASHIER' && (
+                                            <div className="flex gap-3 pt-2">
+                                                <Button onClick={() => startEdit(t)} variant="warning" className="flex-1 py-2 text-sm"><Pencil size={16} /> Editar</Button>
+                                                <Button onClick={() => handleReprint(t)} variant="secondary" className="flex-1 py-2 text-sm"><Printer size={16} /> Imprimir</Button>
+                                                <Button onClick={() => deleteTicket(t.id)} variant="danger" className="flex-1 py-2 text-sm"><Trash2 size={16} /> Borrar</Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const CashierView = () => {
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList } = useContext(AppContext);
+            const t = tickets.find(x => x.id === activeId);
+            const [showSnack, setShowSnack] = useState(false);
+            const [showVarios, setShowVarios] = useState(false);
+            const [showAttendance, setShowAttendance] = useState(false);
+            const [showExpense, setShowExpense] = useState(false);
+            const [showCorte, setShowCorte] = useState(false);
+            const [corteTab, setCorteTab] = useState('ARQUEO');
+
+            const [localAttendance, setLocalAttendance] = useState({});
+
+            const [snackEmp, setSnackEmp] = useState('');
+            const [variosEmp, setVariosEmp] = useState('');
+            const [variosDesc, setVariosDesc] = useState('');
+            const [variosAmt, setVariosAmt] = useState('');
+            const [expDesc, setExpDesc] = useState('');
+            const [expAmt, setExpAmt] = useState('');
+
+            const [declaredMxn, setDeclaredMxn] = useState('');
+            const [declaredUsd, setDeclaredUsd] = useState('');
+
+            const [dropMxn, setDropMxn] = useState('');
+            const [dropUsd, setDropUsd] = useState('');
+
+            useEffect(() => {
+                if (showAttendance) {
+                    const init = {};
+                    employees.forEach(e => {
+                        init[e.id] = { id: e.id, name: e.name, active: e.active };
+                    });
+                    setLocalAttendance(init);
+                }
+            }, [showAttendance, employees]);
+
+            const handleLocalToggle = (id) => {
+                setLocalAttendance(prev => ({
+                    ...prev,
+                    [id]: { ...prev[id], active: !prev[id].active }
+                }));
+            };
+
+            const handleSaveAttendance = async () => {
+                await saveBatchAttendance(localAttendance);
+                alert("Asistencia guardada.");
+                setShowAttendance(false);
+            };
+
+            const handleAddExpense = () => { if (!expDesc || !expAmt) return; addExpense(expDesc, expAmt); setExpDesc(''); setExpAmt(''); setShowExpense(false); };
+
+            const handleAddSnack = () => {
+                if (snackEmp) {
+                    addDeduction(snackEmp, snackPrice, 'Snack');
+                    setShowSnack(false);
+                    setSnackEmp('');
+                }
+            };
+
+            const handleAddVarios = () => {
+                if (variosEmp && variosDesc && variosAmt) {
+                    addDeduction(variosEmp, variosAmt, variosDesc);
+                    setShowVarios(false);
+                    setVariosEmp('');
+                    setVariosDesc('');
+                    setVariosAmt('');
+                }
+            };
+
+            const handleCorte = async () => {
+                const { expectedMxn, expectedUsd, totalCard } = calculateCurrentExpectedCash();
+
+                const decMxnVal = parseFloat(declaredMxn) || 0;
+                const decUsdVal = parseFloat(declaredUsd) || 0;
+
+                const diffMxn = decMxnVal - expectedMxn;
+                const diffUsd = decUsdVal - expectedUsd;
+
+                const isMatch = Math.abs(diffMxn) < 1 && Math.abs(diffUsd) < 0.1;
+
+                await addCashCount({
+                    declaredMxn: decMxnVal,
+                    declaredUsd: decUsdVal,
+                    expectedMxn,
+                    expectedUsd,
+                    diffMxn,
+                    diffUsd,
+                    card: totalCard, // Saving card amount for history
+                    exchangeRate: exRate, // Save rate for historical accuracy
+                    user: role,
+                    timestamp: new Date()
+                });
+
+                if (role === 'ADMIN') {
+                    if (totalDiff < -1) {
+                        alert(`⚠️ DESCUADRE DETECTADO.\n\nDiferencia MXN: ${formatCurrency(diffMxn)}\nDiferencia USD: $${diffUsd.toFixed(2)}`);
+                    } else {
+                        alert("✅ CORTE CORRECTO. El dinero en caja coincide (o sobra).");
+                    }
+                } else {
+                    alert("✅ Corte registrado.");
+                }
+
+                setShowCorte(false);
+                setDeclaredMxn('');
+                setDeclaredUsd('');
+            };
+
+            const calculateCurrentExpectedCash = () => {
+                const todayStr = getLocalDateStr();
+                const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
+
+                const allToday = history.concat(tickets).filter(t => t.status === 'PAID' && getLocalDateStr(t.paidAt || t.timestamp) === todayStr);
+
+                const expensesToday = expenses.filter(e => e.status === 'APPROVED' && getLocalDateStr(e.timestamp) === todayStr)
+                    .reduce((a, b) => a + (b.amount || 0), 0);
+
+                const dropsTodayMxn = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const dropsTodayUsd = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountUsd || 0), 0);
+
+                const cashInsTodayMxn = cashIns.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const cashInsTodayUsd = cashIns.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountUsd || 0), 0);
+
+                const openingCash = getOpeningCash(startOfToday);
+                let expectedMxn = openingCash.mxn;
+                let expectedUsd = openingCash.usd;
+                let totalCard = 0;
+
+                allToday.forEach(t => {
+                    const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false, method: 'CASH' };
+
+                    if (pay.method === 'CARD') {
+                        totalCard += t.price;
+                    } else {
+                        expectedMxn += (pay.mxn || 0);
+                        expectedUsd += (pay.usd || 0);
+
+                        if (pay.isOnlyUsd) {
+                            expectedUsd -= (pay.changeUsd || 0);
+                        } else {
+                            expectedMxn -= (pay.changeMxn || 0);
+                        }
+                    }
+                });
+
+                expectedMxn -= expensesToday;
+                expectedMxn -= dropsTodayMxn;
+                expectedUsd -= dropsTodayUsd;
+                expectedMxn += cashInsTodayMxn;
+                expectedUsd += cashInsTodayUsd;
+
+                return { expectedMxn, expectedUsd, totalCard };
+            };
+
+            const handleCashDrop = async () => {
+                if ((!dropMxn && !dropUsd) || (parseFloat(dropMxn) <= 0 && parseFloat(dropUsd) <= 0)) {
+                    return alert("Ingrese un monto válido.");
+                }
+
+                await addCashDrop(dropMxn, dropUsd);
+                setDropMxn('');
+                setDropUsd('');
+                setShowCorte(false);
+            };
+
+            const mxnVal = parseFloat(payment.mxn) || 0;
+            const usdVal = parseFloat(payment.usd) || 0;
+            const totalGiven = mxnVal + (usdVal * exRate);
+            const changeMxn = totalGiven - (t ? t.price : 0);
+            const changeUsd = changeMxn / exRate;
+            const isOnlyUsd = usdVal > 0 && mxnVal === 0;
+
+            // Get dynamic prices for display
+            const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
+            const boleadaPrice = extrasList.find(e => e.id === 'BOLEADA')?.price || 60;
+
+            return (
+                <div className="flex flex-col md:flex-row h-full gap-4 p-4 overflow-hidden">
+                    <div className="w-full md:w-1/3 bg-white rounded-xl shadow border overflow-hidden flex flex-col h-1/3 md:h-full shrink-0">
+                        <div className="p-3 bg-gray-50 font-bold border-b flex justify-between items-center shrink-0">
+                            <span className="text-gray-700">Tickets ({tickets.length})</span>
+                            <div className="flex gap-1">
+                                <Button onClick={() => setShowCorte(true)} variant="primary" className="text-xs px-2 py-1 h-auto rounded-full bg-slate-700 border-slate-800 text-white">Corte</Button>
+                                <Button onClick={() => setShowAttendance(true)} variant="blueLight" className="text-xs px-2 py-1 h-auto rounded-full">Asist</Button>
+                                <Button onClick={() => setShowSnack(true)} variant="orangeLight" className="text-xs px-2 py-1 h-auto rounded-full">Snack</Button>
+                                <Button onClick={() => setShowVarios(true)} variant="secondary" className="text-xs px-2 py-1 h-auto rounded-full text-purple-700 border-purple-200 bg-purple-50 hover:bg-purple-100">Varios</Button>
+                                <Button onClick={() => setShowExpense(true)} variant="danger" className="text-xs px-2 py-1 h-auto rounded-full">Gasto</Button>
+                            </div>
+                        </div>
+                        <div className="overflow-y-auto flex-1 p-2 space-y-2">
+                            {tickets.map(ticket => (
+                                <div key={ticket.id} onClick={() => setActiveId(ticket.id)} className={`p-4 rounded-lg border cursor-pointer transition-all ${activeId === ticket.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                    <div className="flex justify-between font-bold text-gray-800">
+                                        <span className="truncate pr-2">#{ticket.id.slice(-4).toUpperCase()}{ticket.vehicleDesc ? <span className="uppercase"> - {ticket.vehicleDesc}</span> : ''}</span>
+                                        <div className="text-right">
+                                            <div className="whitespace-nowrap">{formatCurrency(ticket.price)} MXN</div>
+                                            {/* ROUND UP TO NEAREST QUARTER FOR DISPLAY */}
+                                            <div className="text-xs text-green-600 font-normal">${(Math.ceil((ticket.price / exRate) * 4) / 4).toFixed(2)} USD</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || 'Extras'} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size?.label || '-'}</span></div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex-1 bg-white rounded-xl shadow border p-4 md:p-6 flex flex-col items-center h-2/3 md:h-full overflow-y-auto pb-20">
+                        {t ? (
+                            <div className="w-full max-w-md my-auto">
+                                <div className="text-center mb-2">
+                                    <h2 className="text-4xl font-bold text-gray-800">{formatCurrency(t.price)}</h2>
+                                    {/* ROUND UP TO NEAREST QUARTER FOR DISPLAY */}
+                                    <div className="text-xl text-green-600 font-medium">${(Math.ceil((t.price / exRate) * 4) / 4).toFixed(2)} USD</div>
+                                </div>
+                                <p className="text-center text-gray-500 mb-6 font-medium">{t.vehicleDesc} • {t.washers?.join(', ')}</p>
+
+                                <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                    <h4 className="font-bold text-gray-500 text-xs uppercase mb-3 text-center tracking-wider">Add-ons Rápidos (Comisión $0)</h4>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {/* Row 1: Pinos */}
+                                        <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
+                                            <span className="font-bold text-gray-700 pl-2">Pinos (${pinoPrice})</span>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => updateQuickItem(t.id, 'PINO', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                                                <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_PINO').length}</span>
+                                                <button onClick={() => updateQuickItem(t.id, 'PINO', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
+                                            </div>
+                                        </div>
+                                        {/* Row 2: Boleadas */}
+                                        <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
+                                            <span className="font-bold text-gray-700 pl-2">Boleada (${boleadaPrice})</span>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => updateQuickItem(t.id, 'BOLEADA', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                                                <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_BOLEADA').length}</span>
+                                                <button onClick={() => updateQuickItem(t.id, 'BOLEADA', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
+                                            </div>
+                                        </div>
+                                        {/* Row 3: Snacks (Existing) */}
+                                        <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
+                                            <span className="font-bold text-gray-700 pl-2">Snacks (${snackPrice})</span>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => updateQuickItem(t.id, 'SNACKS', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                                                <span className="w-4 text-center font-bold">{t.snackCount || 0}</span>
+                                                <button onClick={() => updateQuickItem(t.id, 'SNACKS', 1)} className="w-8 h-8 bg-orange-100 rounded-full font-bold text-orange-600 hover:bg-orange-200">+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 mb-6">
+                                    <div><label className="text-xs font-bold text-gray-500 mb-1 block">MXN</label><input type="number" inputMode="decimal" value={payment.mxn} onChange={e => setPayment({ ...payment, mxn: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
+                                    <div><label className="text-xs font-bold text-gray-500 mb-1 block">USD (Rate: {exRate})</label><input type="number" inputMode="decimal" value={payment.usd} onChange={e => setPayment({ ...payment, usd: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
+                                </div>
+                                <div className="text-center font-bold mb-6 text-xl bg-gray-50 p-3 rounded-lg border">
+                                    {isOnlyUsd ? (
+                                        <div>Cambio: <span className={changeUsd < 0 ? 'text-red-500' : 'text-green-600'}>${changeUsd.toFixed(2)} USD</span></div>
+                                    ) : (
+                                        <div>Cambio: <span className={changeMxn < 0 ? 'text-red-500' : 'text-green-600'}>{formatCurrency(changeMxn)} MXN</span></div>
+                                    )}
+                                    {!isOnlyUsd && usdVal > 0 && changeMxn > 0 && <div className="text-blue-600 text-lg mt-1">Cambio eqv. USD: ${changeUsd.toFixed(2)}</div>}
+                                </div>
+                                <div className="flex gap-3">
+                                    {role !== 'CASHIER' && <Button onClick={() => deleteTicket(t.id)} variant="danger" title="Borrar"><Trash2 className="w-6 h-6" /></Button>}
+                                    {role !== 'CASHIER' && <Button onClick={() => startEdit(t)} variant="warning" title="Editar"><Pencil className="w-6 h-6" /></Button>}
+                                    <Button onClick={processPayment} disabled={isSubmitting} variant="success" className="flex-1 shadow-lg">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</Button>
+                                    {role === 'CASHIER' && <Button onClick={processCardPayment} disabled={isSubmitting} title="Tarjeta"><CreditCard className="w-6 h-6" /></Button>}
+                                </div>
+                            </div>
+                        ) : <div className="text-gray-400 flex flex-col items-center my-auto"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
+                    </div>
+
+                    {showSnack && <Modal title={`Snack Empleado ($${snackPrice})`} icon={Coffee} onClose={() => setShowSnack(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowSnack(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddSnack} disabled={!snackEmp} variant="warning" className="flex-1">Confirmar</Button></div>}><select className="w-full border p-3 rounded-lg mb-6 text-lg bg-white" onChange={e => setSnackEmp(e.target.value)} value={snackEmp}><option value="">Seleccionar Empleado...</option>{employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}</select></Modal>}
+
+                    {showVarios && (
+                        <Modal title="Varios / Deducción" icon={Briefcase} onClose={() => setShowVarios(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowVarios(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddVarios} disabled={!variosEmp || !variosDesc || !variosAmt} variant="primary" className="flex-1 bg-purple-600 hover:bg-purple-700">Guardar</Button></div>}>
+                            <div className="space-y-3">
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Empleado</label><select className="w-full border p-3 rounded-lg bg-white" onChange={e => setVariosEmp(e.target.value)} value={variosEmp}><option value="">Seleccionar...</option>{employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}</select></div>
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Descripción</label><input value={variosDesc} onChange={e => setVariosDesc(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Toalla, Prestamo" /></div>
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={variosAmt} onChange={e => setVariosAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" /></div>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {showAttendance && (
+                        <Modal title="Asistencia" icon={UserCheck} onClose={() => setShowAttendance(false)} footer={
+                            <div className="flex gap-2">
+                                <Button onClick={() => setShowAttendance(false)} variant="secondary" className="flex-1">Cerrar</Button>
+                                <Button onClick={handleSaveAttendance} variant="success" className="flex-1"><Upload size={18} className="mr-2" /> Guardar</Button>
+                            </div>
+                        }>
+                            <div className="max-h-80 overflow-y-auto space-y-2">
+                                {employees.map(e => {
+                                    const isActive = localAttendance[e.id] ? localAttendance[e.id].active : e.active;
+                                    return (
+                                        <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                            <span className="font-medium text-lg">{e.name}</span>
+                                            <button
+                                                onClick={() => handleLocalToggle(e.id)}
+                                                className={`px-4 py-2 rounded-lg font-bold ${isActive ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}
+                                            >
+                                                {isActive ? 'PRESENTE' : 'AUSENTE'}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </Modal>
+                    )}
+
+                    {showExpense && <Modal title="Registrar Gasto" icon={TrendingDown} onClose={() => setShowExpense(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowExpense(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddExpense} variant="danger" className="flex-1">Registrar</Button></div>}><div className="space-y-3"><div><label className="block text-sm font-bold text-gray-600 mb-1">Concepto</label><input value={expDesc} onChange={e => setExpDesc(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Jabón" /></div><div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" /></div></div></Modal>}
+
+                    {showCorte && (
+                        <Modal
+                            title={corteTab === 'ARQUEO' ? "Arqueo de Caja (Verificación)" : "Retiro de Efectivo (Resguardo)"}
+                            icon={corteTab === 'ARQUEO' ? ClipboardList : ShieldCheck}
+                            onClose={() => setShowCorte(false)}
+                            footer={
+                                <div className="flex gap-3">
+                                    <Button onClick={() => setShowCorte(false)} variant="secondary" className="flex-1">Cancelar</Button>
+                                    {corteTab === 'ARQUEO' ? (
+                                        <Button onClick={handleCorte} variant="primary" className="flex-1 bg-slate-800 hover:bg-slate-900">Verificar</Button>
+                                    ) : (
+                                        <Button onClick={handleCashDrop} variant="warning" className="flex-1">Confirmar Retiro</Button>
+                                    )}
+                                </div>
+                            }
+                        >
+                            <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
+                                <button onClick={() => setCorteTab('ARQUEO')} className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${corteTab === 'ARQUEO' ? 'bg-white shadow text-slate-800' : 'text-gray-500'}`}>Verificar Caja</button>
+                                <button onClick={() => setCorteTab('DROP')} className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${corteTab === 'DROP' ? 'bg-orange-100 text-orange-700 shadow border border-orange-200' : 'text-gray-500'}`}>Retiro de Efectivo</button>
+                            </div>
+
+                            {corteTab === 'ARQUEO' && (
+                                <div className="space-y-4">
+                                    <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
+                                        Ingresa el dinero físico que hay actualmente en la caja. El sistema lo comparará con lo esperado.
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Efectivo MXN</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={declaredMxn} onChange={e => setDeclaredMxn(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold" placeholder="0.00" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Efectivo USD</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={declaredUsd} onChange={e => setDeclaredUsd(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold" placeholder="0.00" />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {corteTab === 'DROP' && (
+                                <div className="space-y-4">
+                                    <div className="bg-orange-50 p-3 rounded-lg text-sm text-orange-800 border border-orange-200">
+                                        <ShieldCheck className="w-5 h-5 inline mr-1" />
+                                        Ingresa el monto que vas a retirar de la caja para mover a resguardo. Se imprimirá un ticket.
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Monto a Retirar (MXN)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={dropMxn} onChange={e => setDropMxn(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold text-orange-700" placeholder="0.00" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Monto a Retirar (USD)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={dropUsd} onChange={e => setDropUsd(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold text-green-700" placeholder="0.00" />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </Modal>
+                    )}
+                </div>
+            );
+        };
+
+        const HistoryView = () => {
+            const { history, tickets, deductions } = useContext(AppContext);
+            const todayStr = getLocalDateStr();
+
+            const allPaid = history.concat(tickets.filter(t => t.status === 'PAID'));
+
+            const todayTickets = allPaid.filter(t => {
+                const tDate = t.paidAt ? getLocalDateStr(t.paidAt) : getLocalDateStr(t.timestamp);
+                return tDate === todayStr;
+            });
+
+            const totalSum = todayTickets.reduce((acc, t) => acc + (t.price || 0), 0);
+            const todayDeductions = deductions.filter(d => d.amount > 0 && getLocalDateStr(d.timestamp) === todayStr);
+
+            return (
+                <div className="p-4 h-full overflow-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
+                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
+                            <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" /> Tickets Pagados (Hoy)</div>
+                        </div>
+                        <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50 font-bold text-gray-700 sticky top-0">
+                                    <tr>
+                                        <th className="p-3">ID</th>
+                                        <th className="p-3">Hora</th>
+                                        <th className="p-3">Descripción</th>
+                                        <th className="p-3">Servicio</th>
+                                        <th className="p-3 text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {todayTickets.map(t => (
+                                        <tr key={t.id} className="border-t hover:bg-gray-50">
+                                            <td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td>
+                                            <td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td>
+                                            <td className="p-3 font-bold text-gray-700 uppercase">{t.vehicleDesc || '-'}</td>
+                                            <td className="p-3">
+                                                <div className="font-medium">{t.service?.label || 'Extras'}</div>
+                                                {t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}
+                                            </td>
+                                            <td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
+                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center"><span>Deducciones (Hoy)</span><Coffee className="w-4 h-4 text-orange-500" /></div>
+                        <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
+                            <table className="w-full text-sm text-left"><thead className="bg-orange-50 font-bold text-orange-800 sticky top-0"><tr><th className="p-3">Fecha</th><th className="p-3">Empleado</th><th className="p-3">Detalle</th><th className="p-3 text-right">Monto</th></tr></thead><tbody>{todayDeductions.map(d => <tr key={d.id} className="border-t hover:bg-orange-50"><td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleDateString() : '...'}</td><td className="p-3 font-bold">{d.employee}</td><td className="p-3 text-gray-600 italic">{d.description || 'Snack'}</td><td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td></tr>)}</tbody></table>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AdminCorte = () => {
+            const { history, tickets, expenses, deductions, exRate, updateExpense, resolveExpense, cashCounts, cashDrops, cashIns, getOpeningCash, setView } = useContext(AppContext);
+            const [corteMode, setCorteMode] = useState('DAY');
+            const [corteDate, setCorteDate] = useState(getLocalDateStr());
+            const [corteMonth, setCorteMonth] = useState(getMonthStr());
+            const [editingExpenseId, setEditingExpenseId] = useState(null);
+            const [editExpDesc, setEditExpDesc] = useState('');
+            const [editExpAmt, setEditExpAmt] = useState('');
+
+            const allPaidForCorte = history.concat(tickets.filter(t => t.status === 'PAID'));
+
+            // Filter Tickets by Date
+            const corteTickets = allPaidForCorte.filter(t => {
+                const d = new Date(t.paidAt ? t.paidAt : t.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth;
+            });
+
+            // Filter Expenses by Date
+            const corteExpenses = expenses.filter(e => {
+                const d = new Date(e.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth;
+            });
+
+            // Filter Drops by Date
+            const corteDrops = cashDrops.filter(d => {
+                const dte = new Date(d.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth;
+            });
+
+            // Filter Cash Ins by Date
+            const corteCashIns = cashIns.filter(d => {
+                const dte = new Date(d.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth;
+            });
+
+            // Filter Deductions by Date (For internal snacks)
+            const corteDeductions = deductions.filter(d => {
+                const dte = new Date(d.timestamp);
+                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth;
+            });
+
+            const calculateItemStats = () => {
+                const stats = {
+                    snacks: { customerCount: 0, internalCount: 0, totalCount: 0, moneyCustomer: 0, moneyInternal: 0 },
+                    pinos: { count: 0, money: 0 },
+                    boleadas: { count: 0, money: 0 }
+                };
+
+                // 1. From Tickets (Customers)
+                corteTickets.forEach(t => {
+                    // Pinos & Boleadas
+                    if (t.extras && Array.isArray(t.extras)) {
+                        t.extras.forEach(e => {
+                            if (['PINO', 'QA_PINO'].includes(e.id)) {
+                                stats.pinos.count += 1;
+                                stats.pinos.money += (e.price || 0);
+                            }
+                            if (['BOLEADA', 'QA_BOLEADA'].includes(e.id)) {
+                                stats.boleadas.count += 1;
+                                stats.boleadas.money += (e.price || 0);
+                            }
+                        });
+                    }
+
+                    // Snacks (Customer)
+                    if (t.snackCount > 0) {
+                        stats.snacks.customerCount += t.snackCount;
+                        // Revenue calc
+                        const extrasTotal = (t.extras || []).reduce((a, b) => a + (b.price || 0), 0);
+                        const serviceTotal = t.basePrice || 0;
+                        const impliedSnackRevenue = (t.price || 0) - serviceTotal - extrasTotal;
+                        stats.snacks.moneyCustomer += Math.max(0, impliedSnackRevenue);
+                    }
+                });
+
+                // 2. From Deductions (Employees)
+                corteDeductions.forEach(d => {
+                    const desc = (d.description || '').toLowerCase().trim();
+                    if (desc === 'snack' || desc === 'snacks') {
+                        stats.snacks.internalCount += 1;
+                        stats.snacks.moneyInternal += (d.amount || 0);
+                    }
+                });
+
+                stats.snacks.totalCount = stats.snacks.customerCount + stats.snacks.internalCount;
+
+                return stats;
+            };
+            const itemStats = calculateItemStats();
+
+            const calculateCorteTotals = () => {
+                let revenueCard = 0;
+                let revenueCashTickets = 0;
+                let netMxnFlow = 0;
+                let netUsdFlow = 0;
+
+                corteTickets.forEach(t => {
+                    if (t.paymentDetails?.method === 'CARD') {
+                        revenueCard += t.price;
+                    } else {
+                        revenueCashTickets += t.price;
+
+                        // Calculate actual cash movement based on what was received and given back
+                        const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false };
+
+                        const mxnIn = parseFloat(pay.mxn) || 0;
+                        const usdIn = parseFloat(pay.usd) || 0;
+
+                        let mxnOut = 0;
+                        let usdOut = 0;
+
+                        // Deduct change from the appropriate currency
+                        if (pay.isOnlyUsd) {
+                            usdOut = parseFloat(pay.changeUsd) || 0;
+                        } else {
+                            mxnOut = parseFloat(pay.changeMxn) || 0;
+                        }
+
+                        netMxnFlow += (mxnIn - mxnOut);
+                        netUsdFlow += (usdIn - usdOut);
+                    }
+                });
+
+                const approvedExpensesTotal = corteExpenses.filter(e => e.status === 'APPROVED').reduce((a, b) => a + (b.amount || 0), 0);
+
+                let startDateObj;
+                if (corteMode === 'DAY') {
+                    startDateObj = new Date(corteDate + 'T00:00:00');
+                } else {
+                    startDateObj = new Date(corteMonth + '-01T00:00:00');
+                }
+                const openingCash = getOpeningCash(startDateObj);
+                const initMxn = openingCash.mxn;
+                const initUsd = openingCash.usd;
+
+                const dropsMxn = corteDrops.reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const dropsUsd = corteDrops.reduce((a, b) => a + (b.amountUsd || 0), 0);
+
+                const cashInsMxn = corteCashIns.reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const cashInsUsd = corteCashIns.reduce((a, b) => a + (b.amountUsd || 0), 0);
+
+                return {
+                    total: revenueCard + revenueCashTickets,
+                    card: revenueCard,
+                    cashTotal: revenueCashTickets,
+                    cashMxn: netMxnFlow, // Actual MXN collected
+                    cashUsd: netUsdFlow, // Actual USD collected (net)
+                    expenses: approvedExpensesTotal,
+                    initialMxn: initMxn,
+                    initialUsd: initUsd,
+                    cashNetMxn: (netMxnFlow + initMxn + cashInsMxn) - approvedExpensesTotal - dropsMxn,
+                    cashNetUsd: netUsdFlow + initUsd + cashInsUsd - dropsUsd,
+                    dropsMxn,
+                    dropsUsd,
+                    cashInsMxn,
+                    cashInsUsd,
+                    exchangeRate: exRate // Pass current rate for final calc
+                };
+            };
+            const corteTotals = calculateCorteTotals();
+
+            const printCorte = () => {
+                // Filter Arqueos specifically for this
+                const relevantArqueos = cashCounts.filter(c => {
+                    const d = new Date(c.timestamp);
+                    return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth;
+                }).sort((a, b) => a.timestamp - b.timestamp); // Ascending order
+
+                const data = {
+                    type: corteMode === 'DAY' ? 'Diario' : 'Mensual',
+                    dateLabel: corteMode === 'DAY' ? corteDate : corteMonth,
+                    totals: corteTotals,
+                    tickets: corteTickets,
+                    expenses: corteExpenses.filter(e => e.status === 'APPROVED'),
+                    cashIns: corteCashIns,
+                    itemStats: itemStats,
+                    arqueos: {
+                        first: relevantArqueos.length > 0 ? relevantArqueos[0] : null,
+                        last: relevantArqueos.length > 0 ? relevantArqueos[relevantArqueos.length - 1] : null
+                    }
+                };
+                PdfService.generateCorte(data);
+            };
+
+            const saveEditedExpense = () => { if (editingExpenseId) { updateExpense(editingExpenseId, { description: editExpDesc, amount: parseFloat(editExpAmt) || 0 }); setEditingExpenseId(null); } };
+
+            const latestCount = cashCounts.length > 0 ? cashCounts[0] : null;
+            const hasRecentDiscrepancy = latestCount && (Math.abs(latestCount.diffMxn) > 1 || Math.abs(latestCount.diffUsd) > 0.1) && getLocalDateStr(latestCount.timestamp) === getLocalDateStr();
+
+            return (
+                <div className="max-w-4xl mx-auto space-y-6">
+                    {hasRecentDiscrepancy && (
+                        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm flex items-start gap-3">
+                            <AlertTriangle className="shrink-0 mt-1" />
+                            <div>
+                                <p className="font-bold">¡Atención! Descuadre en el último corte de caja</p>
+                                <p className="text-sm">
+                                    Hora: {latestCount.timestamp.toLocaleTimeString()} - {latestCount.user}<br />
+                                    Diferencia: MXN {formatCurrency(latestCount.diffMxn)} / USD ${latestCount.diffUsd.toFixed(2)}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+                            <button onClick={() => setCorteMode('DAY')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'DAY' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Día</button>
+                            <button onClick={() => setCorteMode('MONTH')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'MONTH' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Mes</button>
+                        </div>
+                        <div className="flex items-center gap-2">{corteMode === 'DAY' ? <input type="date" value={corteDate} onChange={e => setCorteDate(e.target.value)} className="font-bold text-lg bg-transparent outline-none border p-2 rounded" /> : <input type="month" value={corteMonth} onChange={e => setCorteMonth(e.target.value)} className="font-bold text-lg bg-transparent outline-none border p-2 rounded" />}</div>
+                        <Button onClick={printCorte}><Printer size={18} /> PDF</Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div onClick={() => setView('HISTORY')} className="cursor-pointer hover:scale-105 transition-transform bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div><div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div><div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div></div>
+
+                        <div onClick={printCorte} className="cursor-pointer hover:scale-105 transition-transform bg-white p-4 rounded-xl shadow border border-gray-100 flex flex-col justify-center">
+                            <div className="flex items-center gap-2 mb-2 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja </div>
+                            <div className="mb-2">
+                                <div className="flex justify-between items-end">
+                                    <span className="text-xs text-gray-400 font-bold">MXN</span>
+                                    <span className="text-2xl font-bold text-blue-900">{formatCurrency(corteTotals.cashNetMxn)}</span>
+                                </div>
+                                {corteTotals.cashInsMxn > 0 && <div className="text-xs text-green-600 text-right font-bold">Incl. +{formatCurrency(corteTotals.cashInsMxn)} Ingresos</div>}
+                            </div>
+                            <div className="pt-2 border-t border-dashed">
+                                <div className="flex justify-between items-end">
+                                    <span className="text-xs text-gray-400 font-bold">USD</span>
+                                    <span className="text-2xl font-bold text-green-700">${corteTotals.cashNetUsd.toFixed(2)}</span>
+                                </div>
+                                {corteTotals.cashInsUsd > 0 && <div className="text-xs text-green-600 text-right font-bold">Incl. +${corteTotals.cashInsUsd.toFixed(2)} Ingresos</div>}
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><ShieldCheck size={18} /> Envios/Retiros</div><div className="text-3xl font-bold text-orange-600">{formatCurrency(corteTotals.dropsMxn)}</div><div className="text-xs text-green-600 font-bold mt-1">+ ${corteTotals.dropsUsd.toFixed(2)} USD</div></div>
+                        <div className="bg-white p-6 rounded-xl shadow border border-gray-100"><div className="flex items-center gap-2 mb-1 text-gray-500 font-bold text-sm"><CreditCard size={18} /> Tarjeta</div><div className="text-3xl font-bold text-blue-600">{formatCurrency(corteTotals.card)}</div></div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+                        <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><Briefcase size={16} /> Desglose de Adicionales</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 flex flex-col items-center w-full">
+                                <div className="text-orange-800 font-bold text-xs uppercase mb-2">Snacks (Total: {itemStats.snacks.totalCount})</div>
+                                <div className="w-full flex justify-between text-xs mb-1 px-4 text-gray-600">
+                                    <span>Cliente:</span>
+                                    <span className="font-bold text-gray-800">{itemStats.snacks.customerCount}</span>
+                                </div>
+                                <div className="w-full flex justify-between text-xs mb-3 px-4 text-gray-600 border-b border-orange-200 pb-2">
+                                    <span>Empleado:</span>
+                                    <span className="font-bold text-gray-800">{itemStats.snacks.internalCount}</span>
+                                </div>
+                                <div className="text-xl font-bold text-green-700">{formatCurrency(itemStats.snacks.moneyCustomer + itemStats.snacks.moneyInternal)}</div>
+                            </div>
+                            <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex flex-col items-center justify-center">
+                                <div className="text-green-800 font-bold text-xs uppercase mb-1">Pinos</div>
+                                <div className="text-3xl font-bold text-gray-800">{itemStats.pinos.count}</div>
+                                <div className="text-sm text-green-600 font-bold">{formatCurrency(itemStats.pinos.money)}</div>
+                            </div>
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex flex-col items-center justify-center">
+                                <div className="text-blue-800 font-bold text-xs uppercase mb-1">Boleadas</div>
+                                <div className="text-3xl font-bold text-gray-800">{itemStats.boleadas.count}</div>
+                                <div className="text-sm text-green-600 font-bold">{formatCurrency(itemStats.boleadas.money)}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow border overflow-hidden">
+                        <div className="p-4 bg-orange-50 border-b border-orange-100 font-bold text-orange-800 flex justify-between items-center">
+                            <span>Retiros de Efectivo (Drops)</span>
+                            <ShieldCheck className="w-4 h-4" />
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-orange-100 text-orange-800">
+                                    <tr>
+                                        <th className="p-3">Código</th>
+                                        <th className="p-3">Hora</th>
+                                        <th className="p-3">Usuario</th>
+                                        <th className="p-3 text-right">Monto MXN</th>
+                                        <th className="p-3 text-right">Monto USD</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {corteDrops.length === 0 ? <tr><td colSpan="5" className="p-4 text-center text-gray-400">No hay retiros registrados en este periodo.</td></tr> : corteDrops.map(d => (
+                                        <tr key={d.id} className="border-t hover:bg-orange-50">
+                                            <td className="p-3 font-mono font-bold text-xs">{d.code}</td>
+                                            <td className="p-3">{d.timestamp.toLocaleTimeString()}</td>
+                                            <td className="p-3">{d.user}</td>
+                                            <td className="p-3 text-right font-bold">{formatCurrency(d.amountMxn)}</td>
+                                            <td className="p-3 text-right font-bold text-green-600">${d.amountUsd.toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow border overflow-hidden">
+                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center"><span>Gastos</span><span className="text-sm text-red-500 font-bold">Total: {formatCurrency(corteTotals.expenses)}</span></div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left"><thead className="bg-gray-50 text-gray-500"><tr><th className="p-3">Concepto</th><th className="p-3">Monto</th><th className="p-3">Estado</th><th className="p-3 text-right">Acción</th></tr></thead><tbody>{corteExpenses.map(e => <tr key={e.id} className="border-t hover:bg-gray-50"><td className="p-3">{editingExpenseId === e.id ? <input value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} className="border p-1 rounded w-full" /> : e.description}</td><td className="p-3 font-bold text-red-600">{editingExpenseId === e.id ? <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} className="border p-1 rounded w-24" /> : `-${formatCurrency(e.amount)}`}</td><td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${e.status === 'APPROVED' ? 'bg-green-100 text-green-700' : (e.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`}>{e.status}</span></td><td className="p-3 text-right">{editingExpenseId === e.id ? <div className="flex justify-end gap-2"><button onClick={saveEditedExpense} className="bg-blue-100 text-blue-700 p-1 rounded hover:bg-blue-200"><Save size={16} /></button><button onClick={() => setEditingExpenseId(null)} className="bg-gray-100 text-gray-700 p-1 rounded hover:bg-gray-200"><X size={16} /></button></div> : <div className="flex justify-end gap-2 items-center">{e.status === 'APPROVED' && <button onClick={() => { setEditingExpenseId(e.id); setEditExpDesc(e.description); setEditExpAmt(e.amount); }} className="text-gray-400 hover:text-blue-500"><Pencil size={14} /></button>}{e.status === 'PENDING' && <><button onClick={() => resolveExpense(e.id, 'APPROVED')} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><Check size={16} /></button><button onClick={() => resolveExpense(e.id, 'REJECTED')} className="bg-red-100 text-red-700 p-1 rounded hover:bg-red-200"><X size={16} /></button></>}</div>}</td></tr>)}</tbody></table>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow border overflow-hidden">
+                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
+                            <span>Historial de Arqueos (Últimos 20)</span>
+                            <ClipboardList className="w-4 h-4 text-gray-400" />
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50 text-gray-500">
+                                    <tr>
+                                        <th className="p-3">Fecha/Hora</th>
+                                        <th className="p-3 text-right">Declarado MXN</th>
+                                        <th className="p-3 text-right">Esperado MXN</th>
+                                        <th className="p-3 text-right">Dif MXN</th>
+                                        <th className="p-3 text-right">Declarado USD</th>
+                                        <th className="p-3 text-right">Esperado USD</th>
+                                        <th className="p-3 text-right">Dif USD</th>
+                                        <th className="p-3 text-right">Dif Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {cashCounts.map(c => {
+                                        // Use historical exchange rate if available, otherwise current
+                                        const rate = c.exchangeRate || exRate;
+                                        // Dif Total formula: Dif MXN + (Dif USD * Rate)
+                                        const totalDiffVal = c.diffMxn + (c.diffUsd * rate);
+
+                                        const isBad = Math.abs(c.diffMxn) > 1 || Math.abs(c.diffUsd) > 0.1;
+
+                                        return (
+                                            <tr key={c.id} className={`border-t ${isBad ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                                                <td className="p-3">
+                                                    <div>{c.timestamp.toLocaleString()}</div>
+                                                    <div className="text-xs text-gray-400 font-bold">{c.user}</div>
+                                                </td>
+                                                <td className="p-3 text-right">{formatCurrency(c.declaredMxn)}</td>
+                                                <td className="p-3 text-right text-gray-500">{formatCurrency(c.expectedMxn)}</td>
+                                                <td className={`p-3 text-right font-bold ${c.diffMxn < 0 ? 'text-red-600' : (c.diffMxn > 0 ? 'text-blue-600' : 'text-gray-400')}`}>{c.diffMxn > 0 ? '+' : ''}{formatCurrency(c.diffMxn)}</td>
+
+                                                <td className="p-3 text-right">${(c.declaredUsd || 0).toFixed(2)}</td>
+                                                <td className="p-3 text-right text-gray-500">${(c.expectedUsd || 0).toFixed(2)}</td>
+                                                <td className={`p-3 text-right font-bold ${(c.diffUsd || 0) < 0 ? 'text-red-600' : ((c.diffUsd || 0) > 0 ? 'text-blue-600' : 'text-gray-400')}`}>{(c.diffUsd || 0) > 0 ? '+' : ''}${(c.diffUsd || 0).toFixed(2)}</td>
+
+                                                <td className={`p-3 text-right font-black ${totalDiffVal < 0 ? 'text-red-700' : 'text-green-700'}`}>{formatCurrency(totalDiffVal)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AdminNomina = () => {
+            const { employees, history, deductions, commissions, extrasList, db, tickets } = useContext(AppContext);
+            const [startDate, setStartDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
+            const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+
+            // Preview State
+            const [previewData, setPreviewData] = useState(null);
+            const [previewName, setPreviewName] = useState(null);
+
+            // FIX: Append time to force local time interpretation, ensuring endDate is inclusive
+            const start = new Date(startDate + 'T00:00:00');
+            const end = new Date(endDate + 'T23:59:59.999');
+
+            const filterRange = (ts) => { if (!ts) return true; const date = new Date(ts.toDate ? ts.toDate() : ts); return date >= start && date <= end; };
+
+            const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
+            const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
+            const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
+            const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
+
+            const printNomina = () => {
+                PdfService.generateNomina(payroll, startDate, endDate, rangeHistory);
+            };
+
+            const closeWeek = async () => { if (!confirm("¿Archivar semana?")) return; const batch = writeBatch(db); rangeHistory.forEach(t => batch.update(doc(db, "tickets", t.id), { status: 'ARCHIVED' })); rangeDeductions.forEach(d => batch.update(doc(db, "deductions", d.id), { status: 'ARCHIVED' })); await batch.commit(); alert("Semana Cerrada"); };
+
+            return (
+                <div>
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6 rounded-xl shadow-lg mb-6 flex justify-between items-center">
+                        <div><h2 className="text-2xl font-bold m-0 flex items-center gap-2"><Users className="w-6 h-6" /> Total Nómina</h2></div>
+                        <div className="text-4xl font-bold">{formatCurrency(totalNomina)}</div>
+                    </div>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
+                        <div className="flex flex-wrap gap-3 items-end">
+                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Inicio</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
+                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Fin</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
+                            <Button onClick={printNomina} variant="success"><Printer className="w-4 h-4" /> PDF</Button>
+                        </div>
+                        <Button onClick={closeWeek} variant="danger"><Archive className="w-4 h-4" /> CERRAR SEMANA</Button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {Object.keys(payroll).map(name => (
+                            <div key={name} onClick={() => { setPreviewData(payroll[name]); setPreviewName(name); }} className="bg-white p-5 rounded-xl shadow-sm border border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-all hover:bg-blue-50/30">
+                                <div className="font-bold text-xl text-gray-800 mb-1">{name}</div>
+                                <div className="text-3xl font-bold text-green-700">{formatCurrency(payroll[name].netPay)}</div>
+                                <div className="text-sm text-gray-500 mt-2 flex justify-between border-t pt-2"><span>Com: {formatCurrency(payroll[name].total)}</span><span className="text-red-500 font-medium">Ded: {formatCurrency(payroll[name].deductionTotal)}</span></div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {previewData && (
+                        <Modal title={`Nómina: ${previewName}`} icon={FileText} onClose={() => { setPreviewData(null); setPreviewName(null); }}
+                            footer={<Button onClick={() => { setPreviewData(null); setPreviewName(null); }} variant="secondary" className="w-full">Cerrar</Button>}>
+                            <div className="space-y-4">
+                                <div className="bg-gray-50 p-4 rounded-lg border flex justify-between items-center">
+                                    <div>
+                                        <div className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Total a Pagar</div>
+                                        <div className="text-3xl font-bold text-green-700">{formatCurrency(previewData.netPay)}</div>
+                                    </div>
+                                    <div className="text-right text-xs">
+                                        <div className="text-gray-600 font-medium">Ingresos: {formatCurrency(previewData.total)}</div>
+                                        <div className="text-red-500 font-medium">Deducciones: -{formatCurrency(previewData.deductionTotal)}</div>
+                                    </div>
+                                </div>
+
+                                {/* Services Table */}
+                                <div>
+                                    <h4 className="font-bold text-xs uppercase text-gray-500 mb-2 border-b pb-1">Desglose de Servicios</h4>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs text-left">
+                                            <thead>
+                                                <tr className="bg-gray-100">
+                                                    <th className="p-1">Svc</th>
+                                                    {SIZES.map(s => <th key={s.id} className="p-1 text-center">{s.label.substring(0, 3)}</th>)}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {SERVICES.map(svc => {
+                                                    const rowCounts = SIZES.map(sz => previewData.serviceGrid[svc.id][sz.id] || 0);
+                                                    if (!rowCounts.some(c => c > 0)) return null;
+                                                    return (
+                                                        <tr key={svc.id} className="border-b last:border-0 hover:bg-gray-50">
+                                                            <td className="p-1 font-medium">{svc.label}</td>
+                                                            {rowCounts.map((c, i) => <td key={i} className="p-1 text-center text-gray-600">{c || '-'}</td>)}
+                                                        </tr>
+                                                    )
+                                                })}
+                                                {/* If no services found but has total (e.g. Supervisor Base Salary only), show message */}
+                                                {!SERVICES.some(svc => SIZES.some(sz => (previewData.serviceGrid[svc.id][sz.id] || 0) > 0)) && (
+                                                    <tr><td colSpan="5" className="p-2 text-center text-gray-400 italic">Sin servicios de lavado registrados</td></tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Extras Table */}
+                                {Object.keys(previewData.extrasData).length > 0 && (
+                                    <div>
+                                        <h4 className="font-bold text-xs uppercase text-blue-500 mb-2 border-b pb-1 mt-4">Comisiones Extra</h4>
+                                        <table className="w-full text-xs">
+                                            <tbody>
+                                                {Object.keys(previewData.extrasData).sort().map(k => (
+                                                    <tr key={k} className="border-b last:border-0">
+                                                        <td className="p-1">{k}</td>
+                                                        <td className="p-1 text-center text-gray-500">x{previewData.extrasData[k].count}</td>
+                                                        <td className="p-1 text-right font-bold text-gray-700">{formatCurrency(previewData.extrasData[k].total)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* Deductions Table */}
+                                {previewData.deductionDetails.length > 0 && (
+                                    <div>
+                                        <h4 className="font-bold text-xs uppercase text-red-500 mb-2 border-b pb-1 mt-4">Deducciones</h4>
+                                        <table className="w-full text-xs">
+                                            <tbody>
+                                                {previewData.deductionDetails.map((d, i) => (
+                                                    <tr key={i} className="border-b last:border-0">
+                                                        <td className="p-1">{d.desc || 'Varios'}</td>
+                                                        <td className="p-1 text-right text-red-600 font-medium">-{formatCurrency(d.amount)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </Modal>
+                    )}
+                </div>
+            );
+        };
+
+        const AdminAsistencia = () => {
+            const { db, employees } = useContext(AppContext);
+            const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
+
+            const generateAttendanceReport = async () => {
+                const q = query(collection(db, "attendance"), where("month", "==", reportMonth));
+                const snapshot = await getDocs(q);
+                const attendanceData = {};
+                snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
+
+                const daysInMonth = new Date(reportMonth.split('-')[0], reportMonth.split('-')[1], 0).getDate();
+                PdfService.generateAttendance(reportMonth, employees, attendanceData, daysInMonth);
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
+                    <h3 className="font-bold mb-4 text-gray-800 flex items-center"><Calendar className="mr-2" /> Reporte de Asistencia</h3>
+                    <div className="mb-4"><label className="block text-sm font-bold text-gray-600 mb-2">Mes</label><input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
+                    <Button onClick={generateAttendanceReport} className="w-full">Descargar PDF Mensual</Button>
+                </div>
+            );
+        };
+
+        const AdminConfig = () => {
+            const { exRate, snackPrice, updateGlobalSettings, employees, addEmployee, archiveEmployee, updateEmployee } = useContext(AppContext);
+            const [localExRate, setLocalExRate] = useState(exRate);
+            const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
+            const [newEmpName, setNewEmpName] = useState('');
+            const [editingEmp, setEditingEmp] = useState(null);
+
+            useEffect(() => { setLocalExRate(exRate); setLocalSnackPrice(snackPrice); }, [exRate, snackPrice]);
+            const handleAddEmployee = () => { if (newEmpName.trim()) { addEmployee(newEmpName.trim()); setNewEmpName(''); } };
+
+            const handleEditEmployee = (emp) => {
+                setEditingEmp({
+                    ...emp,
+                    role: emp.role || 'WASHER',
+                    baseSalary: emp.baseSalary || 0,
+                    commissionPct: emp.commissionPct || 0
+                });
+            };
+
+            const saveEmployeeChanges = () => {
+                if (!editingEmp) return;
+                updateEmployee(editingEmp.id, {
+                    role: editingEmp.role,
+                    baseSalary: parseFloat(editingEmp.baseSalary) || 0,
+                    commissionPct: parseFloat(editingEmp.commissionPct) || 0
+                });
+                setEditingEmp(null);
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
+                    <h3 className="font-bold mb-4 text-gray-800">General</h3>
+                    <div className="mb-6 flex flex-col gap-4">
+                        <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
+                        <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
+                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Cambios</Button>
+                    </div>
+                    <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
+                    <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} placeholder="Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><Button onClick={handleAddEmployee}><PlusCircle className="w-5 h-5" /></Button></div>
+                    <div className="space-y-2">{employees.map((e) => (
+                        <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <div>
+                                <span className="font-medium block">{e.name}</span>
+                                <span className="text-xs text-gray-500 uppercase font-bold">{e.role === 'SUPERVISOR' ? 'Supervisor' : 'Lavador'}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className={`text-xs font-bold px-2 py-1 rounded ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.active ? 'Presente' : 'Ausente'}</span>
+                                <button onClick={() => handleEditEmployee(e)} className="text-blue-500 hover:text-blue-700" title="Editar Rol"><UserCog size={18} /></button>
+                                <button onClick={() => { if (confirm(`¿Ocultar a ${e.name}?`)) archiveEmployee(e.id); }} className="text-red-500 hover:text-red-700" title="Ocultar empleado"><EyeOff size={18} /></button>
+                            </div>
+                        </div>
+                    ))}</div>
+
+                    {editingEmp && (
+                        <Modal title={`Editar Empleado: ${editingEmp.name}`} icon={UserCog} onClose={() => setEditingEmp(null)} footer={
+                            <div className="flex gap-2">
+                                <Button onClick={() => setEditingEmp(null)} variant="secondary" className="flex-1">Cancelar</Button>
+                                <Button onClick={saveEmployeeChanges} variant="primary" className="flex-1">Guardar</Button>
+                            </div>
+                        }>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Rol</label>
+                                    <select
+                                        className="w-full border p-2 rounded"
+                                        value={editingEmp.role}
+                                        onChange={(e) => setEditingEmp({ ...editingEmp, role: e.target.value })}
+                                    >
+                                        <option value="WASHER">Lavador (Comisión Estandar)</option>
+                                        <option value="SUPERVISOR">Supervisor (Sueldo + % Ventas)</option>
+                                    </select>
+                                </div>
+                                {editingEmp.role === 'SUPERVISOR' && (
+                                    <>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-600 mb-1">Sueldo Base Semanal ($)</label>
+                                            <input
+                                                type="number"
+                                                className="w-full border p-2 rounded"
+                                                value={editingEmp.baseSalary}
+                                                onChange={(e) => setEditingEmp({ ...editingEmp, baseSalary: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-600 mb-1">Comisión de Ventas Totales (%)</label>
+                                            <input
+                                                type="number"
+                                                className="w-full border p-2 rounded"
+                                                value={editingEmp.commissionPct}
+                                                onChange={(e) => setEditingEmp({ ...editingEmp, commissionPct: e.target.value })}
+                                                placeholder="Ej. 5"
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </Modal>
+                    )}
+                </div>
+            );
+        };
+
+        const AdminPrecios = () => {
+            const { prices, commissions, extrasList, db } = useContext(AppContext);
+            const [editPrices, setEditPrices] = useState({});
+            const [editComms, setEditComms] = useState({});
+            const [editExtras, setEditExtras] = useState([]);
+
+            useEffect(() => {
+                setEditPrices(JSON.parse(JSON.stringify(prices)));
+                setEditComms(JSON.parse(JSON.stringify(commissions)));
+                setEditExtras(JSON.parse(JSON.stringify(extrasList)));
+            }, [prices, commissions, extrasList]);
+
+            const updateLocalPrice = (type, svcId, sizeId, val) => {
+                const target = type === 'prices' ? editPrices : editComms;
+                const setTarget = type === 'prices' ? setEditPrices : setEditComms;
+                const newObj = { ...target };
+                if (!newObj[svcId]) newObj[svcId] = {};
+                newObj[svcId][sizeId] = parseFloat(val) || 0;
+                setTarget(newObj);
+            };
+
+            const updateLocalExtra = (index, field, val) => {
+                const arr = [...editExtras];
+                arr[index][field] = val;
+                setEditExtras(arr);
+            };
+
+            const saveAllSettings = () => handleDbAction(async () => {
+                if (!confirm("¿Aplicar nuevos precios?")) return;
+                const batch = writeBatch(db);
+
+                batch.set(doc(db, "settings", "prices"), editPrices);
+                batch.set(doc(db, "settings", "commissions"), editComms);
+
+                editExtras.forEach(e => {
+                    if (e.docId) {
+                        batch.update(doc(db, "extras", e.docId), {
+                            label: e.label,
+                            price: parseFloat(e.price) || 0,
+                            commission: parseFloat(e.commission) || 0,
+                            id: e.id
+                        });
+                    } else {
+                        const newRef = doc(collection(db, "extras"));
+                        batch.set(newRef, {
+                            id: e.id || `EXTRA_${Date.now()}`,
+                            label: e.label,
+                            price: parseFloat(e.price) || 0,
+                            commission: parseFloat(e.commission) || 0
+                        });
+                    }
+                });
+
+                await batch.commit();
+                alert("¡Precios Actualizados!");
+            });
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-blue-50 border-blue-200 border p-4 rounded-xl flex justify-between items-center">
+                        <div><h3 className="font-bold text-blue-800">Edición de Precios</h3><p className="text-sm text-blue-600">Edita los valores y guarda para aplicar.</p></div>
+                        <Button onClick={saveAllSettings} className="px-6 py-3 shadow-lg"><Upload className="w-5 h-5" /> GUARDAR</Button>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+                        <table className="w-full text-sm text-left border-collapse">
+                            <thead><tr className="bg-gray-100"><th className="p-3 border">Servicio</th>{SIZES.map(s => <th key={s.id} className="p-3 border">{s.label}</th>)}</tr></thead>
+                            <tbody>
+                                {SERVICES.map(svc => (
+                                    <tr key={svc.id}>
+                                        <td className="p-3 border font-medium">{svc.label}</td>
+                                        {SIZES.map(size => (
+                                            <td key={size.id} className="p-2 border">
+                                                <div className="flex flex-col gap-1">
+                                                    <input type="number" value={editPrices[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('prices', svc.id, size.id, e.target.value)} className="border p-1 rounded w-full text-center text-green-700 font-bold" placeholder="Precio" />
+                                                    <input type="number" value={editComms[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('commissions', svc.id, size.id, e.target.value)} className="border p-1 rounded w-full text-center text-blue-600 text-xs" placeholder="Com" />
+                                                </div>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h4 className="font-bold text-gray-700">Extras (Lista Fija)</h4>
+                        </div>
+                        <table className="w-full text-sm text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-100">
+                                    <th className="p-3 border">Nombre / Etiqueta</th>
+                                    <th className="p-3 border text-center">Precio ($)</th>
+                                    <th className="p-3 border text-center">Comisión ($)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {editExtras.map((ex, idx) => (
+                                    <tr key={idx}>
+                                        <td className="p-3 border font-bold text-gray-700 bg-gray-50">
+                                            {ex.label}
+                                        </td>
+                                        <td className="p-2 border">
+                                            <input type="number" value={ex.price} onChange={(e) => updateLocalExtra(idx, 'price', e.target.value)} className="border p-2 rounded w-full text-center text-green-700 font-bold" />
+                                        </td>
+                                        <td className="p-2 border">
+                                            <input type="number" value={ex.commission} onChange={(e) => updateLocalExtra(idx, 'commission', e.target.value)} className="border p-2 rounded w-full text-center text-blue-600 font-bold" />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        const AdminBusinessExpenses = () => {
+            const { businessExpenses, addBusinessExpense } = useContext(AppContext);
+            const [desc, setDesc] = useState('');
+            const [amt, setAmt] = useState('');
+
+            const handleSubmit = () => {
+                if (!desc || !amt) return;
+                addBusinessExpense(desc, amt);
+                setDesc('');
+                setAmt('');
+            }
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-purple-50 border-purple-200 border p-4 rounded-xl shadow-sm">
+                        <h3 className="font-bold text-purple-800 mb-2 flex items-center gap-2"><Briefcase size={20} /> Registrar Gasto Administrativo </h3>
+                        <p className="text-sm text-purple-600 mb-4 font-medium">Estos gastos son pagados externamente (SAM's, IMSS, etc) y NO afectan el corte de caja diario.</p>
+                        <div className="flex gap-2 flex-col md:flex-row">
+                            <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción del gasto" className="border p-3 rounded-lg flex-1 shadow-sm" />
+                            <input type="number" value={amt} onChange={e => setAmt(e.target.value)} placeholder="Monto ($)" className="border p-3 rounded-lg w-full md:w-40 shadow-sm" />
+                            <Button onClick={handleSubmit} variant="primary" className="bg-purple-600 hover:bg-purple-700 shadow-md">Guardar</Button>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+                        <h4 className="font-bold text-gray-700 mb-4">Historial de Gastos Administrativos</h4>
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-500 border-b">
+                                <tr>
+                                    <th className="p-3">Fecha</th>
+                                    <th className="p-3">Descripción</th>
+                                    <th className="p-3 text-right">Monto</th>
+                                    <th className="p-3 text-right">Registrado Por</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {businessExpenses.length === 0 ? <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay gastos registrados.</td></tr> : businessExpenses.map(e => (
+                                    <tr key={e.id} className="border-b hover:bg-gray-50 last:border-b-0">
+                                        <td className="p-3 text-gray-600">
+                                            <div>{e.timestamp.toLocaleDateString()}</div>
+                                            <div className="text-xs">{e.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                        </td>
+                                        <td className="p-3 font-medium text-gray-800">{e.description}</td>
+                                        <td className="p-3 text-right font-bold text-purple-700">{formatCurrency(e.amount)}</td>
+                                        <td className="p-3 text-right text-xs text-gray-400 uppercase">{e.createdBy}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        const AdminPanel = () => {
+            const { addCashIn } = useContext(AppContext);
+            const [tab, setTab] = useState('CORTE');
+            const [showAddCash, setShowAddCash] = useState(false);
+            const [acMxn, setAcMxn] = useState('');
+            const [acUsd, setAcUsd] = useState('');
+            const [acReason, setAcReason] = useState('');
+
+            const handleAddCash = () => {
+                if (!acMxn && !acUsd) return;
+                addCashIn(acMxn, acUsd, acReason);
+                setAcMxn(''); setAcUsd(''); setAcReason('');
+                setShowAddCash(false);
+            };
+
+            return (
+                <div className="p-4 md:p-6 h-full overflow-y-auto">
+                    <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1 items-center">
+                        {['CORTE', 'NOMINA', 'ASISTENCIA', 'GASTOS_ADM', 'CONFIG', 'PRECIOS'].map(t => <button key={t} onClick={() => setTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === t ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>{t === 'GASTOS_ADM' ? 'GASTOS NEGOCIO' : t}</button>)}
+                        <button onClick={() => setShowAddCash(true)} className="px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors bg-green-600 text-white shadow-md flex items-center gap-2 hover:bg-green-700">
+                            <PlusCircle size={18} /> AGREGAR EFECTIVO
+                        </button>
+                    </div>
+                    {tab === 'CORTE' && <AdminCorte />}
+                    {tab === 'NOMINA' && <AdminNomina />}
+                    {tab === 'ASISTENCIA' && <AdminAsistencia />}
+                    {tab === 'GASTOS_ADM' && <AdminBusinessExpenses />}
+                    {tab === 'CONFIG' && <AdminConfig />}
+                    {tab === 'PRECIOS' && <AdminPrecios />}
+
+                    {showAddCash && (
+                        <Modal title="Agregar Efectivo a Caja" icon={Banknote} onClose={() => setShowAddCash(false)} footer={
+                            <div className="flex gap-3">
+                                <Button onClick={() => setShowAddCash(false)} variant="secondary" className="flex-1">Cancelar</Button>
+                                <Button onClick={handleAddCash} variant="success" className="flex-1">Agregar</Button>
+                            </div>
+                        }>
+                            <div className="space-y-4">
+                                <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">
+                                    Este monto se sumará al dinero esperado en caja (similar al fondo inicial). Úsalo cuando necesites meter cambio o aumentar el fondo.
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label>
+                                    <input type="number" value={acMxn} onChange={e => setAcMxn(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label>
+                                    <input type="number" value={acUsd} onChange={e => setAcUsd(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Razón (Opcional)</label>
+                                    <input value={acReason} onChange={e => setAcReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Refill de cambio" />
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
+                </div>
+            );
+        };
+
+        const LavamexPOS = () => {
+            const { role, view, setView, logout } = useContext(AppContext);
+            const [isLocked, setIsLocked] = useState(false);
+
+            useEffect(() => {
+                const checkTime = () => {
+                    const now = new Date();
+                    const hours = now.getHours();
+                    const outsideHours = hours < 7 || hours >= 19;
+                    setIsLocked(false);
+                };
+
+                checkTime();
+                const interval = setInterval(checkTime, 60000);
+                return () => clearInterval(interval);
+            }, [role]);
+
+            if (!role) return <LoginScreen />;
+
+            if (isLocked) return (
+                <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 text-white p-4">
+                    <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl text-center max-w-md w-full border border-gray-700">
+                        <div className="bg-red-900/30 p-4 rounded-full w-fit mx-auto mb-6">
+                            <Lock size={48} className="text-red-500" />
+                        </div>
+                        <h1 className="text-2xl font-bold mb-2">El sistema está bloqueado</h1>
+                        <Button onClick={logout} variant="danger" className="w-full py-3">
+                            <LogOut className="mr-2" size={18} /> Cerrar Sesión
+                        </Button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="h-[100dvh] flex flex-col bg-gray-100 font-sans">
+                    <header className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md shrink-0 z-50">
+                        <a href="https://lavamex.work/menu" className="flex items-center gap-2 font-bold text-lg md:text-xl truncate hover:opacity-80 transition-opacity">
+                            <Car className="text-blue-400 shrink-0" /> <span>LAVAMEX</span>
+                        </a>
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                            <button onClick={() => setView('GREETER')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'GREETER' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><CheckCircle size={18} /> <span className="hidden sm:inline">Entrada</span></button>
+                            {(role === 'CASHIER' || role === 'ADMIN') && <><button onClick={() => setView('CASHIER')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'CASHIER' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><Calculator size={18} /> <span className="hidden sm:inline">Caja</span></button><button onClick={() => setView('HISTORY')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'HISTORY' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><History size={18} /> <span className="hidden sm:inline">Historial</span></button></>}
+                            {role === 'ADMIN' && <button onClick={() => setView('ADMIN')} className={`px-3 py-2 rounded flex gap-2 items-center text-sm font-bold whitespace-nowrap transition-colors ${view === 'ADMIN' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}><Settings size={18} /> <span className="hidden sm:inline">Admin</span></button>}
+                            <button onClick={logout} className="bg-red-900/80 px-3 rounded ml-2 hover:bg-red-700 shrink-0"><LogOut size={18} /></button>
+                        </div>
+                    </header>
+                    <main className="flex-1 overflow-hidden relative">
+                        {view === 'GREETER' && <GreeterView />}
+                        {view === 'CASHIER' && <CashierView />}
+                        {view === 'HISTORY' && <HistoryView />}
+                        {view === 'ADMIN' && <AdminPanel />}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<AppProvider><LavamexPOS /></AppProvider>);
+    </script>
 </body>
+
 </html>
