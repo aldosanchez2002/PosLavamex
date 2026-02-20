@@ -134,10 +134,10 @@
                 { id: 'CHASIS', label: 'Chasis', price: 400, commission: 140 },
                 { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
                 { id: 'ARMORALL', label: 'Armor-All', price: 40, commission: 14 },
-                { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
                 { id: 'LIMP_FOCOS', label: 'Limpieza de Focos', price: 340, commission: 120 },
                 { id: 'ASPIRADO_CAJUELA', label: 'Aspirado de Cajuela', price: 40, commission: 14 },
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
+                { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
             ]
         };
 
@@ -425,6 +425,7 @@ ${cleanWashers}
 ${ticket.size ? ticket.size.label : ''}
 ${ticket.service ? ticket.service.label : 'Extras Only'}
 ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label}`).join('\n') : ''}
+${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount})` : ''}
 --------------------------------</div>`;
             },
 
@@ -1071,7 +1072,7 @@ Firma: __________________
                 if (isSubmitting) return;
                 setIsSubmitting(true);
                 try {
-                    const snacks = editingTicket ? (editingTicket.snackCount || 0) : 0;
+                    const snacks = data.snackCount !== undefined ? data.snackCount : (editingTicket ? (editingTicket.snackCount || 0) : 0);
                     const serviceId = data.service ? data.service.id : null;
                     const sizeId = data.size ? data.size.id : null;
                     const totals = calculateTicketTotals(serviceId, sizeId, data.extras, prices, commissions, snacks, snackPrice);
@@ -1249,8 +1250,7 @@ Firma: __________________
             const processPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-                // EDIT: Added 'BOLEADA' to exception list
-                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA', 'BOLEADA'].includes(e.id));
+                const isExceptionOnly = !t.service && (!t.extras || t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA', 'BOLEADA'].includes(e.id)));
                 if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
@@ -1275,8 +1275,7 @@ Firma: __________________
             const processCardPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
-                // EDIT: Added 'BOLEADA' to exception list
-                const isExceptionOnly = !t.service && t.extras?.length > 0 && t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA', 'BOLEADA'].includes(e.id));
+                const isExceptionOnly = !t.service && (!t.extras || t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA', 'BOLEADA'].includes(e.id)));
                 if ((!t.washers || t.washers.length === 0) && !isExceptionOnly) {
                     return alert("Error: No se puede cobrar. Asigne lavadores antes de cobrar.");
                 }
@@ -1362,12 +1361,13 @@ Firma: __________________
         };
 
         const GreeterView = () => {
-            const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting, tickets, deleteTicket, startEdit, role } = useContext(AppContext);
+            const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting, tickets, deleteTicket, startEdit, role, snackPrice } = useContext(AppContext);
             const [subTab, setSubTab] = useState('FORM');
             const [size, setSize] = useState(null);
             const [service, setService] = useState(null);
             const [washers, setWashers] = useState([]);
             const [extras, setExtras] = useState([]);
+            const [snackCount, setSnackCount] = useState(0);
             const [desc, setDesc] = useState('');
             const [vDesc, setVDesc] = useState('');
             const [vPrice, setVPrice] = useState('');
@@ -1382,8 +1382,9 @@ Firma: __________________
                     setWashers(editingTicket.washers || []);
                     setExtras(editingTicket.extras || []);
                     setDesc(editingTicket.vehicleDesc || '');
+                    setSnackCount(editingTicket.snackCount || 0);
                 } else {
-                    setSize(null); setService(null); setWashers([]); setExtras([]); setDesc('');
+                    setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0);
                 }
             }, [editingTicket]);
 
@@ -1392,8 +1393,8 @@ Firma: __________________
             const addExtra = (item) => setExtras(prev => [...prev, item]);
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
             const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: 0 }]); setVDesc(''); setVPrice(''); };
-            const canSubmit = ((size && service) || extras.length > 0);
-            const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); } };
+            const canSubmit = ((size && service) || extras.length > 0 || snackCount > 0);
+            const handleSubmit = () => { if (!canSubmit) return; saveTicket({ size, service, washers, extras, vehicleDesc: desc, snackCount }); if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); } };
             const handleReprint = (ticket) => {
                 const html = PrintService.getJobTicketHtml({ ...ticket, timestamp: ticket.timestamp || new Date() }, ticket.id.slice(-4).toUpperCase());
                 PrintService.print(html, role);
@@ -1441,7 +1442,7 @@ Firma: __________________
                         <div className={`grid ${isDesktop ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-2'}`}>
                             {extrasList.map(e => {
                                 const count = extras.filter(x => x.id === e.id).length;
-                                if (e.id === 'BOLEADA') {
+                                if (e.id === 'BOLEADA' || e.id === 'LIMP_ZONA') {
                                     return (
                                         <div key={e.id} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'} ${isDesktop ? 'col-span-2' : ''}`}>
                                             <span className="flex-1">{e.label} (+${e.price})</span>
@@ -1451,6 +1452,12 @@ Firma: __________________
                                 }
                                 return <button key={e.id} onClick={() => toggleExtra(e)} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>;
                             })}
+                        </div>
+                        <div className="mt-2 border-t pt-2">
+                            <div className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${snackCount > 0 ? 'bg-orange-50 border-orange-600 font-bold text-orange-800' : 'border-gray-200 hover:bg-gray-50'} ${isDesktop ? 'col-span-2' : ''}`}>
+                                <span className="flex-1">Snacks (+${snackPrice})</span>
+                                <div className="flex items-center gap-2"><button onClick={() => setSnackCount(s => Math.max(0, s - 1))} disabled={snackCount === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button><span className="w-6 text-center font-bold">{snackCount}</span><button onClick={() => setSnackCount(s => s + 1)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button></div>
+                            </div>
                         </div>
                     </div>
                     <div className="mt-4 border-t pt-2">
@@ -1476,7 +1483,8 @@ Firma: __________________
                             <div className="bg-gray-50 p-3 rounded-lg border text-sm mb-4">
                                 <div className="flex justify-between mb-1"><span>Base:</span> <span>${(size && service && prices[service.id]?.[size.id]) || 0}</span></div>
                                 <div className="flex justify-between mb-1"><span>Extras:</span> <span>${extras.reduce((a, b) => a + b.price, 0)}</span></div>
-                                <div className="flex justify-between font-bold text-lg border-t pt-1 mt-1 text-green-700"><span>Total:</span> <span>${((size && service && prices[service.id]?.[size.id]) || 0) + extras.reduce((a, b) => a + b.price, 0)}</span></div>
+                                {snackCount > 0 && <div className="flex justify-between mb-1 text-orange-600"><span>Snacks:</span> <span>${snackCount * snackPrice}</span></div>}
+                                <div className="flex justify-between font-bold text-lg border-t pt-1 mt-1 text-green-700"><span>Total:</span> <span>${((size && service && prices[service.id]?.[size.id]) || 0) + extras.reduce((a, b) => a + b.price, 0) + (snackCount * snackPrice)}</span></div>
                             </div>
                         )}
                         <Button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className={`w-full py-5 text-xl shadow-lg ${!canSubmit ? 'bg-gray-300' : ''}`}>
