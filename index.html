@@ -204,6 +204,9 @@
                 payroll[emp.name] = initPayrollItem();
             });
 
+            // Hardcode Bolero into the payroll structure
+            payroll["Bolero - Raul Barron Reza"] = initPayrollItem();
+
             const totalGrossSales = history.reduce((acc, t) => acc + (t.price || 0), 0);
 
             // Step 3: Iterate through employees (as requested in new logic)
@@ -277,6 +280,28 @@
                         }
                     }
                 });
+            });
+
+            // Calculate Bolero
+            history.forEach(item => {
+                if (item.extras && item.extras.length > 0) {
+                    let boleadaCount = 0;
+                    item.extras.forEach(ex => {
+                        if (['BOLEADA', 'QA_BOLEADA'].includes(ex.id)) boleadaCount++;
+                    });
+
+                    if (boleadaCount > 0) {
+                        const boleroRate = 30;
+                        const b = payroll["Bolero - Raul Barron Reza"];
+                        b.count += boleadaCount;
+                        b.total += (boleadaCount * boleroRate);
+                        if (!b.extrasData['Boleadas']) {
+                            b.extrasData['Boleadas'] = { count: 0, total: 0 };
+                        }
+                        b.extrasData['Boleadas'].count += boleadaCount;
+                        b.extrasData['Boleadas'].total += (boleadaCount * boleroRate);
+                    }
+                }
             });
 
             employees.forEach(emp => {
@@ -508,12 +533,18 @@ Firma: __________________
                         styles: { fontSize: 8, cellPadding: 1, lineColor: [0, 0, 0] }
                     };
 
-                    autoTable(doc, {
-                        startY: 50,
-                        head: head,
-                        body: body,
-                        ...tableStyles
-                    });
+                    // Only generate service breakdown table if there's actual service count data
+                    if (body.length > 0) {
+                        autoTable(doc, {
+                            startY: 50,
+                            head: head,
+                            body: body,
+                            ...tableStyles
+                        });
+                    } else {
+                        // Dummy autotable to initialize finalY for non-service payroll records (like Bolero)
+                        doc.lastAutoTable = { finalY: 50 };
+                    }
 
                     let currentY = doc.lastAutoTable.finalY + 10;
 
@@ -592,63 +623,6 @@ Firma: __________________
                     doc.text(name, 105, currentY + 45, { align: 'center' });
                     doc.text("Firma de Conformidad", 105, currentY + 50, { align: 'center' });
                 });
-
-                // --- BOLERO PAGE LOGIC ---
-                if (history && history.length > 0) {
-                    let boleadaCount = 0;
-                    history.forEach(t => {
-                        if (t.extras && Array.isArray(t.extras)) {
-                            t.extras.forEach(e => {
-                                if (['BOLEADA', 'QA_BOLEADA'].includes(e.id)) {
-                                    boleadaCount++;
-                                }
-                            });
-                        }
-                    });
-
-                    if (boleadaCount > 0) {
-                        doc.addPage();
-                        const boleroRate = 30;
-                        const boleroTotal = boleadaCount * boleroRate;
-
-                        doc.setFontSize(14);
-                        doc.text("Bolero - Raul Barron Reza", 14, 25);
-                        doc.setFontSize(10);
-                        doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 30);
-
-                        doc.setDrawColor(0);
-                        doc.setFillColor(255, 255, 255);
-                        doc.rect(140, 20, 50, 20);
-                        doc.setFontSize(12);
-                        doc.text("TOTAL A PAGAR", 165, 26, { align: 'center' });
-                        doc.setFontSize(16);
-                        doc.setTextColor(0, 0, 0);
-                        doc.text(formatCurrency(boleroTotal), 165, 35, { align: 'center' });
-                        doc.setTextColor(0);
-
-                        autoTable(doc, {
-                            startY: 45,
-                            head: [['Concepto', 'Cantidad', 'Tarifa', 'Total']],
-                            body: [
-                                ['Boleadas', boleadaCount, formatCurrency(boleroRate), formatCurrency(boleroTotal)]
-                            ],
-                            theme: 'grid',
-                            headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1, lineColor: [0, 0, 0] },
-                            bodyStyles: { textColor: [0, 0, 0], lineWidth: 0.1, lineColor: [0, 0, 0] },
-                            styles: { fontSize: 10, cellPadding: 1, lineColor: [0, 0, 0] }
-                        });
-
-                        let currentY = doc.lastAutoTable.finalY + 20;
-                        doc.setFontSize(8);
-                        const legalText = "Recibí de LAVAMEX la cantidad descrita a mi entera satisfacción por concepto de pago por servicios de boleado realizados. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral, civil o mercantil.";
-                        const splitText = doc.splitTextToSize(legalText, 180);
-                        doc.text(splitText, 14, currentY);
-
-                        doc.line(70, currentY + 30, 140, currentY + 30);
-                        doc.text("Bolero - Raul Barron Reza", 105, currentY + 35, { align: 'center' });
-                        doc.text("Firma de Conformidad", 105, currentY + 40, { align: 'center' });
-                    }
-                }
 
                 doc.save(`Nomina_${startDate}_${endDate}.pdf`);
             },
