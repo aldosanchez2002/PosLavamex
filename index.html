@@ -548,7 +548,10 @@ Firma: __________________
 
                     let currentY = doc.lastAutoTable.finalY + 10;
 
-                    const extraKeys = Object.keys(p.extrasData).sort();
+                    const extraKeys = Object.keys(p.extrasData)
+                        .filter(k => p.extrasData[k].total > 0)
+                        .sort();
+
                     if (extraKeys.length > 0) {
                         const extrasBody = extraKeys.map(k => [k, p.extrasData[k].count, formatCurrency(p.extrasData[k].total)]);
                         autoTable(doc, {
