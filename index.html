@@ -32,6 +32,19 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+
+        /* Expands the clickable area of the date picker icon to cover the whole input */
+        .invisible-date-input::-webkit-calendar-picker-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -39,7 +52,7 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useContext, createContext } from 'react';
+        import React, { useState, useEffect, useContext, createContext, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         import {
             User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2,
@@ -170,7 +183,7 @@
             };
         };
 
-        const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
+        const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras, boleroName, boleroPct) => {
             const payroll = {};
             const initPayrollItem = () => {
                 const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, debugDetails: [] };
@@ -185,21 +198,11 @@
                 payroll[emp.name] = initPayrollItem();
             });
 
+            if (boleroName && !payroll[boleroName]) {
+                payroll[boleroName] = initPayrollItem();
+            }
+
             const totalGrossSales = history.reduce((acc, t) => acc + (t.price || 0), 0);
-
-            let totalBoleadaCount = 0;
-            let totalBoleadaRevenue = 0;
-
-            history.forEach(item => {
-                if (item.extras && item.extras.length > 0) {
-                    item.extras.forEach(ex => {
-                        if (['BOLEADA', 'QA_BOLEADA'].includes(ex.id)) {
-                            totalBoleadaCount++;
-                            totalBoleadaRevenue += (ex.price || 0);
-                        }
-                    });
-                }
-            });
 
             employees.forEach(emp => {
                 const empName = emp.name;
@@ -252,6 +255,33 @@
                 });
             });
 
+            if (boleroName) {
+                history.forEach(item => {
+                    if (item.extras && item.extras.length > 0) {
+                        let boleadaCount = 0;
+                        let totalBoleadaRevenue = 0;
+                        item.extras.forEach(ex => {
+                            if (['BOLEADA', 'QA_BOLEADA'].includes(ex.id)) {
+                                boleadaCount++;
+                                totalBoleadaRevenue += (ex.price || 0);
+                            }
+                        });
+
+                        if (boleadaCount > 0) {
+                            const boleroComm = totalBoleadaRevenue * (boleroPct / 100);
+                            const b = payroll[boleroName];
+                            b.count += boleadaCount;
+                            b.total += boleroComm;
+                            if (!b.extrasData['Boleadas']) {
+                                b.extrasData['Boleadas'] = { count: 0, total: 0 };
+                            }
+                            b.extrasData['Boleadas'].count += boleadaCount;
+                            b.extrasData['Boleadas'].total += boleroComm;
+                        }
+                    }
+                });
+            }
+
             employees.forEach(emp => {
                 if (emp.role === 'SUPERVISOR' && payroll[emp.name]) {
                     const baseSalary = parseFloat(emp.baseSalary) || 0;
@@ -267,19 +297,6 @@
                     }
                     if (salesComm > 0) {
                         payroll[emp.name].extrasData['COMISIÓN VENTAS'] = { count: 1, total: salesComm };
-                    }
-                } else if (emp.role === 'BOLERO' && payroll[emp.name]) {
-                    const commPct = parseFloat(emp.commissionPct) || 50;
-                    const boleroComm = totalBoleadaRevenue * (commPct / 100);
-
-                    if (totalBoleadaCount > 0) {
-                        payroll[emp.name].count += totalBoleadaCount;
-                        payroll[emp.name].total += boleroComm;
-                        if (!payroll[emp.name].extrasData['Boleadas']) {
-                            payroll[emp.name].extrasData['Boleadas'] = { count: 0, total: 0 };
-                        }
-                        payroll[emp.name].extrasData['Boleadas'].count += totalBoleadaCount;
-                        payroll[emp.name].extrasData['Boleadas'].total += boleroComm;
                     }
                 }
             });
@@ -415,8 +432,8 @@ TOTAL: $${ticket.price}
 ${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
 Gracias por su preferencia
       .--------.
- ____/_____|___ \___
-O    _      - |     _,*
+ ____/_____|___ \\___
+O    _          - |    _,*
  '--(_)-------(_)--' </div>`;
             },
 
@@ -838,6 +855,8 @@ Firma: __________________
 
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
+            const [boleroName, setBoleroName] = useState('');
+            const [boleroPct, setBoleroPct] = useState(50);
             const [prices, setPrices] = useState({});
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
@@ -891,10 +910,14 @@ Firma: __________________
                         const data = docSnap.data();
                         if (data.exchangeRate) setExRate(data.exchangeRate);
                         if (data.snackPrice) setSnackPrice(data.snackPrice);
+                        setBoleroName(data.boleroName || '');
+                        setBoleroPct(data.boleroPct !== undefined ? data.boleroPct : 50);
                     } else {
                         setDoc(doc(db, "settings", "general"), {
                             exchangeRate: DEFAULTS.EXCHANGE_RATE,
-                            snackPrice: DEFAULTS.SNACK_PRICE
+                            snackPrice: DEFAULTS.SNACK_PRICE,
+                            boleroName: '',
+                            boleroPct: 50
                         });
                     }
                 });
@@ -965,9 +988,9 @@ Firma: __________________
                 return () => { unsubT(); unsubD(); unsubE(); unsubBE(); unsubCC(); unsubCD(); unsubCI(); };
             }, []);
 
-            const updateGlobalSettings = (newRate, newSnackPrice) => handleDbAction(async () => {
+            const updateGlobalSettings = (newRate, newSnackPrice, newBoleroName, newBoleroPct) => handleDbAction(async () => {
                 await setDoc(doc(db, "settings", "general"), {
-                    exchangeRate: newRate, snackPrice: newSnackPrice
+                    exchangeRate: newRate, snackPrice: newSnackPrice, boleroName: newBoleroName, boleroPct: newBoleroPct
                 }, { merge: true });
             });
 
@@ -1203,7 +1226,7 @@ Firma: __________________
 
             const value = {
                 role, login, logout, view, setView, employees, tickets, history, deductions, expenses, businessExpenses, cashCounts, cashDrops, cashIns,
-                prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
+                prices, commissions, extrasList, exRate, snackPrice, boleroName, boleroPct, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
@@ -1246,6 +1269,7 @@ Firma: __________________
         );
 
         const CustomDateInput = ({ type, value, onChange, label }) => {
+            const inputRef = useRef(null);
             let formatted = "";
             if (value) {
                 try {
@@ -1258,12 +1282,19 @@ Firma: __________________
                     }
                 } catch (e) { }
             }
+
+            const handleClick = () => {
+                if (inputRef.current && inputRef.current.showPicker) {
+                    try { inputRef.current.showPicker(); } catch (e) { }
+                }
+            };
+
             return (
                 <div className="flex flex-col w-full sm:w-auto">
                     {label && <label className="text-xs font-bold text-gray-500 block mb-1">{label}</label>}
-                    <div className="relative border border-gray-300 p-2 rounded-lg bg-white flex items-center justify-center min-w-[150px] shadow-sm hover:bg-gray-50 transition-colors">
+                    <div onClick={handleClick} className="relative border border-gray-300 p-2 rounded-lg bg-white flex items-center justify-center min-w-[150px] shadow-sm hover:bg-gray-50 transition-colors cursor-pointer overflow-hidden">
                         <span className="font-bold text-gray-700 capitalize text-sm">{formatted || 'Seleccionar'}</span>
-                        <input type={type} value={value} onChange={e => onChange(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        <input ref={inputRef} type={type} value={value} onChange={e => onChange(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer invisible-date-input" />
                     </div>
                 </div>
             );
