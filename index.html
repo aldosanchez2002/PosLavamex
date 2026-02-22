@@ -2415,7 +2415,7 @@ Firma: __________________
 
             const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
             const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
-            const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
+            const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList, boleroName, boleroPct);
             const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
 
             const printNomina = () => {
@@ -2555,16 +2555,20 @@ Firma: __________________
         };
 
         const AdminConfig = () => {
-            const { exRate, snackPrice, updateGlobalSettings, employees, addEmployee, archiveEmployee, updateEmployee } = useContext(AppContext);
+            const { exRate, snackPrice, updateGlobalSettings, employees, addEmployee, archiveEmployee, updateEmployee, boleroName, boleroPct } = useContext(AppContext);
             const [localExRate, setLocalExRate] = useState(exRate);
             const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
+            const [localBoleroName, setLocalBoleroName] = useState(boleroName);
+            const [localBoleroPct, setLocalBoleroPct] = useState(boleroPct);
             const [newEmpName, setNewEmpName] = useState('');
             const [editingEmp, setEditingEmp] = useState(null);
 
             useEffect(() => {
                 setLocalExRate(exRate);
                 setLocalSnackPrice(snackPrice);
-            }, [exRate, snackPrice]);
+                setLocalBoleroName(boleroName);
+                setLocalBoleroPct(boleroPct);
+            }, [exRate, snackPrice, boleroName, boleroPct]);
 
             const handleAddEmployee = () => { if (newEmpName.trim()) { addEmployee(newEmpName.trim()); setNewEmpName(''); } };
 
@@ -2593,7 +2597,22 @@ Firma: __________________
                     <div className="mb-6 flex flex-col gap-4">
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Ajustes Generales</Button>
+                    </div>
+
+                    <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Ajustes de Bolero</h3>
+                    <div className="mb-6 flex flex-col gap-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-600 mb-2">Bolero Designado</label>
+                            <select value={localBoleroName} onChange={e => setLocalBoleroName(e.target.value)} className="border p-3 rounded-lg w-full text-lg bg-white">
+                                <option value="">Ninguno</option>
+                                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-600 mb-2">Comisión Bolero (%)</label>
+                            <input type="number" value={localBoleroPct} onChange={e => setLocalBoleroPct(e.target.value)} className="border p-3 rounded-lg w-full text-lg" />
+                        </div>
+                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice), localBoleroName, parseFloat(localBoleroPct)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Ajustes Generales</Button>
                     </div>
 
                     <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
