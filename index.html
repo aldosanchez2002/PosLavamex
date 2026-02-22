@@ -200,7 +200,7 @@
             };
         };
 
-        const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras, boleroName, boleroPct) => {
+        const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
             const payroll = {};
             const initPayrollItem = () => {
                 const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, debugDetails: [] };
@@ -215,11 +215,21 @@
                 payroll[emp.name] = initPayrollItem();
             });
 
-            if (boleroName && !payroll[boleroName]) {
-                payroll[boleroName] = initPayrollItem();
-            }
-
             const totalGrossSales = history.reduce((acc, t) => acc + (t.price || 0), 0);
+
+            let totalBoleadaCount = 0;
+            let totalBoleadaRevenue = 0;
+
+            history.forEach(item => {
+                if (item.extras && item.extras.length > 0) {
+                    item.extras.forEach(ex => {
+                        if (['BOLEADA', 'QA_BOLEADA'].includes(ex.id)) {
+                            totalBoleadaCount++;
+                            totalBoleadaRevenue += (ex.price || 0);
+                        }
+                    });
+                }
+            });
 
             employees.forEach(emp => {
                 const empName = emp.name;
@@ -272,33 +282,6 @@
                 });
             });
 
-            if (boleroName) {
-                history.forEach(item => {
-                    if (item.extras && item.extras.length > 0) {
-                        let boleadaCount = 0;
-                        let totalBoleadaRevenue = 0;
-                        item.extras.forEach(ex => {
-                            if (['BOLEADA', 'QA_BOLEADA'].includes(ex.id)) {
-                                boleadaCount++;
-                                totalBoleadaRevenue += (ex.price || 0);
-                            }
-                        });
-
-                        if (boleadaCount > 0) {
-                            const boleroComm = totalBoleadaRevenue * (boleroPct / 100);
-                            const b = payroll[boleroName];
-                            b.count += boleadaCount;
-                            b.total += boleroComm;
-                            if (!b.extrasData['Boleadas']) {
-                                b.extrasData['Boleadas'] = { count: 0, total: 0 };
-                            }
-                            b.extrasData['Boleadas'].count += boleadaCount;
-                            b.extrasData['Boleadas'].total += boleroComm;
-                        }
-                    }
-                });
-            }
-
             employees.forEach(emp => {
                 if (emp.role === 'SUPERVISOR' && payroll[emp.name]) {
                     const baseSalary = parseFloat(emp.baseSalary) || 0;
@@ -314,6 +297,19 @@
                     }
                     if (salesComm > 0) {
                         payroll[emp.name].extrasData['COMISIÓN VENTAS'] = { count: 1, total: salesComm };
+                    }
+                } else if (emp.role === 'BOLERO' && payroll[emp.name]) {
+                    const commPct = parseFloat(emp.commissionPct) || 50;
+                    const boleroComm = totalBoleadaRevenue * (commPct / 100);
+
+                    if (totalBoleadaCount > 0) {
+                        payroll[emp.name].count += totalBoleadaCount;
+                        payroll[emp.name].total += boleroComm;
+                        if (!payroll[emp.name].extrasData['Boleadas']) {
+                            payroll[emp.name].extrasData['Boleadas'] = { count: 0, total: 0 };
+                        }
+                        payroll[emp.name].extrasData['Boleadas'].count += totalBoleadaCount;
+                        payroll[emp.name].extrasData['Boleadas'].total += boleroComm;
                     }
                 }
             });
@@ -872,8 +868,6 @@ Firma: __________________
 
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
             const [snackPrice, setSnackPrice] = useState(DEFAULTS.SNACK_PRICE);
-            const [boleroName, setBoleroName] = useState('');
-            const [boleroPct, setBoleroPct] = useState(50);
             const [prices, setPrices] = useState({});
             const [commissions, setCommissions] = useState({});
             const [extrasList, setExtrasList] = useState([]);
@@ -927,14 +921,10 @@ Firma: __________________
                         const data = docSnap.data();
                         if (data.exchangeRate) setExRate(data.exchangeRate);
                         if (data.snackPrice) setSnackPrice(data.snackPrice);
-                        setBoleroName(data.boleroName || '');
-                        setBoleroPct(data.boleroPct !== undefined ? data.boleroPct : 50);
                     } else {
                         setDoc(doc(db, "settings", "general"), {
                             exchangeRate: DEFAULTS.EXCHANGE_RATE,
-                            snackPrice: DEFAULTS.SNACK_PRICE,
-                            boleroName: '',
-                            boleroPct: 50
+                            snackPrice: DEFAULTS.SNACK_PRICE
                         });
                     }
                 });
@@ -1005,9 +995,9 @@ Firma: __________________
                 return () => { unsubT(); unsubD(); unsubE(); unsubBE(); unsubCC(); unsubCD(); unsubCI(); };
             }, []);
 
-            const updateGlobalSettings = (newRate, newSnackPrice, newBoleroName, newBoleroPct) => handleDbAction(async () => {
+            const updateGlobalSettings = (newRate, newSnackPrice) => handleDbAction(async () => {
                 await setDoc(doc(db, "settings", "general"), {
-                    exchangeRate: newRate, snackPrice: newSnackPrice, boleroName: newBoleroName, boleroPct: newBoleroPct
+                    exchangeRate: newRate, snackPrice: newSnackPrice
                 }, { merge: true });
             });
 
@@ -1243,7 +1233,7 @@ Firma: __________________
 
             const value = {
                 role, login, logout, view, setView, employees, tickets, history, deductions, expenses, businessExpenses, cashCounts, cashDrops, cashIns,
-                prices, commissions, extrasList, exRate, snackPrice, boleroName, boleroPct, updateGlobalSettings,
+                prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
@@ -2401,7 +2391,7 @@ Firma: __________________
         };
 
         const AdminNomina = () => {
-            const { employees, history, deductions, commissions, extrasList, db, tickets, boleroName, boleroPct } = useContext(AppContext);
+            const { employees, history, deductions, commissions, extrasList, db, tickets } = useContext(AppContext);
             const [startDate, setStartDate] = useState(() => getDefaultPayPeriod().start);
             const [endDate, setEndDate] = useState(() => getDefaultPayPeriod().end);
 
@@ -2415,7 +2405,7 @@ Firma: __________________
 
             const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
             const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
-            const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList, boleroName, boleroPct);
+            const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
             const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
 
             const printNomina = () => {
@@ -2555,20 +2545,16 @@ Firma: __________________
         };
 
         const AdminConfig = () => {
-            const { exRate, snackPrice, updateGlobalSettings, employees, addEmployee, archiveEmployee, updateEmployee, boleroName, boleroPct } = useContext(AppContext);
+            const { exRate, snackPrice, updateGlobalSettings, employees, addEmployee, archiveEmployee, updateEmployee } = useContext(AppContext);
             const [localExRate, setLocalExRate] = useState(exRate);
             const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
-            const [localBoleroName, setLocalBoleroName] = useState(boleroName);
-            const [localBoleroPct, setLocalBoleroPct] = useState(boleroPct);
             const [newEmpName, setNewEmpName] = useState('');
             const [editingEmp, setEditingEmp] = useState(null);
 
             useEffect(() => {
                 setLocalExRate(exRate);
                 setLocalSnackPrice(snackPrice);
-                setLocalBoleroName(boleroName);
-                setLocalBoleroPct(boleroPct);
-            }, [exRate, snackPrice, boleroName, boleroPct]);
+            }, [exRate, snackPrice]);
 
             const handleAddEmployee = () => { if (newEmpName.trim()) { addEmployee(newEmpName.trim()); setNewEmpName(''); } };
 
@@ -2597,22 +2583,7 @@ Firma: __________________
                     <div className="mb-6 flex flex-col gap-4">
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-                    </div>
-
-                    <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Ajustes de Bolero</h3>
-                    <div className="mb-6 flex flex-col gap-4">
-                        <div>
-                            <label className="block text-sm font-bold text-gray-600 mb-2">Bolero Designado</label>
-                            <select value={localBoleroName} onChange={e => setLocalBoleroName(e.target.value)} className="border p-3 rounded-lg w-full text-lg bg-white">
-                                <option value="">Ninguno</option>
-                                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-600 mb-2">Comisión Bolero (%)</label>
-                            <input type="number" value={localBoleroPct} onChange={e => setLocalBoleroPct(e.target.value)} className="border p-3 rounded-lg w-full text-lg" />
-                        </div>
-                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice), localBoleroName, parseFloat(localBoleroPct)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Ajustes Generales</Button>
+                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Ajustes Generales</Button>
                     </div>
 
                     <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
