@@ -169,6 +169,23 @@
             return `${y}-${m}`;
         };
 
+        const getDefaultPayPeriod = () => {
+            const now = new Date();
+            const dayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+            const diffToSaturday = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
+
+            const start = new Date(now);
+            start.setDate(now.getDate() - diffToSaturday);
+
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+
+            return {
+                start: getLocalDateStr(start),
+                end: getLocalDateStr(end)
+            };
+        };
+
         const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0, currentSnackPrice = 30) => {
             const basePrice = (serviceId && sizeId && prices[serviceId]?.[sizeId]) || 0;
             const baseComm = (serviceId && sizeId && commissions[serviceId]?.[sizeId]) || 0;
@@ -2036,8 +2053,8 @@ Firma: __________________
             const [corteMode, setCorteMode] = useState('DAY');
             const [corteDate, setCorteDate] = useState(getLocalDateStr());
             const [corteMonth, setCorteMonth] = useState(getMonthStr());
-            const [corteRangeStart, setCorteRangeStart] = useState(getLocalDateStr());
-            const [corteRangeEnd, setCorteRangeEnd] = useState(getLocalDateStr());
+            const [corteRangeStart, setCorteRangeStart] = useState(() => getDefaultPayPeriod().start);
+            const [corteRangeEnd, setCorteRangeEnd] = useState(() => getDefaultPayPeriod().end);
             const [editingExpenseId, setEditingExpenseId] = useState(null);
             const [editExpDesc, setEditExpDesc] = useState('');
             const [editExpAmt, setEditExpAmt] = useState('');
@@ -2384,9 +2401,9 @@ Firma: __________________
         };
 
         const AdminNomina = () => {
-            const { employees, history, deductions, commissions, extrasList, db, tickets } = useContext(AppContext);
-            const [startDate, setStartDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
-            const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+            const { employees, history, deductions, commissions, extrasList, db, tickets, boleroName, boleroPct } = useContext(AppContext);
+            const [startDate, setStartDate] = useState(() => getDefaultPayPeriod().start);
+            const [endDate, setEndDate] = useState(() => getDefaultPayPeriod().end);
 
             const [previewData, setPreviewData] = useState(null);
             const [previewName, setPreviewName] = useState(null);
