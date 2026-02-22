@@ -6,13 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Lavamex POS</title>
 
-    <!-- UTILITIES: Tailwind for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- COMPILER: Babel for in-browser JSX transformation (Dev only) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- IMPORTS: ES Modules for React, Firebase, and PDF generation -->
     <script type="importmap">
     {
       "imports": {
@@ -28,7 +24,6 @@
     </script>
 
     <style>
-        /* Utility to hide scrollbars while maintaining functionality */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
@@ -44,9 +39,6 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        // ------------------------------------------------------------------
-        // SECTION 1: IMPORTS & SETUP
-        // ------------------------------------------------------------------
         import React, { useState, useEffect, useContext, createContext } from 'react';
         import { createRoot } from 'react-dom/client';
         import {
@@ -68,9 +60,6 @@
             where, deleteDoc, limit
         } from 'firebase/firestore';
 
-        // ------------------------------------------------------------------
-        // SECTION 2: FIREBASE CONFIGURATION
-        // ------------------------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyByIvJpBZv32Zd22fxlYWL9etzBa66Q2rE",
             authDomain: "poslavamex.firebaseapp.com",
@@ -83,9 +72,6 @@
         const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
         const db = getFirestore(app);
 
-        // ------------------------------------------------------------------
-        // SECTION 3: CONSTANTS & DEFAULTS
-        // ------------------------------------------------------------------
         const SIZES = [
             { id: 'AUTO', label: 'Auto' },
             { id: 'SUV_CHICA', label: 'SUV Chica' },
@@ -103,9 +89,9 @@
 
         const DEFAULTS = {
             PINS: {
-                GREETER: ['bWVsdnkxMDYx', 'NXJpdG83'], // melvy1061, 5rito7
-                CASHIER: 'c2VyZ2lvOTE5MQ==', // sergio9191
-                ADMIN: 'Y292aW5ndG9uNTIx'    // covington521
+                GREETER: ['bWVsdnkxMDYx', 'NXJpdG83'],
+                CASHIER: 'c2VyZ2lvOTE5MQ==',
+                ADMIN: 'Y292aW5ndG9uNTIx'
             },
             EXCHANGE_RATE: 18.10,
             SNACK_PRICE: 30,
@@ -140,10 +126,6 @@
                 { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
             ]
         };
-
-        // ------------------------------------------------------------------
-        // SECTION 4: HELPER FUNCTIONS (Business Logic & DB Wrapper)
-        // ------------------------------------------------------------------
 
         const handleDbAction = async (actionFn) => {
             try {
@@ -199,35 +181,40 @@
                 return item;
             };
 
-            // Step 1 & 2: Initialize payroll for all employees
             employees.forEach(emp => {
                 payroll[emp.name] = initPayrollItem();
             });
 
-            // Hardcode Bolero into the payroll structure
-            payroll["Bolero - Raul Barron Reza"] = initPayrollItem();
-
             const totalGrossSales = history.reduce((acc, t) => acc + (t.price || 0), 0);
 
-            // Step 3: Iterate through employees (as requested in new logic)
+            let totalBoleadaCount = 0;
+            let totalBoleadaRevenue = 0;
+
+            history.forEach(item => {
+                if (item.extras && item.extras.length > 0) {
+                    item.extras.forEach(ex => {
+                        if (['BOLEADA', 'QA_BOLEADA'].includes(ex.id)) {
+                            totalBoleadaCount++;
+                            totalBoleadaRevenue += (ex.price || 0);
+                        }
+                    });
+                }
+            });
+
             employees.forEach(emp => {
                 const empName = emp.name;
                 const p = payroll[empName];
 
-                // Step 4: Iterate through paid tickets (nested)
                 history.forEach(item => {
                     const washersList = item.washers || (item.washer ? [item.washer] : []);
 
-                    // Step 5: If ticket contains washer's name
                     if (washersList.includes(empName)) {
                         const washerCount = washersList.length;
                         if (washerCount === 0) return;
 
-                        // FIX: Prioritize Stored Commission to respect history, fallback to calculation if missing/zero
                         let totalTicketCommission = item.commission || 0;
 
                         if (!totalTicketCommission || totalTicketCommission === 0) {
-                            // Recalculate if not found in history (legacy support or data repair)
                             let base = 0;
                             if (item.service && item.size && currentCommissions && currentCommissions[item.service.id]) {
                                 base = currentCommissions[item.service.id][item.size.id] || 0;
@@ -240,33 +227,16 @@
                             totalTicketCommission = base + extrasTotal;
                         }
 
-                        // Divide commission by amount of washers
                         const sharePerWasher = totalTicketCommission / washerCount;
-
-                        // Add quotient to employee's total pay
                         p.total += sharePerWasher;
                         p.count += 1;
 
-                        // --- DEBUG: Track ticket details ---
-                        const debugNomina = false;
-                        if (debugNomina) {
-                            p.debugDetails.push({
-                                id: item.id ? item.id.slice(-4).toUpperCase() : '???',
-                                desc: item.vehicleDesc || 'Sin descripción',
-                                amount: sharePerWasher
-                            });
-                        }
-                        // -----------------------------------
-
-                        // --- Stats & Breakdown Logic (Visuals) ---
-                        // Count service participation
                         if (item.service && item.size) {
                             if (p.serviceGrid[item.service.id] && p.serviceGrid[item.service.id][item.size.id] !== undefined) {
                                 p.serviceGrid[item.service.id][item.size.id] += 1;
                             }
                         }
 
-                        // Add Extra Details for Payslip
                         if (item.extras && item.extras.length > 0) {
                             item.extras.forEach(ex => {
                                 const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
@@ -282,28 +252,6 @@
                 });
             });
 
-            // Calculate Bolero
-            history.forEach(item => {
-                if (item.extras && item.extras.length > 0) {
-                    let boleadaCount = 0;
-                    item.extras.forEach(ex => {
-                        if (['BOLEADA', 'QA_BOLEADA'].includes(ex.id)) boleadaCount++;
-                    });
-
-                    if (boleadaCount > 0) {
-                        const boleroRate = 30;
-                        const b = payroll["Bolero - Raul Barron Reza"];
-                        b.count += boleadaCount;
-                        b.total += (boleadaCount * boleroRate);
-                        if (!b.extrasData['Boleadas']) {
-                            b.extrasData['Boleadas'] = { count: 0, total: 0 };
-                        }
-                        b.extrasData['Boleadas'].count += boleadaCount;
-                        b.extrasData['Boleadas'].total += (boleadaCount * boleroRate);
-                    }
-                }
-            });
-
             employees.forEach(emp => {
                 if (emp.role === 'SUPERVISOR' && payroll[emp.name]) {
                     const baseSalary = parseFloat(emp.baseSalary) || 0;
@@ -313,13 +261,25 @@
                     const newTotal = baseSalary + salesComm;
 
                     payroll[emp.name].total = newTotal;
-
                     payroll[emp.name].extrasData = {};
                     if (baseSalary > 0) {
                         payroll[emp.name].extrasData['SUELDO BASE'] = { count: 1, total: baseSalary };
                     }
                     if (salesComm > 0) {
                         payroll[emp.name].extrasData['COMISIÓN VENTAS'] = { count: 1, total: salesComm };
+                    }
+                } else if (emp.role === 'BOLERO' && payroll[emp.name]) {
+                    const commPct = parseFloat(emp.commissionPct) || 50;
+                    const boleroComm = totalBoleadaRevenue * (commPct / 100);
+
+                    if (totalBoleadaCount > 0) {
+                        payroll[emp.name].count += totalBoleadaCount;
+                        payroll[emp.name].total += boleroComm;
+                        if (!payroll[emp.name].extrasData['Boleadas']) {
+                            payroll[emp.name].extrasData['Boleadas'] = { count: 0, total: 0 };
+                        }
+                        payroll[emp.name].extrasData['Boleadas'].count += totalBoleadaCount;
+                        payroll[emp.name].extrasData['Boleadas'].total += boleroComm;
                     }
                 }
             });
@@ -336,7 +296,6 @@
 
         const validatePin = (input) => {
             try {
-                // Case-insensitive validation: convert input to lowercase
                 const encoded = btoa(input.toLowerCase().trim());
                 if (DEFAULTS.PINS.GREETER.includes(encoded)) return 'GREETER';
                 if (encoded === DEFAULTS.PINS.CASHIER) return 'CASHIER';
@@ -352,9 +311,6 @@
             return exists ? list.filter(x => isObj ? x.id !== item.id : x !== item) : [...list, item];
         };
 
-        // ------------------------------------------------------------------
-        // SECTION 5: PRINTING SERVICE
-        // ------------------------------------------------------------------
         const PrintService = {
             normalizeText: (str) => {
                 if (!str) return '';
@@ -460,7 +416,7 @@ ${payment.method === 'CASH' ? `Recibido: ${receivedStr}\n${changeStr}` : ''}
 Gracias por su preferencia
       .--------.
  ____/_____|___ \___
-O    _          - |    _,*
+O    _      - |     _,*
  '--(_)-------(_)--' </div>`;
             },
 
@@ -497,7 +453,6 @@ Firma: __________________
                     doc.setFontSize(10);
                     doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 30);
 
-                    // --- SUMMARY VERTICAL ---
                     doc.setFontSize(9);
                     doc.setTextColor(60, 60, 60);
                     doc.text(`${formatCurrency(p.total)} Subtotal Ingresos`, 14, 36);
@@ -506,7 +461,6 @@ Firma: __________________
                     doc.text(`${formatCurrency(p.netPay)} Total`, 14, 44);
                     doc.setFont(undefined, 'normal');
                     doc.setTextColor(0);
-                    // --------------------
 
                     doc.setDrawColor(0);
                     doc.setFillColor(255, 255, 255);
@@ -534,7 +488,6 @@ Firma: __________________
                         styles: { fontSize: 8, cellPadding: 1, lineColor: [0, 0, 0] }
                     };
 
-                    // Only generate service breakdown table if there's actual service count data
                     if (body.length > 0) {
                         autoTable(doc, {
                             startY: 50,
@@ -543,7 +496,6 @@ Firma: __________________
                             ...tableStyles
                         });
                     } else {
-                        // Dummy autotable to initialize finalY for non-service payroll records (like Bolero)
                         doc.lastAutoTable = { finalY: 50 };
                     }
 
@@ -592,10 +544,9 @@ Firma: __________________
                         currentY += 10;
                     }
 
-                    // --- DEBUG TABLE SECTION ---
                     if (p.debugDetails && p.debugDetails.length > 0) {
                         doc.setFontSize(8);
-                        doc.setTextColor(255, 0, 0); // Red title to indicate debug
+                        doc.setTextColor(255, 0, 0);
                         doc.text("DEBUG: Detalle por Ticket (Vehículo | Comisión)", 14, currentY);
                         doc.setTextColor(0);
 
@@ -611,12 +562,11 @@ Firma: __________________
                             body: debugBody,
                             theme: 'grid',
                             styles: { fontSize: 7, cellPadding: 1 },
-                            headStyles: { fillColor: [220, 50, 50], textColor: [255, 255, 255] }, // Red header
-                            margin: { right: 100 } // Keep it on the left side
+                            headStyles: { fillColor: [220, 50, 50], textColor: [255, 255, 255] },
+                            margin: { right: 100 }
                         });
                         currentY = doc.lastAutoTable.finalY + 10;
                     }
-                    // ---------------------------
 
                     doc.setFontSize(8);
                     const legalText = "Recibí la cantidad descrita a mi entera satisfacción. Recibi el importe indicado a el periodo señalado por jornada  diurna. No reservándome acción ni derecho alguno que ejercitar por ninguna vía laboral o civil";
@@ -636,25 +586,16 @@ Firma: __________________
                 const { totals, itemStats, expenses, cashIns, arqueos } = data;
                 const pageWidth = doc.internal.pageSize.width;
 
-                // Ink-saving colors
                 const lightGrey = [240, 240, 240];
                 const black = [0, 0, 0];
 
-                // Helper for centering text
                 const centerText = (text, y, size = 12) => {
                     doc.setFontSize(size);
                     doc.text(text, pageWidth / 2, y, { align: 'center' });
                 };
 
-                // Title - Reduced sizes
-                centerText(`CORTE ${data.type.toUpperCase()}`, 15, 18); // y=20->15, size=22->18
-                centerText(`Fecha: ${data.dateLabel}`, 22, 10); // y=28->22, size=12->10
-
-                // --- SECTION 1: BALANCE DE CAJA (The "Register" info) ---
-                // How much was in register (Initial)
-                // How much came in (Sales + CashIns)
-                // How much left (Drops, Expenses)
-                // How much is there now (Net)
+                centerText(`CORTE ${data.type.toUpperCase()}`, 15, 18);
+                centerText(`Fecha: ${data.dateLabel}`, 22, 10);
 
                 const balanceBody = [
                     ['FONDO INICIAL (SISTEMA)', formatCurrency(totals.initialMxn), `$${totals.initialUsd.toFixed(2)}`],
@@ -666,11 +607,11 @@ Firma: __________________
                 ];
 
                 autoTable(doc, {
-                    startY: 28, // 35 -> 28
+                    startY: 28,
                     head: [['CONCEPTO', 'MXN', 'USD']],
                     body: balanceBody,
                     theme: 'grid',
-                    headStyles: { fillColor: lightGrey, textColor: black, halign: 'center', fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
+                    headStyles: { fillColor: lightGrey, textColor: black, halign: 'center', fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] },
                     columnStyles: {
                         0: { cellWidth: 80 },
                         1: { halign: 'right', cellWidth: 50 },
@@ -678,17 +619,15 @@ Firma: __________________
                     },
                     styles: { fontSize: 8, cellPadding: 1.5, textColor: black },
                     didParseCell: (data) => {
-                        if (data.row.index === balanceBody.length - 1) { // Total row
+                        if (data.row.index === balanceBody.length - 1) {
                             data.cell.styles.fontStyle = 'bold';
                             data.cell.styles.fillColor = [250, 250, 250];
                         }
                     }
                 });
 
-                // --- SECTION 2: ESTADÍSTICAS OPERATIVAS ---
-                // Total tickets, card, snacks, pinos, boleadas
-                let currentY = doc.lastAutoTable.finalY + 6; // 10 -> 6
-                doc.setFontSize(11); // 14 -> 11
+                let currentY = doc.lastAutoTable.finalY + 6;
+                doc.setFontSize(11);
                 doc.text("Resumen Operativo", 14, currentY);
 
                 const statsBody = [
@@ -701,76 +640,64 @@ Firma: __________________
                 ];
 
                 autoTable(doc, {
-                    startY: currentY + 2, // + 4 -> + 2
+                    startY: currentY + 2,
                     head: [['CONCEPTO', 'CANTIDAD', 'TOTAL (MXN)']],
                     body: statsBody,
                     theme: 'striped',
-                    headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
+                    headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] },
                     columnStyles: {
                         1: { halign: 'center' },
                         2: { halign: 'right' }
                     },
-                    styles: { fontSize: 8, cellPadding: 1.5, textColor: black } // Added styles
+                    styles: { fontSize: 8, cellPadding: 1.5, textColor: black }
                 });
 
-                // --- SECTION 3: DETALLE DE GASTOS ---
-                currentY = doc.lastAutoTable.finalY + 6; // 10 -> 6
+                currentY = doc.lastAutoTable.finalY + 6;
                 if (expenses.length > 0) {
-                    doc.setFontSize(11); // Ensure font size
+                    doc.setFontSize(11);
                     doc.text("Desglose de Gastos", 14, currentY);
                     const expenseBody = expenses.map(e => [
                         e.description,
                         e.status,
                         formatCurrency(e.amount)
                     ]);
-                    // Add total row
                     expenseBody.push(['TOTAL GASTOS', '', formatCurrency(totals.expenses)]);
 
                     autoTable(doc, {
-                        startY: currentY + 2, // + 4 -> + 2
+                        startY: currentY + 2,
                         head: [['DESCRIPCIÓN', 'ESTADO', 'MONTO']],
                         body: expenseBody,
                         theme: 'striped',
-                        headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
+                        headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] },
                         columnStyles: { 2: { halign: 'right' } },
-                        styles: { fontSize: 8, cellPadding: 1.5, textColor: black }, // Added styles
+                        styles: { fontSize: 8, cellPadding: 1.5, textColor: black },
                         didParseCell: (data) => {
-                            if (data.row.index === expenseBody.length - 1) { // Total row
+                            if (data.row.index === expenseBody.length - 1) {
                                 data.cell.styles.fontStyle = 'bold';
                             }
                         }
                     });
                 }
 
-                // --- SECTION 4: VERIFICACIÓN DE ARQUEOS (NEW SECTION) ---
-                currentY = doc.lastAutoTable.finalY + 10; // 15 -> 10
+                currentY = doc.lastAutoTable.finalY + 10;
 
                 if (arqueos && arqueos.first && arqueos.last) {
-                    doc.setFontSize(11); // 14 -> 11
+                    doc.setFontSize(11);
                     doc.text("Corte de Caja", 14, currentY);
 
                     const first = arqueos.first;
                     const last = arqueos.last;
                     const isSame = first.id === last.id;
 
-                    // Physical Movement
                     const physDeltaMxn = last.declaredMxn - first.declaredMxn;
                     const physDeltaUsd = last.declaredUsd - first.declaredUsd;
 
-                    // System Expected Movement (Net Change)
-                    // Expected Net Change = (Sales + CashIns) - (Expenses + Drops)
-                    // We can also derive it: Expected End (cashNetMxn) - Initial (initialMxn)
-                    // However, to be strict with the "comparison" request, we compare the physical flow to the system flow.
                     const sysDeltaMxn = totals.cashNetMxn - totals.initialMxn;
                     const sysDeltaUsd = totals.cashNetUsd - totals.initialUsd;
 
-                    // The Discrepancy
                     const diffMxn = physDeltaMxn - sysDeltaMxn;
                     const diffUsd = physDeltaUsd - sysDeltaUsd;
 
-                    // Final Total Discrepancy in MXN (using current rate roughly, or just displaying both)
-                    // User asked for "diferencia de caja total MXN"
-                    // We typically use the rate from the last arqueo or current rate
                     const finalRate = last.exchangeRate || totals.exchangeRate || 18.0;
                     const totalDiffMxn = diffMxn + (diffUsd * finalRate);
 
@@ -787,66 +714,58 @@ Firma: __________________
                     ];
 
                     autoTable(doc, {
-                        startY: currentY + 3, // + 5 -> + 3
+                        startY: currentY + 3,
                         head: [['CONCEPTO', 'MXN', 'USD']],
                         body: arqueoBody,
                         theme: 'grid',
-                        headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] }, // Ink saving
+                        headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] },
                         columnStyles: {
                             1: { halign: 'right' },
                             2: { halign: 'right' }
                         },
-                        styles: { fontSize: 8, cellPadding: 1.5, textColor: black }, // Added styles
+                        styles: { fontSize: 8, cellPadding: 1.5, textColor: black },
                         didParseCell: (data) => {
                             if (data.row.index === arqueoBody.length - 1) {
                                 data.cell.styles.fontStyle = 'bold';
-                                if (totalDiffMxn < -5) data.cell.styles.textColor = [0, 0, 0]; // Keep black for ink saving, maybe bold/italic?
+                                if (totalDiffMxn < -5) data.cell.styles.textColor = [0, 0, 0];
                                 else if (totalDiffMxn > 5) data.cell.styles.textColor = [0, 0, 0];
                             }
                         }
                     });
 
-                    // Final Total Number Box (Diferencia)
-                    const boxY = doc.lastAutoTable.finalY + 6; // + 10 -> + 6
+                    const boxY = doc.lastAutoTable.finalY + 6;
                     doc.setDrawColor(0);
-                    // Lightest grey for box
                     doc.setFillColor(252, 252, 252);
 
-                    // Box 1: Diferencia Total (Right side)
-                    doc.roundedRect(pageWidth - 90, boxY, 80, 20, 3, 3, 'S'); // 'S' for Stroke only to save ink
-
-                    doc.setFontSize(9); // 10 -> 9
-                    doc.setTextColor(50); // Dark grey text
-                    doc.text("DIFERENCIA TOTAL (MXN)", pageWidth - 50, boxY + 6, { align: 'center' }); // + 8 -> + 6
-
-                    doc.setFontSize(14); // 16 -> 14
-                    doc.setFont(undefined, 'bold');
-
-                    // --- COLOR LOGIC FOR DIFFERENCE ---
-                    // Allow small float errors (e.g. +/- 1 peso is acceptable as neutral)
-                    let diffColor = [0, 0, 0]; // Default Black
-                    let diffPrefix = "";
-
-                    if (totalDiffMxn > 1) {
-                        diffColor = [0, 150, 0]; // Green for Extra
-                        diffPrefix = "+";
-                    } else if (totalDiffMxn < -1) {
-                        diffColor = [200, 0, 0]; // Red for Missing
-                        // Negative number standard formatting usually includes '-', but verify logic
-                    }
-
-                    doc.setTextColor(...diffColor);
-                    doc.text(`${diffPrefix}${formatCurrency(totalDiffMxn)}`, pageWidth - 50, boxY + 14, { align: 'center' }); // + 18 -> + 14
-                    doc.setTextColor(0); // Reset
-                    doc.setFont(undefined, 'normal');
-
-                    // Box 2: Total Tickets Pagado (Left side) - Similar style
-                    // Placing it to the left, e.g., at x = 14
-                    doc.roundedRect(14, boxY, 80, 20, 3, 3, 'S'); // Stroke only
+                    doc.roundedRect(pageWidth - 90, boxY, 80, 20, 3, 3, 'S');
 
                     doc.setFontSize(9);
                     doc.setTextColor(50);
-                    doc.text("TOTAL VENTAS (MXN)", 54, boxY + 6, { align: 'center' }); // 14 + 40 = 54 center
+                    doc.text("DIFERENCIA TOTAL (MXN)", pageWidth - 50, boxY + 6, { align: 'center' });
+
+                    doc.setFontSize(14);
+                    doc.setFont(undefined, 'bold');
+
+                    let diffColor = [0, 0, 0];
+                    let diffPrefix = "";
+
+                    if (totalDiffMxn > 1) {
+                        diffColor = [0, 150, 0];
+                        diffPrefix = "+";
+                    } else if (totalDiffMxn < -1) {
+                        diffColor = [200, 0, 0];
+                    }
+
+                    doc.setTextColor(...diffColor);
+                    doc.text(`${diffPrefix}${formatCurrency(totalDiffMxn)}`, pageWidth - 50, boxY + 14, { align: 'center' });
+                    doc.setTextColor(0);
+                    doc.setFont(undefined, 'normal');
+
+                    doc.roundedRect(14, boxY, 80, 20, 3, 3, 'S');
+
+                    doc.setFontSize(9);
+                    doc.setTextColor(50);
+                    doc.text("TOTAL VENTAS (MXN)", 54, boxY + 6, { align: 'center' });
 
                     doc.setFontSize(14);
                     doc.setFont(undefined, 'bold');
@@ -854,14 +773,13 @@ Firma: __________________
                     doc.text(formatCurrency(totals.total), 54, boxY + 14, { align: 'center' });
                     doc.setFont(undefined, 'normal');
 
-
                     if (isSame) {
-                        doc.setFontSize(7); // 8 -> 7
+                        doc.setFontSize(7);
                         doc.text("* Nota: Solo se registró un arqueo en este periodo.", 14, boxY + 25);
                     }
 
                 } else {
-                    doc.setFontSize(9); // 10 -> 9
+                    doc.setFontSize(9);
                     doc.setTextColor(150);
                     doc.text("No hay suficientes registros de arqueo para calcular el flujo comparativo.", 14, currentY + 6);
                 }
@@ -902,9 +820,6 @@ Firma: __________________
             }
         };
 
-        // ------------------------------------------------------------------
-        // SECTION 7: CONTEXT & PROVIDER
-        // ------------------------------------------------------------------
         const AppContext = createContext();
 
         const AppProvider = ({ children }) => {
@@ -915,7 +830,7 @@ Firma: __________________
             const [history, setHistory] = useState([]);
             const [deductions, setDeductions] = useState([]);
             const [expenses, setExpenses] = useState([]);
-            const [businessExpenses, setBusinessExpenses] = useState([]); // New State
+            const [businessExpenses, setBusinessExpenses] = useState([]);
             const [cashCounts, setCashCounts] = useState([]);
             const [cashDrops, setCashDrops] = useState([]);
             const [cashIns, setCashIns] = useState([]);
@@ -979,7 +894,7 @@ Firma: __________________
                     } else {
                         setDoc(doc(db, "settings", "general"), {
                             exchangeRate: DEFAULTS.EXCHANGE_RATE,
-                            snackPrice: DEFAULTS.SNACK_PRICE,
+                            snackPrice: DEFAULTS.SNACK_PRICE
                         });
                     }
                 });
@@ -1018,7 +933,6 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-                // New Listener for Business Expenses
                 const qBE = query(collection(db, "business_expenses"), orderBy("timestamp", "desc"));
                 const unsubBE = onSnapshot(qBE, (snap) => {
                     setBusinessExpenses(snap.docs.map(d => ({
@@ -1111,20 +1025,16 @@ Firma: __________________
                     return;
                 }
 
-                // For Pinos and Boleadas, we modify the extras array
                 let newExtras = [...(t.extras || [])];
                 const targetId = type === 'PINO' ? 'QA_PINO' : 'QA_BOLEADA';
                 const label = type === 'PINO' ? 'Pino (Caja)' : 'Boleada (Caja)';
 
-                // Pull price from DB extrasList
                 const dbExtra = extrasList.find(e => e.id === (type === 'PINO' ? 'PINO' : 'BOLEADA'));
                 const price = dbExtra ? dbExtra.price : (type === 'PINO' ? 35 : 60);
 
                 if (change > 0) {
                     newExtras.push({ id: targetId, label, price, commission: 0 });
                 } else {
-                    // Remove last instance of this item
-                    // reverse find index
                     let idx = -1;
                     for (let i = newExtras.length - 1; i >= 0; i--) {
                         if (newExtras[i].id === targetId) {
@@ -1136,7 +1046,7 @@ Firma: __________________
                     if (idx !== -1) {
                         newExtras.splice(idx, 1);
                     } else {
-                        return; // Cannot remove if none exist
+                        return;
                     }
                 }
 
@@ -1230,7 +1140,6 @@ Firma: __________________
                 alert("Gasto registrado, pendiente de aprobación.");
             });
 
-            // New function for Admin Business Expenses
             const addBusinessExpense = (desc, amount) => handleDbAction(async () => {
                 await addDoc(collection(db, "business_expenses"), {
                     description: desc,
@@ -1306,10 +1215,6 @@ Firma: __________________
             return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
         };
 
-        // ------------------------------------------------------------------
-        // SECTION 8: COMPONENTS
-        // ------------------------------------------------------------------
-
         const Button = ({ onClick, children, variant = 'primary', className = '', ...props }) => {
             const base = "p-3 rounded-xl font-bold transition-transform active:scale-95 shadow-sm flex items-center justify-center gap-2";
             const styles = {
@@ -1339,6 +1244,30 @@ Firma: __________________
                 </div>
             </div>
         );
+
+        const CustomDateInput = ({ type, value, onChange, label }) => {
+            let formatted = "";
+            if (value) {
+                try {
+                    if (type === 'month') {
+                        const d = new Date(value + '-01T00:00:00');
+                        formatted = new Intl.DateTimeFormat('es-MX', { month: 'long', year: 'numeric' }).format(d);
+                    } else {
+                        const d = new Date(value + 'T00:00:00');
+                        formatted = new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).format(d);
+                    }
+                } catch (e) { }
+            }
+            return (
+                <div className="flex flex-col w-full sm:w-auto">
+                    {label && <label className="text-xs font-bold text-gray-500 block mb-1">{label}</label>}
+                    <div className="relative border border-gray-300 p-2 rounded-lg bg-white flex items-center justify-center min-w-[150px] shadow-sm hover:bg-gray-50 transition-colors">
+                        <span className="font-bold text-gray-700 capitalize text-sm">{formatted || 'Seleccionar'}</span>
+                        <input type={type} value={value} onChange={e => onChange(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    </div>
+                </div>
+            );
+        };
 
         const LoginScreen = () => {
             const { login } = useContext(AppContext);
@@ -1681,13 +1610,12 @@ Firma: __________________
                     expectedUsd,
                     diffMxn,
                     diffUsd,
-                    card: totalCard, // Saving card amount for history
-                    exchangeRate: exRate, // Save rate for historical accuracy
+                    card: totalCard,
+                    exchangeRate: exRate,
                     user: role,
                     timestamp: new Date()
                 });
 
-                // Calculate a rough total difference value for the alert
                 const totalDiff = diffMxn + (diffUsd * exRate);
 
                 if (role === 'ADMIN') {
@@ -1744,12 +1672,7 @@ Firma: __________________
 
                 expectedMxn -= expensesToday;
                 expectedMxn -= dropsTodayMxn;
-                expectedMxn -= dropsTodayUsd; // Assuming drops can be USD, but logic here mixes currencies. Wait, the drop logic separates them.
-                // Correction: Deduct drops in their respective currency
-                // Re-calculating properly
-                // Since the above lines deducted dropsTodayUsd from expectedMxn, that was a bug in previous logic or just simplified.
-                // Let's fix it here:
-                // Resetting and applying correctly:
+                expectedMxn -= dropsTodayUsd;
                 expectedMxn = openingCash.mxn;
                 expectedUsd = openingCash.usd;
 
@@ -1765,7 +1688,7 @@ Firma: __________________
                     }
                 });
 
-                expectedMxn -= expensesToday; // Expenses usually paid in MXN
+                expectedMxn -= expensesToday;
                 expectedMxn -= dropsTodayMxn;
                 expectedUsd -= dropsTodayUsd;
                 expectedMxn += cashInsTodayMxn;
@@ -1792,7 +1715,6 @@ Firma: __________________
             const changeUsd = changeMxn / exRate;
             const isOnlyUsd = usdVal > 0 && mxnVal === 0;
 
-            // Get dynamic prices for display
             const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
             const boleadaPrice = extrasList.find(e => e.id === 'BOLEADA')?.price || 60;
 
@@ -1816,7 +1738,6 @@ Firma: __________________
                                         <span className="truncate pr-2">#{ticket.id.slice(-4).toUpperCase()}{ticket.vehicleDesc ? <span className="uppercase"> - {ticket.vehicleDesc}</span> : ''}</span>
                                         <div className="text-right">
                                             <div className="whitespace-nowrap">{formatCurrency(ticket.price)} MXN</div>
-                                            {/* ROUND UP TO NEAREST QUARTER FOR DISPLAY */}
                                             <div className="text-xs text-green-600 font-normal">${(Math.ceil((ticket.price / exRate) * 4) / 4).toFixed(2)} USD</div>
                                         </div>
                                     </div>
@@ -1830,7 +1751,6 @@ Firma: __________________
                             <div className="w-full max-w-md my-auto">
                                 <div className="text-center mb-2">
                                     <h2 className="text-4xl font-bold text-gray-800">{formatCurrency(t.price)}</h2>
-                                    {/* ROUND UP TO NEAREST QUARTER FOR DISPLAY */}
                                     <div className="text-xl text-green-600 font-medium">${(Math.ceil((t.price / exRate) * 4) / 4).toFixed(2)} USD</div>
                                 </div>
                                 <div className="text-center mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-inner">
@@ -1862,7 +1782,6 @@ Firma: __________________
                                 <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                     <h4 className="font-bold text-gray-500 text-xs uppercase mb-3 text-center tracking-wider">Add-ons Rápidos (Comisión $0)</h4>
                                     <div className="grid grid-cols-1 gap-3">
-                                        {/* Row 1: Pinos */}
                                         <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
                                             <span className="font-bold text-gray-700 pl-2">Pinos (${pinoPrice})</span>
                                             <div className="flex items-center gap-3">
@@ -1871,7 +1790,6 @@ Firma: __________________
                                                 <button onClick={() => updateQuickItem(t.id, 'PINO', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
                                             </div>
                                         </div>
-                                        {/* Row 2: Boleadas */}
                                         <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
                                             <span className="font-bold text-gray-700 pl-2">Boleada (${boleadaPrice})</span>
                                             <div className="flex items-center gap-3">
@@ -1880,7 +1798,6 @@ Firma: __________________
                                                 <button onClick={() => updateQuickItem(t.id, 'BOLEADA', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
                                             </div>
                                         </div>
-                                        {/* Row 3: Snacks (Existing) */}
                                         <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm">
                                             <span className="font-bold text-gray-700 pl-2">Snacks (${snackPrice})</span>
                                             <div className="flex items-center gap-3">
@@ -2088,41 +2005,33 @@ Firma: __________________
             const [corteMode, setCorteMode] = useState('DAY');
             const [corteDate, setCorteDate] = useState(getLocalDateStr());
             const [corteMonth, setCorteMonth] = useState(getMonthStr());
+            const [corteRangeStart, setCorteRangeStart] = useState(getLocalDateStr());
+            const [corteRangeEnd, setCorteRangeEnd] = useState(getLocalDateStr());
             const [editingExpenseId, setEditingExpenseId] = useState(null);
             const [editExpDesc, setEditExpDesc] = useState('');
             const [editExpAmt, setEditExpAmt] = useState('');
 
             const allPaidForCorte = history.concat(tickets.filter(t => t.status === 'PAID'));
 
-            // Filter Tickets by Date
+            const rStart = new Date(corteRangeStart + 'T00:00:00');
+            const rEnd = new Date(corteRangeEnd + 'T23:59:59.999');
+
+            const isDateInMode = (d) => {
+                if (corteMode === 'DAY') return getLocalDateStr(d) === corteDate;
+                if (corteMode === 'MONTH') return getMonthStr(d) === corteMonth;
+                if (corteMode === 'RANGE') return d >= rStart && d <= rEnd;
+                return false;
+            };
+
             const corteTickets = allPaidForCorte.filter(t => {
                 const d = new Date(t.paidAt ? t.paidAt : t.timestamp);
-                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth;
+                return isDateInMode(d);
             });
 
-            // Filter Expenses by Date
-            const corteExpenses = expenses.filter(e => {
-                const d = new Date(e.timestamp);
-                return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth;
-            });
-
-            // Filter Drops by Date
-            const corteDrops = cashDrops.filter(d => {
-                const dte = new Date(d.timestamp);
-                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth;
-            });
-
-            // Filter Cash Ins by Date
-            const corteCashIns = cashIns.filter(d => {
-                const dte = new Date(d.timestamp);
-                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth;
-            });
-
-            // Filter Deductions by Date (For internal snacks)
-            const corteDeductions = deductions.filter(d => {
-                const dte = new Date(d.timestamp);
-                return corteMode === 'DAY' ? getLocalDateStr(dte) === corteDate : getMonthStr(dte) === corteMonth;
-            });
+            const corteExpenses = expenses.filter(e => isDateInMode(new Date(e.timestamp)));
+            const corteDrops = cashDrops.filter(d => isDateInMode(new Date(d.timestamp)));
+            const corteCashIns = cashIns.filter(d => isDateInMode(new Date(d.timestamp)));
+            const corteDeductions = deductions.filter(d => isDateInMode(new Date(d.timestamp)));
 
             const calculateItemStats = () => {
                 const stats = {
@@ -2131,9 +2040,7 @@ Firma: __________________
                     boleadas: { count: 0, money: 0 }
                 };
 
-                // 1. From Tickets (Customers)
                 corteTickets.forEach(t => {
-                    // Pinos & Boleadas
                     if (t.extras && Array.isArray(t.extras)) {
                         t.extras.forEach(e => {
                             if (['PINO', 'QA_PINO'].includes(e.id)) {
@@ -2147,10 +2054,8 @@ Firma: __________________
                         });
                     }
 
-                    // Snacks (Customer)
                     if (t.snackCount > 0) {
                         stats.snacks.customerCount += t.snackCount;
-                        // Revenue calc
                         const extrasTotal = (t.extras || []).reduce((a, b) => a + (b.price || 0), 0);
                         const serviceTotal = t.basePrice || 0;
                         const impliedSnackRevenue = (t.price || 0) - serviceTotal - extrasTotal;
@@ -2158,7 +2063,6 @@ Firma: __________________
                     }
                 });
 
-                // 2. From Deductions (Employees)
                 corteDeductions.forEach(d => {
                     const desc = (d.description || '').toLowerCase().trim();
                     if (desc === 'snack' || desc === 'snacks') {
@@ -2184,8 +2088,6 @@ Firma: __________________
                         revenueCard += t.price;
                     } else {
                         revenueCashTickets += t.price;
-
-                        // Calculate actual cash movement based on what was received and given back
                         const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false };
 
                         const mxnIn = parseFloat(pay.mxn) || 0;
@@ -2194,7 +2096,6 @@ Firma: __________________
                         let mxnOut = 0;
                         let usdOut = 0;
 
-                        // Deduct change from the appropriate currency
                         if (pay.isOnlyUsd) {
                             usdOut = parseFloat(pay.changeUsd) || 0;
                         } else {
@@ -2211,8 +2112,10 @@ Firma: __________________
                 let startDateObj;
                 if (corteMode === 'DAY') {
                     startDateObj = new Date(corteDate + 'T00:00:00');
-                } else {
+                } else if (corteMode === 'MONTH') {
                     startDateObj = new Date(corteMonth + '-01T00:00:00');
+                } else {
+                    startDateObj = new Date(corteRangeStart + 'T00:00:00');
                 }
                 const openingCash = getOpeningCash(startDateObj);
                 const initMxn = openingCash.mxn;
@@ -2228,8 +2131,8 @@ Firma: __________________
                     total: revenueCard + revenueCashTickets,
                     card: revenueCard,
                     cashTotal: revenueCashTickets,
-                    cashMxn: netMxnFlow, // Actual MXN collected
-                    cashUsd: netUsdFlow, // Actual USD collected (net)
+                    cashMxn: netMxnFlow,
+                    cashUsd: netUsdFlow,
                     expenses: approvedExpensesTotal,
                     initialMxn: initMxn,
                     initialUsd: initUsd,
@@ -2239,21 +2142,22 @@ Firma: __________________
                     dropsUsd,
                     cashInsMxn,
                     cashInsUsd,
-                    exchangeRate: exRate // Pass current rate for final calc
+                    exchangeRate: exRate
                 };
             };
             const corteTotals = calculateCorteTotals();
 
             const printCorte = () => {
-                // Filter Arqueos specifically for this
-                const relevantArqueos = cashCounts.filter(c => {
-                    const d = new Date(c.timestamp);
-                    return corteMode === 'DAY' ? getLocalDateStr(d) === corteDate : getMonthStr(d) === corteMonth;
-                }).sort((a, b) => a.timestamp - b.timestamp); // Ascending order
+                const relevantArqueos = cashCounts.filter(c => isDateInMode(new Date(c.timestamp))).sort((a, b) => a.timestamp - b.timestamp);
+
+                let typeLabel = 'Diario';
+                let dateLabelText = corteDate;
+                if (corteMode === 'MONTH') { typeLabel = 'Mensual'; dateLabelText = corteMonth; }
+                else if (corteMode === 'RANGE') { typeLabel = 'Rango'; dateLabelText = `${corteRangeStart} al ${corteRangeEnd}`; }
 
                 const data = {
-                    type: corteMode === 'DAY' ? 'Diario' : 'Mensual',
-                    dateLabel: corteMode === 'DAY' ? corteDate : corteMonth,
+                    type: typeLabel,
+                    dateLabel: dateLabelText,
                     totals: corteTotals,
                     tickets: corteTickets,
                     expenses: corteExpenses.filter(e => e.status === 'APPROVED'),
@@ -2291,8 +2195,19 @@ Firma: __________________
                         <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
                             <button onClick={() => setCorteMode('DAY')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'DAY' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Día</button>
                             <button onClick={() => setCorteMode('MONTH')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'MONTH' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Mes</button>
+                            <button onClick={() => setCorteMode('RANGE')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'RANGE' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Rango</button>
                         </div>
-                        <div className="flex items-center gap-2">{corteMode === 'DAY' ? <input type="date" value={corteDate} onChange={e => setCorteDate(e.target.value)} className="font-bold text-lg bg-transparent outline-none border p-2 rounded" /> : <input type="month" value={corteMonth} onChange={e => setCorteMonth(e.target.value)} className="font-bold text-lg bg-transparent outline-none border p-2 rounded" />}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {corteMode === 'DAY' && <CustomDateInput type="date" value={corteDate} onChange={setCorteDate} />}
+                            {corteMode === 'MONTH' && <CustomDateInput type="month" value={corteMonth} onChange={setCorteMonth} />}
+                            {corteMode === 'RANGE' && (
+                                <>
+                                    <CustomDateInput type="date" value={corteRangeStart} onChange={setCorteRangeStart} />
+                                    <span className="font-bold text-gray-500">-</span>
+                                    <CustomDateInput type="date" value={corteRangeEnd} onChange={setCorteRangeEnd} />
+                                </>
+                            )}
+                        </div>
                         <Button onClick={printCorte}><Printer size={18} /> PDF</Button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -2407,11 +2322,8 @@ Firma: __________________
                                 </thead>
                                 <tbody>
                                     {cashCounts.map(c => {
-                                        // Use historical exchange rate if available, otherwise current
                                         const rate = c.exchangeRate || exRate;
-                                        // Dif Total formula: Dif MXN + (Dif USD * Rate)
                                         const totalDiffVal = c.diffMxn + (c.diffUsd * rate);
-
                                         const isBad = Math.abs(c.diffMxn) > 1 || Math.abs(c.diffUsd) > 0.1;
 
                                         return (
@@ -2445,11 +2357,9 @@ Firma: __________________
             const [startDate, setStartDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
             const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
-            // Preview State
             const [previewData, setPreviewData] = useState(null);
             const [previewName, setPreviewName] = useState(null);
 
-            // FIX: Append time to force local time interpretation, ensuring endDate is inclusive
             const start = new Date(startDate + 'T00:00:00');
             const end = new Date(endDate + 'T23:59:59.999');
 
@@ -2474,8 +2384,8 @@ Firma: __________________
                     </div>
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
                         <div className="flex flex-wrap gap-3 items-end">
-                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Inicio</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
-                            <div><label className="text-xs font-bold text-gray-500 block mb-1">Fin</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-2 rounded-lg bg-gray-50" /></div>
+                            <CustomDateInput type="date" label="Inicio" value={startDate} onChange={setStartDate} />
+                            <CustomDateInput type="date" label="Fin" value={endDate} onChange={setEndDate} />
                             <Button onClick={printNomina} variant="success"><Printer className="w-4 h-4" /> PDF</Button>
                         </div>
                         <Button onClick={closeWeek} variant="danger"><Archive className="w-4 h-4" /> CERRAR SEMANA</Button>
@@ -2505,7 +2415,6 @@ Firma: __________________
                                     </div>
                                 </div>
 
-                                {/* Services Table */}
                                 <div>
                                     <h4 className="font-bold text-xs uppercase text-gray-500 mb-2 border-b pb-1">Desglose de Servicios</h4>
                                     <div className="overflow-x-auto">
@@ -2527,7 +2436,6 @@ Firma: __________________
                                                         </tr>
                                                     )
                                                 })}
-                                                {/* If no services found but has total (e.g. Supervisor Base Salary only), show message */}
                                                 {!SERVICES.some(svc => SIZES.some(sz => (previewData.serviceGrid[svc.id][sz.id] || 0) > 0)) && (
                                                     <tr><td colSpan="5" className="p-2 text-center text-gray-400 italic">Sin servicios de lavado registrados</td></tr>
                                                 )}
@@ -2536,7 +2444,6 @@ Firma: __________________
                                     </div>
                                 </div>
 
-                                {/* Extras Table */}
                                 {Object.keys(previewData.extrasData).length > 0 && (
                                     <div>
                                         <h4 className="font-bold text-xs uppercase text-blue-500 mb-2 border-b pb-1 mt-4">Comisiones Extra</h4>
@@ -2554,7 +2461,6 @@ Firma: __________________
                                     </div>
                                 )}
 
-                                {/* Deductions Table */}
                                 {previewData.deductionDetails.length > 0 && (
                                     <div>
                                         <h4 className="font-bold text-xs uppercase text-red-500 mb-2 border-b pb-1 mt-4">Deducciones</h4>
@@ -2607,7 +2513,11 @@ Firma: __________________
             const [newEmpName, setNewEmpName] = useState('');
             const [editingEmp, setEditingEmp] = useState(null);
 
-            useEffect(() => { setLocalExRate(exRate); setLocalSnackPrice(snackPrice); }, [exRate, snackPrice]);
+            useEffect(() => {
+                setLocalExRate(exRate);
+                setLocalSnackPrice(snackPrice);
+            }, [exRate, snackPrice]);
+
             const handleAddEmployee = () => { if (newEmpName.trim()) { addEmployee(newEmpName.trim()); setNewEmpName(''); } };
 
             const handleEditEmployee = (emp) => {
@@ -2635,15 +2545,16 @@ Firma: __________________
                     <div className="mb-6 flex flex-col gap-4">
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
                         <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Cambios</Button>
+                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Ajustes Generales</Button>
                     </div>
+
                     <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
                     <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} placeholder="Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><Button onClick={handleAddEmployee}><PlusCircle className="w-5 h-5" /></Button></div>
                     <div className="space-y-2">{employees.map((e) => (
                         <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                             <div>
                                 <span className="font-medium block">{e.name}</span>
-                                <span className="text-xs text-gray-500 uppercase font-bold">{e.role === 'SUPERVISOR' ? 'Supervisor' : 'Lavador'}</span>
+                                <span className="text-xs text-gray-500 uppercase font-bold">{e.role === 'SUPERVISOR' ? 'Supervisor' : (e.role === 'BOLERO' ? 'Bolero' : 'Lavador')}</span>
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className={`text-xs font-bold px-2 py-1 rounded ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.active ? 'Presente' : 'Ausente'}</span>
@@ -2664,12 +2575,13 @@ Firma: __________________
                                 <div>
                                     <label className="block text-sm font-bold text-gray-600 mb-1">Rol</label>
                                     <select
-                                        className="w-full border p-2 rounded"
+                                        className="w-full border p-2 rounded bg-white"
                                         value={editingEmp.role}
                                         onChange={(e) => setEditingEmp({ ...editingEmp, role: e.target.value })}
                                     >
                                         <option value="WASHER">Lavador (Comisión Estandar)</option>
                                         <option value="SUPERVISOR">Supervisor (Sueldo + % Ventas)</option>
+                                        <option value="BOLERO">Bolero (% de Boleadas)</option>
                                     </select>
                                 </div>
                                 {editingEmp.role === 'SUPERVISOR' && (
@@ -2694,6 +2606,18 @@ Firma: __________________
                                             />
                                         </div>
                                     </>
+                                )}
+                                {editingEmp.role === 'BOLERO' && (
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Comisión de Boleadas (%)</label>
+                                        <input
+                                            type="number"
+                                            className="w-full border p-2 rounded"
+                                            value={editingEmp.commissionPct}
+                                            onChange={(e) => setEditingEmp({ ...editingEmp, commissionPct: e.target.value })}
+                                            placeholder="Ej. 50"
+                                        />
+                                    </div>
                                 )}
                             </div>
                         </Modal>
