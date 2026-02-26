@@ -203,7 +203,7 @@
         const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
             const payroll = {};
             const initPayrollItem = () => {
-                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, debugDetails: [] };
+                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, debugDetails: [], daysWorked: 0 };
                 SERVICES.forEach(svc => {
                     item.serviceGrid[svc.id] = {};
                     SIZES.forEach(sz => item.serviceGrid[svc.id][sz.id] = 0);
@@ -482,13 +482,16 @@ Firma: __________________
                     doc.text(`${name}`, 14, 25);
                     doc.setFontSize(10);
                     doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 30);
+                    if (p.daysWorked !== undefined) {
+                        doc.text(`Días trabajados: ${p.daysWorked}`, 14, 34);
+                    }
 
                     doc.setFontSize(9);
                     doc.setTextColor(60, 60, 60);
-                    doc.text(`${formatCurrency(p.total)} Subtotal Ingresos`, 14, 36);
-                    doc.text(`-${formatCurrency(p.deductionTotal)} Deducciones`, 14, 40);
+                    doc.text(`${formatCurrency(p.total)} Subtotal Ingresos`, 14, 38);
+                    doc.text(`-${formatCurrency(p.deductionTotal)} Deducciones`, 14, 42);
                     doc.setFont(undefined, 'bold');
-                    doc.text(`${formatCurrency(p.netPay)} Total`, 14, 44);
+                    doc.text(`${formatCurrency(p.netPay)} Total`, 14, 46);
                     doc.setFont(undefined, 'normal');
                     doc.setTextColor(0);
 
@@ -520,13 +523,13 @@ Firma: __________________
 
                     if (body.length > 0) {
                         autoTable(doc, {
-                            startY: 50,
+                            startY: 52,
                             head: head,
                             body: body,
                             ...tableStyles
                         });
                     } else {
-                        doc.lastAutoTable = { finalY: 50 };
+                        doc.lastAutoTable = { finalY: 52 };
                     }
 
                     let currentY = doc.lastAutoTable.finalY + 10;
@@ -1196,13 +1199,24 @@ Firma: __________________
                 const mxnVal = parseFloat(payment.mxn) || 0;
                 const usdVal = parseFloat(payment.usd) || 0;
                 const isOnlyUsd = usdVal > 0 && mxnVal === 0;
-                const total = mxnVal + (usdVal * exRate);
-                if (total < t.price) return alert("Falta dinero");
+
+                let changeMxn = 0;
+                let changeUsd = 0;
+
+                if (isOnlyUsd) {
+                    const roundedUsdPrice = Math.ceil((t.price / exRate) * 4) / 4;
+                    if (usdVal < roundedUsdPrice) return alert("Falta dinero");
+                    changeUsd = usdVal - roundedUsdPrice;
+                    changeMxn = changeUsd * exRate;
+                } else {
+                    const total = mxnVal + (usdVal * exRate);
+                    if (total < t.price) return alert("Falta dinero");
+                    changeMxn = total - t.price;
+                    changeUsd = changeMxn / exRate;
+                }
 
                 setIsSubmitting(true);
                 try {
-                    const changeMxn = total - t.price;
-                    const changeUsd = changeMxn / exRate;
                     const details = { mxn: mxnVal, usd: usdVal, rate: exRate, changeMxn, changeUsd, isOnlyUsd, method: 'CASH' };
                     await updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
                     const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
@@ -1748,10 +1762,21 @@ Firma: __________________
 
             const mxnVal = parseFloat(payment.mxn) || 0;
             const usdVal = parseFloat(payment.usd) || 0;
-            const totalGiven = mxnVal + (usdVal * exRate);
-            const changeMxn = totalGiven - (t ? t.price : 0);
-            const changeUsd = changeMxn / exRate;
             const isOnlyUsd = usdVal > 0 && mxnVal === 0;
+
+            let changeMxn = 0;
+            let changeUsd = 0;
+            if (t) {
+                if (isOnlyUsd) {
+                    const roundedUsdPrice = Math.ceil((t.price / exRate) * 4) / 4;
+                    changeUsd = usdVal - roundedUsdPrice;
+                    changeMxn = changeUsd * exRate;
+                } else {
+                    const totalGiven = mxnVal + (usdVal * exRate);
+                    changeMxn = totalGiven - t.price;
+                    changeUsd = changeMxn / exRate;
+                }
+            }
 
             const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
             const boleadaPrice = extrasList.find(e => e.id === 'BOLEADA')?.price || 60;
@@ -1981,57 +2006,85 @@ Firma: __________________
         };
 
         const HistoryView = () => {
-            const { history, tickets, deductions } = useContext(AppContext);
-            const todayStr = getLocalDateStr();
+            const { history, tickets, deductions, role } = useContext(AppContext);
+            const [historyDate, setHistoryDate] = useState(getLocalDateStr());
+
+            const targetDateStr = historyDate;
 
             const allPaid = history.concat(tickets.filter(t => t.status === 'PAID'));
 
-            const todayTickets = allPaid.filter(t => {
+            const targetTickets = allPaid.filter(t => {
                 const tDate = t.paidAt ? getLocalDateStr(t.paidAt) : getLocalDateStr(t.timestamp);
-                return tDate === todayStr;
+                return tDate === targetDateStr;
             });
 
-            const totalSum = todayTickets.reduce((acc, t) => acc + (t.price || 0), 0);
-            const todayDeductions = deductions.filter(d => d.amount > 0 && getLocalDateStr(d.timestamp) === todayStr);
+            const totalSum = targetTickets.reduce((acc, t) => acc + (t.price || 0), 0);
+            const targetDeductions = deductions.filter(d => d.amount > 0 && getLocalDateStr(d.timestamp) === targetDateStr);
+
+            const isToday = targetDateStr === getLocalDateStr();
+            const dateLabel = isToday ? '(Hoy)' : `(${targetDateStr})`;
 
             return (
-                <div className="p-4 h-full overflow-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
-                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
-                            <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" /> Tickets Pagados (Hoy)</div>
+                <div className="p-4 h-full overflow-auto flex flex-col gap-4">
+                    {role === 'ADMIN' && (
+                        <div className="bg-white p-3 rounded-xl shadow border border-gray-200 flex justify-between items-center shrink-0">
+                            <span className="font-bold text-gray-700 flex items-center gap-2"><History className="w-5 h-5 text-blue-600"/> Fecha del Historial:</span>
+                            <CustomDateInput type="date" value={historyDate} onChange={setHistoryDate} />
                         </div>
-                        <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 font-bold text-gray-700 sticky top-0">
-                                    <tr>
-                                        <th className="p-3">ID</th>
-                                        <th className="p-3">Hora</th>
-                                        <th className="p-3">Descripción</th>
-                                        <th className="p-3">Servicio</th>
-                                        <th className="p-3 text-right">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {todayTickets.map(t => (
-                                        <tr key={t.id} className="border-t hover:bg-gray-50">
-                                            <td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td>
-                                            <td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td>
-                                            <td className="p-3 font-bold text-gray-700 uppercase">{t.vehicleDesc || '-'}</td>
-                                            <td className="p-3">
-                                                <div className="font-medium">{t.service?.label || 'Extras'}</div>
-                                                {t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}
-                                            </td>
-                                            <td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td>
+                    )}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
+                            <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
+                                <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" /> Tickets Pagados {dateLabel}</div>
+                            </div>
+                            <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 font-bold text-gray-700 sticky top-0 shadow-sm z-10">
+                                        <tr>
+                                            <th className="p-3">ID</th>
+                                            <th className="p-3">Hora</th>
+                                            <th className="p-3">Descripción</th>
+                                            <th className="p-3">Servicio</th>
+                                            <th className="p-3 text-right">Total</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {targetTickets.map(t => (
+                                            <tr key={t.id} className="border-t hover:bg-gray-50">
+                                                <td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td>
+                                                <td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td>
+                                                <td className="p-3 font-bold text-gray-700 uppercase">{t.vehicleDesc || '-'}</td>
+                                                <td className="p-3">
+                                                    <div className="font-medium">{t.service?.label || 'Extras'}</div>
+                                                    {t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}
+                                                </td>
+                                                <td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td>
+                                            </tr>
+                                        ))}
+                                        {targetTickets.length === 0 && (
+                                            <tr><td colSpan="5" className="p-4 text-center text-gray-400">No hay tickets registrados en esta fecha.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
-                    <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
-                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center"><span>Deducciones (Hoy)</span><Coffee className="w-4 h-4 text-orange-500" /></div>
-                        <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
-                            <table className="w-full text-sm text-left"><thead className="bg-orange-50 font-bold text-orange-800 sticky top-0"><tr><th className="p-3">Fecha</th><th className="p-3">Empleado</th><th className="p-3">Detalle</th><th className="p-3 text-right">Monto</th></tr></thead><tbody>{todayDeductions.map(d => <tr key={d.id} className="border-t hover:bg-orange-50"><td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleDateString() : '...'}</td><td className="p-3 font-bold">{d.employee}</td><td className="p-3 text-gray-600 italic">{d.description || 'Snack'}</td><td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td></tr>)}</tbody></table>
+                        <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
+                            <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
+                                <span>Deducciones {dateLabel}</span><Coffee className="w-4 h-4 text-orange-500" />
+                            </div>
+                            <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-orange-50 font-bold text-orange-800 sticky top-0 shadow-sm z-10">
+                                        <tr><th className="p-3">Fecha</th><th className="p-3">Empleado</th><th className="p-3">Detalle</th><th className="p-3 text-right">Monto</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {targetDeductions.map(d => <tr key={d.id} className="border-t hover:bg-orange-50"><td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleDateString() : '...'}</td><td className="p-3 font-bold">{d.employee}</td><td className="p-3 text-gray-600 italic">{d.description || 'Snack'}</td><td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td></tr>)}
+                                        {targetDeductions.length === 0 && (
+                                            <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay deducciones registradas en esta fecha.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2394,6 +2447,7 @@ Firma: __________________
             const { employees, history, deductions, commissions, extrasList, db, tickets } = useContext(AppContext);
             const [startDate, setStartDate] = useState(() => getDefaultPayPeriod().start);
             const [endDate, setEndDate] = useState(() => getDefaultPayPeriod().end);
+            const [attendanceData, setAttendanceData] = useState([]);
 
             const [previewData, setPreviewData] = useState(null);
             const [previewName, setPreviewName] = useState(null);
@@ -2401,11 +2455,30 @@ Firma: __________________
             const start = new Date(startDate + 'T00:00:00');
             const end = new Date(endDate + 'T23:59:59.999');
 
+            useEffect(() => {
+                const fetchAttendance = async () => {
+                    const q = query(collection(db, "attendance"), where("date", ">=", startDate), where("date", "<=", endDate));
+                    const snap = await getDocs(q);
+                    setAttendanceData(snap.docs.map(d => d.data()));
+                };
+                fetchAttendance();
+            }, [startDate, endDate, db]);
+
             const filterRange = (ts) => { if (!ts) return true; const date = new Date(ts.toDate ? ts.toDate() : ts); return date >= start && date <= end; };
 
             const rangeHistory = history.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
             const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
+
+            // Calculate days worked from fetched attendance
+            attendanceData.forEach(record => {
+                Object.entries(record.records || {}).forEach(([empName, isPresent]) => {
+                    if (isPresent && payroll[empName]) {
+                        payroll[empName].daysWorked = (payroll[empName].daysWorked || 0) + 1;
+                    }
+                });
+            });
+
             const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
 
             const printNomina = () => {
@@ -2432,6 +2505,7 @@ Firma: __________________
                         {Object.keys(payroll).map(name => (
                             <div key={name} onClick={() => { setPreviewData(payroll[name]); setPreviewName(name); }} className="bg-white p-5 rounded-xl shadow-sm border border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-all hover:bg-blue-50/30">
                                 <div className="font-bold text-xl text-gray-800 mb-1">{name}</div>
+                                <div className="text-sm font-bold text-blue-600 mb-2">Días trabajados: {payroll[name].daysWorked || 0}</div>
                                 <div className="text-3xl font-bold text-green-700">{formatCurrency(payroll[name].netPay)}</div>
                                 <div className="text-sm text-gray-500 mt-2 flex justify-between border-t pt-2"><span>Com: {formatCurrency(payroll[name].total)}</span><span className="text-red-500 font-medium">Ded: {formatCurrency(payroll[name].deductionTotal)}</span></div>
                             </div>
