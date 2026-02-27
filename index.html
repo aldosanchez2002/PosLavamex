@@ -60,7 +60,7 @@
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
             Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
-            EyeOff, ClipboardList, ShieldCheck, UserCog, Zap
+            EyeOff, ClipboardList, ShieldCheck, UserCog, Zap, Package
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -867,6 +867,7 @@ Firma: __________________
             const [cashCounts, setCashCounts] = useState([]);
             const [cashDrops, setCashDrops] = useState([]);
             const [cashIns, setCashIns] = useState([]);
+            const [adminSnacks, setAdminSnacks] = useState([]);
             const [editingTicket, setEditingTicket] = useState(null);
 
             const [exRate, setExRate] = useState(DEFAULTS.EXCHANGE_RATE);
@@ -995,7 +996,14 @@ Firma: __________________
                         timestamp: d.data().timestamp?.toDate() || new Date()
                     })));
                 });
-                return () => { unsubT(); unsubD(); unsubE(); unsubBE(); unsubCC(); unsubCD(); unsubCI(); };
+                const qAS = query(collection(db, "admin_snacks"), orderBy("timestamp", "desc"));
+                const unsubAS = onSnapshot(qAS, (snap) => {
+                    setAdminSnacks(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date()
+                    })));
+                });
+                return () => { unsubT(); unsubD(); unsubE(); unsubBE(); unsubCC(); unsubCD(); unsubCI(); unsubAS(); };
             }, []);
 
             const updateGlobalSettings = (newRate, newSnackPrice) => handleDbAction(async () => {
@@ -1189,6 +1197,21 @@ Firma: __________________
                 status: status, processedAt: serverTimestamp(), processedBy: role
             }));
 
+            const addAdminSnack = (qty) => handleDbAction(async () => {
+                await addDoc(collection(db, "admin_snacks"), {
+                    quantity: parseInt(qty, 10) || 1,
+                    timestamp: serverTimestamp(),
+                    user: role
+                });
+                alert("Snack de admin registrado.");
+            });
+
+            const deleteAdminSnack = (id) => handleDbAction(async () => {
+                if (confirm("¿Seguro que deseas eliminar esta cortesía?")) {
+                    await deleteDoc(doc(db, "admin_snacks", id));
+                }
+            });
+
             const processPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
@@ -1246,12 +1269,12 @@ Firma: __________________
             const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
 
             const value = {
-                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, businessExpenses, cashCounts, cashDrops, cashIns,
+                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, businessExpenses, cashCounts, cashDrops, cashIns, adminSnacks,
                 prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
-                updateEmployee,
+                updateEmployee, addAdminSnack, deleteAdminSnack,
                 getOpeningCash,
                 db, isSubmitting
             };
@@ -1577,9 +1600,10 @@ Firma: __________________
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList, addAdminSnack } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
+            const [showAdminSnack, setShowAdminSnack] = useState(false);
             const [showVarios, setShowVarios] = useState(false);
             const [showAttendance, setShowAttendance] = useState(false);
             const [showExpense, setShowExpense] = useState(false);
@@ -1589,6 +1613,7 @@ Firma: __________________
             const [localAttendance, setLocalAttendance] = useState({});
 
             const [snackEmp, setSnackEmp] = useState('');
+            const [adminSnackQty, setAdminSnackQty] = useState(1);
             const [variosEmp, setVariosEmp] = useState('');
             const [variosDesc, setVariosDesc] = useState('');
             const [variosAmt, setVariosAmt] = useState('');
@@ -1632,6 +1657,12 @@ Firma: __________________
                     setShowSnack(false);
                     setSnackEmp('');
                 }
+            };
+
+            const handleAddAdminSnack = () => {
+                addAdminSnack(adminSnackQty);
+                setShowAdminSnack(false);
+                setAdminSnackQty(1);
             };
 
             const handleAddVarios = () => {
@@ -1786,12 +1817,13 @@ Firma: __________________
                     <div className="w-full md:w-1/3 bg-white rounded-xl shadow border overflow-hidden flex flex-col h-1/3 md:h-full shrink-0">
                         <div className="p-3 bg-gray-50 font-bold border-b flex justify-between items-center shrink-0">
                             <span className="text-gray-700">Tickets ({tickets.length})</span>
-                            <div className="flex gap-1">
-                                <Button onClick={() => setShowCorte(true)} variant="primary" className="text-xs px-2 py-1 h-auto rounded-full bg-slate-700 border-slate-800 text-white">Corte</Button>
-                                <Button onClick={() => setShowAttendance(true)} variant="blueLight" className="text-xs px-2 py-1 h-auto rounded-full">Asist</Button>
-                                <Button onClick={() => setShowSnack(true)} variant="orangeLight" className="text-xs px-2 py-1 h-auto rounded-full">Snack</Button>
-                                <Button onClick={() => setShowVarios(true)} variant="secondary" className="text-xs px-2 py-1 h-auto rounded-full text-purple-700 border-purple-200 bg-purple-50 hover:bg-purple-100">Varios</Button>
-                                <Button onClick={() => setShowExpense(true)} variant="danger" className="text-xs px-2 py-1 h-auto rounded-full">Gasto</Button>
+                            <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                                <Button onClick={() => setShowCorte(true)} variant="primary" className="text-xs px-2 py-1 h-auto rounded-full bg-slate-700 border-slate-800 text-white shrink-0">Corte</Button>
+                                <Button onClick={() => setShowAttendance(true)} variant="blueLight" className="text-xs px-2 py-1 h-auto rounded-full shrink-0">Asist</Button>
+                                <Button onClick={() => setShowSnack(true)} variant="orangeLight" className="text-xs px-2 py-1 h-auto rounded-full shrink-0">Snack</Button>
+                                <Button onClick={() => setShowAdminSnack(true)} variant="warning" className="text-xs px-2 py-1 h-auto rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-yellow-200 shrink-0">Snack Adm</Button>
+                                <Button onClick={() => setShowVarios(true)} variant="secondary" className="text-xs px-2 py-1 h-auto rounded-full text-purple-700 border-purple-200 bg-purple-50 hover:bg-purple-100 shrink-0">Varios</Button>
+                                <Button onClick={() => setShowExpense(true)} variant="danger" className="text-xs px-2 py-1 h-auto rounded-full shrink-0">Gasto</Button>
                             </div>
                         </div>
                         <div className="overflow-y-auto flex-1 p-2 space-y-2">
@@ -1895,6 +1927,21 @@ Firma: __________________
                     </div>
 
                     {showSnack && <Modal title={`Snack Empleado ($${snackPrice})`} icon={Coffee} onClose={() => setShowSnack(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowSnack(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddSnack} disabled={!snackEmp} variant="warning" className="flex-1">Confirmar</Button></div>}><select className="w-full border p-3 rounded-lg mb-6 text-lg bg-white" onChange={e => setSnackEmp(e.target.value)} value={snackEmp}><option value="">Seleccionar Empleado...</option>{employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}</select></Modal>}
+
+                    {showAdminSnack && (
+                        <Modal title="Snack Administrador" icon={Coffee} onClose={() => setShowAdminSnack(false)} footer={
+                            <div className="flex gap-3">
+                                <Button onClick={() => setShowAdminSnack(false)} variant="secondary" className="flex-1">Cancelar</Button>
+                                <Button onClick={handleAddAdminSnack} variant="warning" className="flex-1">Registrar</Button>
+                            </div>
+                        }>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-600 mb-1">Cantidad de Snacks</label>
+                                <input type="number" value={adminSnackQty} onChange={e => setAdminSnackQty(e.target.value)} className="w-full border p-3 rounded-lg text-lg" min="1" />
+                                <p className="text-xs text-gray-500 mt-2">Los snacks de administrador son cortesías aprobadas y no afectarán el monto esperado en el corte de caja.</p>
+                            </div>
+                        </Modal>
+                    )}
 
                     {showVarios && (
                         <Modal title="Varios / Deducción" icon={Briefcase} onClose={() => setShowVarios(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowVarios(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddVarios} disabled={!variosEmp || !variosDesc || !variosAmt} variant="primary" className="flex-1 bg-purple-600 hover:bg-purple-700">Guardar</Button></div>}>
@@ -2910,6 +2957,111 @@ Firma: __________________
             );
         };
 
+        const AdminMercancia = () => {
+            const { history, tickets, deductions, adminSnacks, deleteAdminSnack } = useContext(AppContext);
+            const [startDate, setStartDate] = useState(() => getDefaultPayPeriod().start);
+            const [endDate, setEndDate] = useState(() => getDefaultPayPeriod().end);
+
+            const start = new Date(startDate + 'T00:00:00');
+            const end = new Date(endDate + 'T23:59:59.999');
+
+            const filterRange = (ts) => { if (!ts) return false; const date = new Date(ts.toDate ? ts.toDate() : ts); return date >= start && date <= end; };
+
+            const rangeTickets = history.concat(tickets.filter(t => t.status === 'PAID')).filter(t => filterRange(t.paidAt || t.timestamp));
+            const rangeDeductions = deductions.filter(d => filterRange(d.timestamp));
+            const rangeAdminSnacks = adminSnacks.filter(a => filterRange(a.timestamp));
+
+            let snackCustomers = 0;
+            let pinoCount = 0;
+            rangeTickets.forEach(t => {
+                snackCustomers += (t.snackCount || 0);
+                if (t.extras) {
+                    t.extras.forEach(e => {
+                        if (['PINO', 'QA_PINO'].includes(e.id)) pinoCount++;
+                    });
+                }
+            });
+
+            let snackEmployees = 0;
+            rangeDeductions.forEach(d => {
+                if ((d.description || '').toLowerCase().includes('snack')) {
+                    snackEmployees += 1;
+                }
+            });
+
+            let snackAdmin = 0;
+            rangeAdminSnacks.forEach(a => {
+                snackAdmin += (a.quantity || 1);
+            });
+
+            const totalSnacks = snackCustomers + snackEmployees + snackAdmin;
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
+                        <CustomDateInput type="date" label="Inicio" value={startDate} onChange={setStartDate} />
+                        <CustomDateInput type="date" label="Fin" value={endDate} onChange={setEndDate} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white p-6 rounded-xl shadow border border-gray-200">
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Coffee className="w-5 h-5 text-orange-500" /> Snacks Vendidos/Tomados</h3>
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between border-b pb-2"><span>Clientes (Tickets)</span> <span className="font-bold">{snackCustomers}</span></div>
+                                <div className="flex justify-between border-b pb-2"><span>Empleados (Deducciones)</span> <span className="font-bold">{snackEmployees}</span></div>
+                                <div className="flex justify-between border-b pb-2"><span>Administración (Cortesías)</span> <span className="font-bold">{snackAdmin}</span></div>
+                                <div className="flex justify-between text-lg text-orange-700 pt-2 font-black"><span>TOTAL SNACKS</span> <span>{totalSnacks}</span></div>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow border border-gray-200">
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                <Package className="w-5 h-5 text-green-500" /> Pinos Vendidos
+                            </h3>
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between border-b pb-2"><span>Clientes (Tickets)</span> <span className="font-bold">{pinoCount}</span></div>
+                                <div className="flex justify-between text-lg text-green-700 pt-2 font-black"><span>TOTAL PINOS</span> <span>{pinoCount}</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden mt-6">
+                        <div className="p-4 bg-orange-50 border-b border-orange-100 font-bold text-orange-800 flex items-center gap-2">
+                            <Coffee className="w-4 h-4" /> Registro de Cortesías de Administración
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-orange-100 text-orange-800">
+                                    <tr>
+                                        <th className="p-3">Fecha y Hora</th>
+                                        <th className="p-3">Usuario</th>
+                                        <th className="p-3 text-right">Cantidad</th>
+                                        <th className="p-3 text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rangeAdminSnacks.length === 0 ? (
+                                        <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay cortesías registradas en este periodo.</td></tr>
+                                    ) : (
+                                        rangeAdminSnacks.sort((a, b) => b.timestamp - a.timestamp).map(a => (
+                                            <tr key={a.id} className="border-t hover:bg-orange-50">
+                                                <td className="p-3">{a.timestamp instanceof Date ? a.timestamp.toLocaleString() : '...'}</td>
+                                                <td className="p-3 uppercase text-xs font-bold text-gray-600">{a.user}</td>
+                                                <td className="p-3 text-right font-bold text-orange-600">{a.quantity}</td>
+                                                <td className="p-3 text-center">
+                                                    <button onClick={() => deleteAdminSnack(a.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded-lg" title="Eliminar cortesía">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const AdminPanel = () => {
             const { addCashIn } = useContext(AppContext);
             const [tab, setTab] = useState('CORTE');
@@ -2928,7 +3080,7 @@ Firma: __________________
             return (
                 <div className="p-4 md:p-6 h-full overflow-y-auto">
                     <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1 items-center">
-                        {['CORTE', 'NOMINA', 'ASISTENCIA', 'GASTOS_ADM', 'CONFIG', 'PRECIOS'].map(t => <button key={t} onClick={() => setTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === t ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>{t === 'GASTOS_ADM' ? 'GASTOS NEGOCIO' : t}</button>)}
+                        {['CORTE', 'NOMINA', 'ASISTENCIA', 'GASTOS_ADM', 'MERCANCIA', 'CONFIG', 'PRECIOS'].map(t => <button key={t} onClick={() => setTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === t ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>{t === 'GASTOS_ADM' ? 'GASTOS NEGOCIO' : (t === 'MERCANCIA' ? 'MERCANCÍA' : t)}</button>)}
                         <button onClick={() => setShowAddCash(true)} className="px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors bg-green-600 text-white shadow-md flex items-center gap-2 hover:bg-green-700">
                             <PlusCircle size={18} /> AGREGAR EFECTIVO
                         </button>
@@ -2937,6 +3089,7 @@ Firma: __________________
                     {tab === 'NOMINA' && <AdminNomina />}
                     {tab === 'ASISTENCIA' && <AdminAsistencia />}
                     {tab === 'GASTOS_ADM' && <AdminBusinessExpenses />}
+                    {tab === 'MERCANCIA' && <AdminMercancia />}
                     {tab === 'CONFIG' && <AdminConfig />}
                     {tab === 'PRECIOS' && <AdminPrecios />}
 
