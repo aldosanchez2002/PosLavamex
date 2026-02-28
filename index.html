@@ -482,12 +482,20 @@ Firma: __________________
 
                     if (p.role === 'SUPERVISOR') {
                         doc.setFontSize(14);
-                        doc.setFont(undefined, 'bold');
-                        doc.text(`Nombre: ${name}`, 14, 25);
+                        doc.text(`${name}`, 14, 25);
                         doc.setFontSize(10);
-                        doc.setFont(undefined, 'normal');
-                        doc.text(`CURP: ${p.curp || 'NO REGISTRADO'}`, 14, 32);
-                        doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 38);
+                        doc.text(`CURP: ${p.curp || 'NO REGISTRADO'}`, 14, 30);
+                        doc.text(`Periodo: ${formatDate(startDate)} al ${formatDate(endDate)}`, 14, 34);
+
+                        doc.setDrawColor(0);
+                        doc.setFillColor(255, 255, 255);
+                        doc.rect(140, 20, 50, 20);
+                        doc.setFontSize(12);
+                        doc.text("TOTAL A PAGAR", 165, 26, { align: 'center' });
+                        doc.setFontSize(16);
+                        doc.setTextColor(0, 0, 0);
+                        doc.text(formatCurrency(p.netPay), 165, 35, { align: 'center' });
+                        doc.setTextColor(0);
 
                         const dailyRate = 440.87;
                         const daysWorked = p.daysWorked || 0;
@@ -498,7 +506,8 @@ Firma: __________________
                         const targetTotal = p.total;
                         const bono = targetTotal - totalLegal;
 
-                        let curY = 50;
+                        let curY = 46;
+                        doc.setFontSize(9);
                         doc.text(`Salario Diario:`, 14, curY);
                         doc.text(formatCurrency(dailyRate), 70, curY);
 
@@ -510,41 +519,30 @@ Firma: __________________
                         doc.text(`${daysWorked} Días Trabajados.`, 14, curY);
                         doc.text(formatCurrency(baseWorked), 70, curY);
 
-                        curY += 8;
+                        curY += 6;
                         doc.setFont(undefined, 'bold');
                         doc.text(`Total:`, 14, curY);
                         doc.text(formatCurrency(totalLegal), 70, curY);
                         doc.setFont(undefined, 'normal');
 
-                        curY += 15;
-                        doc.setFontSize(9);
-                        const legalText = "Recibí de LAVAMEX y/o Nancy Carmona Carrasco a mi entera conformidad el importe de mi sueldo normal y demás prestaciones por el periodo que termina en la fecha que se anota, dando mi conformidad también a los descuentos de la ley de carácter privado que se me hacen, manifestando que a la fecha no se me adeuda ninguna cantidad por otro concepto.";
-                        const splitText = doc.splitTextToSize(legalText, 180);
-                        doc.text(splitText, 14, curY);
-
-                        curY += (splitText.length * 4) + 25;
-                        doc.line(70, curY, 140, curY);
-                        doc.text("FIRMA", 105, curY + 5, { align: 'center' });
-                        doc.text(name, 105, curY + 10, { align: 'center' });
-
-                        curY += 25;
-                        doc.setFontSize(10);
+                        curY += 8;
                         doc.text(`Bono por desempeño:`, 14, curY);
                         doc.text(formatCurrency(bono), 70, curY);
 
                         curY += 6;
                         doc.text(`Deducciones:`, 14, curY);
-                        doc.text(formatCurrency(p.deductionTotal), 70, curY);
+                        doc.text(`-${formatCurrency(p.deductionTotal)}`, 70, curY);
 
-                        doc.setDrawColor(0);
-                        doc.setFillColor(255, 255, 255);
-                        doc.rect(130, curY + 4, 65, 20);
-                        doc.setFontSize(12);
-                        doc.setFont(undefined, 'bold');
-                        doc.text("TOTAL A PAGAR", 162.5, curY + 10, { align: 'center' });
-                        doc.setFontSize(16);
-                        doc.text(formatCurrency(p.netPay), 162.5, curY + 19, { align: 'center' });
-                        doc.setFont(undefined, 'normal');
+                        curY += 15;
+                        doc.setFontSize(8);
+                        const legalText = "Recibí de LAVAMEX y/o Nancy Carmona Carrasco a mi entera conformidad el importe de mi sueldo normal y demás prestaciones por el periodo que termina en la fecha que se anota, dando mi conformidad también a los descuentos de la ley de carácter privado que se me hacen, manifestando que a la fecha no se me adeuda ninguna cantidad por otro concepto.";
+                        const splitText = doc.splitTextToSize(legalText, 180);
+                        doc.text(splitText, 14, curY);
+
+                        curY += (splitText.length * 4) + 20;
+                        doc.line(70, curY, 140, curY);
+                        doc.text("FIRMA", 105, curY + 5, { align: 'center' });
+                        doc.text(name, 105, curY + 10, { align: 'center' });
 
                     } else {
                         doc.setFontSize(14);
