@@ -606,10 +606,25 @@ Firma: __________________
                         }
 
                         if (p.deductionDetails && p.deductionDetails.length > 0) {
-                            const dedBody = p.deductionDetails.map(d => [
-                                d.desc || 'Varios',
-                                formatCurrency(d.amount)
-                            ]);
+                            const groupedDeductions = {};
+                            p.deductionDetails.forEach(d => {
+                                const rawDesc = d.desc || 'Varios';
+                                const isSnack = rawDesc.toLowerCase().includes('snack');
+                                const desc = isSnack ? 'Snacks' : rawDesc;
+
+                                if (!groupedDeductions[desc]) {
+                                    groupedDeductions[desc] = { count: 0, amount: 0 };
+                                }
+                                groupedDeductions[desc].count += 1;
+                                groupedDeductions[desc].amount += d.amount;
+                            });
+
+                            const dedBody = Object.keys(groupedDeductions).map(desc => {
+                                const item = groupedDeductions[desc];
+                                const label = item.count > 1 ? `${desc} (x${item.count})` : desc;
+                                return [label, formatCurrency(item.amount)];
+                            });
+
                             dedBody.push(['TOTAL DEDUCCIONES', formatCurrency(p.deductionTotal)]);
 
                             autoTable(doc, {
@@ -2703,10 +2718,20 @@ Firma: __________________
                                         <h4 className="font-bold text-xs uppercase text-red-500 mb-2 border-b pb-1 mt-4">Deducciones</h4>
                                         <table className="w-full text-xs">
                                             <tbody>
-                                                {previewData.deductionDetails.map((d, i) => (
+                                                {Object.entries(
+                                                    previewData.deductionDetails.reduce((acc, d) => {
+                                                        const rawDesc = d.desc || 'Varios';
+                                                        const isSnack = rawDesc.toLowerCase().includes('snack');
+                                                        const desc = isSnack ? 'Snacks' : rawDesc;
+                                                        if (!acc[desc]) acc[desc] = { count: 0, amount: 0 };
+                                                        acc[desc].count += 1;
+                                                        acc[desc].amount += d.amount;
+                                                        return acc;
+                                                    }, {})
+                                                ).map(([desc, item], i) => (
                                                     <tr key={i} className="border-b last:border-0">
-                                                        <td className="p-1">{d.desc || 'Varios'}</td>
-                                                        <td className="p-1 text-right text-red-600 font-medium">-{formatCurrency(d.amount)}</td>
+                                                        <td className="p-1">{item.count > 1 && desc === 'Snacks' ? `${desc} (x${item.count})` : desc}</td>
+                                                        <td className="p-1 text-right text-red-600 font-medium">-{formatCurrency(item.amount)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
