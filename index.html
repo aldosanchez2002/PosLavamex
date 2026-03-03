@@ -2613,7 +2613,6 @@ Firma: __________________
             const rangeDeductions = deductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
 
-            // Calculate days worked from fetched attendance
             attendanceData.forEach(record => {
                 Object.entries(record.records || {}).forEach(([empName, isPresent]) => {
                     if (isPresent && payroll[empName]) {
@@ -2626,6 +2625,90 @@ Firma: __________________
 
             const printNomina = () => {
                 PdfService.generateNomina(payroll, startDate, endDate, rangeHistory);
+            };
+
+            const printDetailedNomina = () => {
+                if (!previewName) return;
+                const empTickets = rangeHistory.filter(t => {
+                    const wList = t.washers || (t.washer ? [t.washer] : []);
+                    return wList.includes(previewName);
+                }).map(t => {
+                    const wList = t.washers || (t.washer ? [t.washer] : []);
+                    const wCount = wList.length;
+                    let totalComm = t.commission || 0;
+                    if (!totalComm || totalComm === 0) {
+                        let base = 0;
+                        if (t.service && t.size && commissions[t.service?.id]) {
+                            base = commissions[t.service.id][t.size.id] || 0;
+                        }
+                        const extrasTotal = (t.extras || []).reduce((acc, e) => {
+                            const dbEx = extrasList.find(x => x.id === e.id);
+                            return acc + (dbEx ? (dbEx.commission || 0) : (e.commission || 0));
+                        }, 0);
+                        totalComm = base + extrasTotal;
+                    }
+                    const dateObj = t.paidAt || t.timestamp;
+                    return {
+                        id: t.id,
+                        dateObj: dateObj,
+                        date: getLocalDateStr(dateObj),
+                        time: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        desc: t.vehicleDesc || t.service?.label || 'Extras',
+                        share: totalComm / wCount
+                    };
+                }).sort((a, b) => a.dateObj - b.dateObj);
+
+                const doc = new jsPDF();
+                doc.setFontSize(16);
+                doc.text(`Detalle de Nómina: ${previewName}`, 14, 20);
+                doc.setFontSize(10);
+                doc.text(`Periodo: ${startDate} al ${endDate}`, 14, 26);
+
+                let currentY = 35;
+                const grouped = {};
+                empTickets.forEach(t => {
+                    if (!grouped[t.date]) grouped[t.date] = { tickets: [], subtotal: 0 };
+                    grouped[t.date].tickets.push(t);
+                    grouped[t.date].subtotal += t.share;
+                });
+
+                let grandTotal = 0;
+
+                Object.keys(grouped).sort().forEach(date => {
+                    const group = grouped[date];
+                    grandTotal += group.subtotal;
+
+                    doc.setFontSize(12);
+                    doc.text(`Fecha: ${date} (Subtotal: ${formatCurrency(group.subtotal)})`, 14, currentY);
+                    currentY += 5;
+
+                    const body = group.tickets.map(t => [
+                        t.time,
+                        t.desc,
+                        `#${t.id.slice(-4).toUpperCase()}`,
+                        formatCurrency(t.share)
+                    ]);
+
+                    autoTable(doc, {
+                        startY: currentY,
+                        head: [['Hora', 'Descripción', 'Ticket', 'Comisión']],
+                        body: body,
+                        theme: 'grid',
+                        styles: { fontSize: 8, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1 },
+                        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0] },
+                        margin: { left: 14, right: 14 }
+                    });
+                    currentY = doc.lastAutoTable.finalY + 10;
+                    if (currentY > 270) {
+                        doc.addPage();
+                        currentY = 20;
+                    }
+                });
+
+                doc.setFontSize(14);
+                doc.text(`TOTAL COMISIONES PERIODO: ${formatCurrency(grandTotal)}`, 14, currentY + 5);
+
+                doc.save(`Detalle_Nomina_${previewName}_${startDate}_${endDate}.pdf`);
             };
 
             return (
@@ -2654,7 +2737,12 @@ Firma: __________________
 
                     {previewData && (
                         <Modal title={`Nómina: ${previewName}`} icon={FileText} onClose={() => { setPreviewData(null); setPreviewName(null); }}
-                            footer={<Button onClick={() => { setPreviewData(null); setPreviewName(null); }} variant="secondary" className="w-full">Cerrar</Button>}>
+                            footer={
+                                <div className="flex gap-2">
+                                    <Button onClick={() => { setPreviewData(null); setPreviewName(null); }} variant="secondary" className="flex-1">Cerrar</Button>
+                                    <Button onClick={printDetailedNomina} variant="primary" className="flex-1"><Printer className="w-4 h-4" /> Detalle</Button>
+                                </div>
+                            }>
                             <div className="space-y-4">
                                 <div className="bg-gray-50 p-4 rounded-lg border flex justify-between items-center">
                                     <div>
