@@ -821,14 +821,11 @@ Firma: __________________
                     const last = arqueos.last;
                     const isSame = first.id === last.id;
 
-                    const physDeltaMxn = last.declaredMxn - first.declaredMxn;
-                    const physDeltaUsd = last.declaredUsd - first.declaredUsd;
+                    const sysExpectedMxn = totals.cashNetMxn;
+                    const sysExpectedUsd = totals.cashNetUsd;
 
-                    const sysDeltaMxn = totals.cashNetMxn - totals.initialMxn;
-                    const sysDeltaUsd = totals.cashNetUsd - totals.initialUsd;
-
-                    const diffMxn = physDeltaMxn - sysDeltaMxn;
-                    const diffUsd = physDeltaUsd - sysDeltaUsd;
+                    const diffMxn = last.declaredMxn - sysExpectedMxn;
+                    const diffUsd = last.declaredUsd - sysExpectedUsd;
 
                     const finalRate = last.exchangeRate || totals.exchangeRate || 18.0;
                     const totalDiffMxn = diffMxn + (diffUsd * finalRate);
@@ -838,10 +835,7 @@ Firma: __________________
                     const arqueoBody = [
                         [`Arqueo Inicial (${formatTime(first.timestamp)})`, formatCurrency(first.declaredMxn), `$${first.declaredUsd.toFixed(2)}`],
                         [`Arqueo Final (${formatTime(last.timestamp)})`, formatCurrency(last.declaredMxn), `$${last.declaredUsd.toFixed(2)}`],
-                        ['', '', ''],
-                        ['Diferencia de Arqueos', formatCurrency(physDeltaMxn), `$${physDeltaUsd.toFixed(2)}`],
-                        ['Diferencia debe ser', formatCurrency(sysDeltaMxn), `$${sysDeltaUsd.toFixed(2)}`],
-                        ['', '', ''],
+                        ['Sistema Esperaba (Debe Haber)', formatCurrency(sysExpectedMxn), `$${sysExpectedUsd.toFixed(2)}`],
                         ['DIFERENCIA OPERATIVA', formatCurrency(diffMxn), `$${diffUsd.toFixed(2)}`]
                     ];
 
