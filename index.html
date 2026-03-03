@@ -203,7 +203,7 @@
         const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
             const payroll = {};
             const initPayrollItem = () => {
-                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, debugDetails: [], daysWorked: 0, role: null, curp: null };
+                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, debugDetails: [], daysWorked: 0, datesWorked: [], role: null, curp: null };
                 SERVICES.forEach(svc => {
                     item.serviceGrid[svc.id] = {};
                     SIZES.forEach(sz => item.serviceGrid[svc.id][sz.id] = 0);
@@ -507,6 +507,20 @@ Firma: __________________
                         curY += 6;
                         doc.text(`${daysWorked} Días Trabajados.`, 14, curY);
                         doc.text(formatCurrency(baseWorked), 70, curY);
+
+                        if (p.datesWorked && p.datesWorked.length > 0) {
+                            doc.setFontSize(8);
+                            doc.setTextColor(100, 100, 100);
+                            p.datesWorked.sort().forEach(dateStr => {
+                                curY += 4;
+                                const dObj = new Date(dateStr + 'T00:00:00');
+                                const formattedDate = new Intl.DateTimeFormat('es-MX', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(dObj);
+                                const displayDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
+                                doc.text(`  - ${displayDate}`, 14, curY);
+                            });
+                            doc.setFontSize(10);
+                            doc.setTextColor(0, 0, 0);
+                        }
 
                         curY += 8;
                         doc.setFont(undefined, 'bold');
@@ -2617,6 +2631,7 @@ Firma: __________________
                 Object.entries(record.records || {}).forEach(([empName, isPresent]) => {
                     if (isPresent && payroll[empName]) {
                         payroll[empName].daysWorked = (payroll[empName].daysWorked || 0) + 1;
+                        payroll[empName].datesWorked.push(record.date);
                     }
                 });
             });
