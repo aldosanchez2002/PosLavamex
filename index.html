@@ -2403,7 +2403,7 @@ Firma: __________________
                     qEnd = new Date(corteRangeEnd + 'T23:59:59.999');
                 }
 
-                if (qStart >= sixtyDaysAgo) { setLocalData(null); return; }
+                if (corteMode === 'DAY' && corteDate === getLocalDateStr()) { setLocalData(null); return; }
 
                 setIsFetching(true);
                 Promise.all([
@@ -2773,7 +2773,7 @@ Firma: __________________
                 sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
                 sixtyDaysAgo.setHours(0, 0, 0, 0);
 
-                if (start >= sixtyDaysAgo) { setLocalHistory(null); setLocalDeductions(null); return; }
+                if (startDate === getLocalDateStr() && endDate === getLocalDateStr()) { setLocalHistory(null); setLocalDeductions(null); return; }
 
                 setIsFetchingNomina(true);
                 Promise.all([
@@ -2791,7 +2791,7 @@ Firma: __________________
             const activeNominaHistory = localHistory !== null ? localHistory : history.concat(tickets.filter(t => t.status === 'PAID'));
             const activeNominaDeductions = localDeductions !== null ? localDeductions : deductions;
 
-            const rangeHistory = activeNominaHistory.filter(t => t.status === 'PAID' && filterRange(t.timestamp));
+            const rangeHistory = activeNominaHistory.filter(t => t.status === 'PAID' && filterRange(t.paidAt || t.timestamp));
             const rangeDeductions = activeNominaDeductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
 
