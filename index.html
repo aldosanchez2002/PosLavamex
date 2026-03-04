@@ -3558,7 +3558,7 @@ Firma: __________________
                     const now = new Date();
                     const hours = now.getHours();
                     const outsideHours = hours < 7 || hours >= 19;
-                    setIsLocked(false);
+                    setIsLocked(outsideHours && role !== 'ADMIN');
                 };
 
                 checkTime();
