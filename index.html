@@ -69,7 +69,7 @@
         import { initializeApp, getApps, getApp } from 'firebase/app';
         import {
             getFirestore, collection, addDoc, updateDoc, doc, onSnapshot,
-            query, orderBy, serverTimestamp, writeBatch, setDoc, getDocs,
+            query, orderBy, serverTimestamp, writeBatch, setDoc, getDocs, getDoc,
             where, deleteDoc, limit
         } from 'firebase/firestore';
 
@@ -996,26 +996,33 @@ Firma: __________________
             }, []);
 
             useEffect(() => {
-                const unsubP = onSnapshot(doc(db, "settings", "prices"), (docSnap) => {
-                    if (docSnap.exists()) setPrices(docSnap.data());
-                    else setDoc(doc(db, "settings", "prices"), DEFAULTS.PRICES);
-                });
-                const unsubC = onSnapshot(doc(db, "settings", "commissions"), (docSnap) => {
-                    if (docSnap.exists()) setCommissions(docSnap.data());
-                    else setDoc(doc(db, "settings", "commissions"), DEFAULTS.COMMISSIONS);
-                });
-                const unsubE = onSnapshot(collection(db, "extras"), (snap) => {
-                    const dbItems = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
-                    const cleanList = DEFAULTS.EXTRAS.map(def => {
-                        const match = dbItems.find(item => item.id === def.id);
-                        return match ? { ...def, ...match } : def;
-                    });
-                    setExtrasList(cleanList);
-                    if (snap.empty) DEFAULTS.EXTRAS.forEach(e => addDoc(collection(db, "extras"), e));
-                });
-                const unsubG = onSnapshot(doc(db, "settings", "general"), (docSnap) => {
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
+                const loadSettings = async () => {
+                    const [pricesSnap, commissionsSnap, extrasSnap, generalSnap] = await Promise.all([
+                        getDoc(doc(db, "settings", "prices")),
+                        getDoc(doc(db, "settings", "commissions")),
+                        getDocs(collection(db, "extras")),
+                        getDoc(doc(db, "settings", "general"))
+                    ]);
+
+                    if (pricesSnap.exists()) setPrices(pricesSnap.data());
+                    else { setDoc(doc(db, "settings", "prices"), DEFAULTS.PRICES); setPrices(DEFAULTS.PRICES); }
+
+                    if (commissionsSnap.exists()) setCommissions(commissionsSnap.data());
+                    else { setDoc(doc(db, "settings", "commissions"), DEFAULTS.COMMISSIONS); setCommissions(DEFAULTS.COMMISSIONS); }
+
+                    if (!extrasSnap.empty) {
+                        const dbItems = extrasSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
+                        const cleanList = DEFAULTS.EXTRAS.map(def => {
+                            const match = dbItems.find(item => item.id === def.id);
+                            return match ? { ...def, ...match } : def;
+                        });
+                        setExtrasList(cleanList);
+                    } else {
+                        DEFAULTS.EXTRAS.forEach(e => addDoc(collection(db, "extras"), e));
+                    }
+
+                    if (generalSnap.exists()) {
+                        const data = generalSnap.data();
                         if (data.exchangeRate) setExRate(data.exchangeRate);
                         if (data.snackPrice) setSnackPrice(data.snackPrice);
                     } else {
@@ -1024,25 +1031,39 @@ Firma: __________________
                             snackPrice: DEFAULTS.SNACK_PRICE
                         });
                     }
-                });
-                return () => { unsubP(); unsubC(); unsubE(); unsubG(); };
+                };
+                loadSettings();
             }, []);
 
             useEffect(() => {
-                const qT = query(collection(db, "tickets"), orderBy("timestamp", "desc"));
-                const unsubT = onSnapshot(qT, (snap) => {
-                    const active = [], hist = [];
-                    snap.forEach(d => {
-                        const dat = {
-                            id: d.id, ...d.data(),
-                            timestamp: d.data().timestamp?.toDate() || new Date(),
-                            paidAt: d.data().paidAt?.toDate() || null
-                        };
-                        if (dat.status === 'PENDING') active.push(dat);
-                        else hist.push(dat);
-                    });
-                    setTickets(active);
-                    setHistory(hist);
+                // Real-time listener only for active tickets — avoids reading entire ticket history on load
+                const qPending = query(
+                    collection(db, "tickets"),
+                    where("status", "==", "PENDING"),
+                    orderBy("timestamp", "desc")
+                );
+                const unsubT = onSnapshot(qPending, (snap) => {
+                    setTickets(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date(),
+                        paidAt: d.data().paidAt?.toDate() || null
+                    })));
+                });
+
+                // One-time fetch for today's paid tickets (corte de caja / daily summary)
+                const todayStart = new Date();
+                todayStart.setHours(0, 0, 0, 0);
+                getDocs(query(
+                    collection(db, "tickets"),
+                    where("status", "==", "PAID"),
+                    where("paidAt", ">=", todayStart),
+                    orderBy("paidAt", "desc")
+                )).then(snap => {
+                    setHistory(snap.docs.map(d => ({
+                        id: d.id, ...d.data(),
+                        timestamp: d.data().timestamp?.toDate() || new Date(),
+                        paidAt: d.data().paidAt?.toDate() || null
+                    })));
                 });
                 const unsubD = onSnapshot(collection(db, "deductions"), (snap) => {
                     setDeductions(snap.docs.map(d => {
