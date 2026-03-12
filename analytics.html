@@ -25,7 +25,7 @@
 <body class="bg-slate-50">
     <div id="root"></div>
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo } from 'react';
+        import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         import {
             LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -35,7 +35,7 @@
         import {
             TrendingUp, Users, Calendar, Clock, DollarSign, Activity,
             Award, ArrowUpRight, ArrowDownRight, Filter, Wallet, ShieldAlert, PiggyBank, Lock,
-            Droplets, Percent, Briefcase, Car
+            Droplets, Percent, Briefcase, Car, ChevronLeft, ChevronRight
         } from 'lucide-react';
         import { initializeApp } from 'firebase/app';
         import { getFirestore, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
@@ -55,6 +55,121 @@
         // --- Helpers ---
         const formatCurrency = (val) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val);
         const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ef4444'];
+        const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+        const CustomDateRangePicker = ({ startDate, endDate, setStartDate, setEndDate }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            const [viewDate, setViewDate] = useState(new Date());
+            const [hoverDateStr, setHoverDateStr] = useState(null);
+            const pickerRef = useRef(null);
+
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+                        setIsOpen(false);
+                    }
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
+
+            const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const shortFmt = (dStr) => {
+                if (!dStr) return '';
+                const [y, m, d] = dStr.split('-');
+                return `${d} ${MONTHS[parseInt(m) - 1].substring(0, 3)} ${y}`;
+            };
+
+            const nextMonth = () => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1));
+            const prevMonth = () => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
+
+            const handleDayClick = (date) => {
+                if (!date) return;
+                const dateStr = fmt(date);
+                const time = date.getTime();
+                const sTime = startDate ? new Date(startDate + 'T00:00:00').getTime() : null;
+                const eTime = endDate ? new Date(endDate + 'T00:00:00').getTime() : null;
+
+                if (!sTime || (sTime && eTime) || time < sTime) {
+                    setStartDate(dateStr);
+                    setEndDate('');
+                } else {
+                    setEndDate(dateStr);
+                    setIsOpen(false);
+                }
+            };
+
+            const renderMonth = (offset) => {
+                const d = new Date(viewDate.getFullYear(), viewDate.getMonth() + offset, 1);
+                const year = d.getFullYear();
+                const month = d.getMonth();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const startDay = new Date(year, month, 1).getDay();
+
+                const days = Array(startDay).fill(null);
+                for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+
+                return (
+                    <div className="flex-1 w-64 select-none">
+                        <div className="text-center font-bold text-slate-700 mb-4">{MONTHS[month]} {year}</div>
+                        <div className="grid grid-cols-7 gap-y-1 text-center text-xs font-bold text-slate-400 mb-2">
+                            {['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'].map(day => <div key={day}>{day}</div>)}
+                        </div>
+                        <div className="grid grid-cols-7 gap-y-1 text-center text-sm">
+                            {days.map((date, i) => {
+                                if (!date) return <div key={i} className="h-9"></div>;
+                                const dStr = fmt(date);
+                                const dTime = date.getTime();
+                                const sTime = startDate ? new Date(startDate + 'T00:00:00').getTime() : null;
+                                const eTime = endDate ? new Date(endDate + 'T00:00:00').getTime() : null;
+                                const hTime = hoverDateStr ? new Date(hoverDateStr + 'T00:00:00').getTime() : null;
+
+                                const isStart = startDate === dStr;
+                                const isEnd = endDate === dStr;
+                                const isBetween = sTime && eTime && dTime > sTime && dTime < eTime;
+                                const isHoverBetween = sTime && !eTime && hTime && dTime > sTime && dTime <= hTime;
+
+                                const bgClass = isBetween || isHoverBetween ? 'bg-blue-50' : '';
+                                let roundedClass = '';
+                                if (isStart && (eTime || hTime)) roundedClass = 'rounded-l-full bg-blue-50';
+                                if (isEnd || (isHoverBetween && dStr === hoverDateStr)) roundedClass = 'rounded-r-full bg-blue-50';
+                                if (isStart && isEnd) roundedClass = 'rounded-full';
+
+                                return (
+                                    <div key={i} className={`h-9 flex items-center justify-center cursor-pointer ${roundedClass} ${bgClass}`}
+                                        onMouseEnter={() => setHoverDateStr(dStr)}
+                                        onClick={() => handleDayClick(date)}>
+                                        <div className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${isStart || isEnd ? 'bg-blue-600 text-white font-bold shadow-md' : 'text-slate-700 hover:bg-slate-200'}`}>
+                                            {date.getDate()}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="relative" ref={pickerRef}>
+                    <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm min-w-[220px] justify-between h-10">
+                        <div className="flex items-center gap-2 truncate">
+                            <Calendar size={16} className="text-blue-500 shrink-0" />
+                            {startDate ? `${shortFmt(startDate)} ${endDate ? '- ' + shortFmt(endDate) : '...'}` : 'Seleccionar fechas'}
+                        </div>
+                    </button>
+                    {isOpen && (
+                        <div className="absolute top-full right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 p-5 z-50 flex flex-col md:flex-row gap-8 origin-top-right transition-all">
+                            <div className="absolute top-4 left-4 cursor-pointer p-1.5 hover:bg-slate-100 text-slate-500 rounded-full transition-colors" onClick={prevMonth}><ChevronLeft size={20} /></div>
+                            <div className="absolute top-4 right-4 cursor-pointer p-1.5 hover:bg-slate-100 text-slate-500 rounded-full transition-colors" onClick={nextMonth}><ChevronRight size={20} /></div>
+                            {renderMonth(0)}
+                            <div className="hidden md:block w-px bg-slate-100"></div>
+                            <div className="hidden md:block">{renderMonth(1)}</div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
 
         const KPICard = ({ title, value, subtext, icon: Icon, trend, color = "blue" }) => {
             const colorClasses = {
@@ -99,10 +214,16 @@
             const [cashCounts, setCashCounts] = useState([]);
             const [employees, setEmployees] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [timeRange, setTimeRange] = useState('MONTH'); // Default to MONTH for better relevance
+
+            // Filter State
+            const [dateFilterType, setDateFilterType] = useState('MONTH');
+            const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+            const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+            const [startDate, setStartDate] = useState('');
+            const [endDate, setEndDate] = useState('');
 
             useEffect(() => {
-                if (!isAuthenticated) return; // Don't fetch data until logged in
+                if (!isAuthenticated) return;
 
                 const fetchData = async () => {
                     try {
@@ -130,6 +251,12 @@
                 fetchData();
             }, [isAuthenticated]);
 
+            const availableYears = useMemo(() => {
+                if (!tickets.length) return [new Date().getFullYear()];
+                const years = new Set(tickets.map(t => t.date.getFullYear()));
+                return Array.from(years).sort((a, b) => b - a);
+            }, [tickets]);
+
             const handleLogin = (e) => {
                 e.preventDefault();
                 if (passwordInput === 'covington521') {
@@ -143,11 +270,25 @@
             const processed = useMemo(() => {
                 if (tickets.length === 0) return null;
 
-                const now = new Date();
                 const filterDate = (item) => {
-                    if (timeRange === 'ALL') return true;
-                    if (timeRange === 'YEAR') return item.date.getFullYear() === now.getFullYear();
-                    if (timeRange === 'MONTH') return item.date.getMonth() === now.getMonth() && item.date.getFullYear() === now.getFullYear();
+                    if (dateFilterType === 'ALL') return true;
+                    if (dateFilterType === 'YEAR') return item.date.getFullYear() === selectedYear;
+                    if (dateFilterType === 'MONTH') return item.date.getMonth() === selectedMonth && item.date.getFullYear() === selectedYear;
+                    if (dateFilterType === 'CUSTOM') {
+                        const itemTime = item.date.getTime();
+                        let start = 0;
+                        let end = Infinity;
+
+                        if (startDate) {
+                            const [y, m, d] = startDate.split('-');
+                            start = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+                        }
+                        if (endDate) {
+                            const [y, m, d] = endDate.split('-');
+                            end = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+                        }
+                        return itemTime >= start && itemTime <= end;
+                    }
                     return true;
                 };
 
@@ -158,17 +299,12 @@
 
                 // --- 1. Financials ---
                 const totalRevenue = fTickets.reduce((acc, t) => acc + (t.price || 0), 0);
-
-                // 1. Labor: Washer Commissions (Direct per ticket)
                 const laborCommission = fTickets.reduce((acc, t) => acc + (t.commission || 0), 0);
 
-                // 2. Labor: Fixed Salaries (Estimate based on duration)
-                // MODIFIED: Filter first to get count, then sum
                 const salariedEmployees = employees.filter(e => e.active && (parseFloat(e.baseSalary) || 0) > 0);
                 const weeklyFixedLabor = salariedEmployees.reduce((acc, e) => acc + (parseFloat(e.baseSalary) || 0), 0);
                 const salariedCount = salariedEmployees.length;
 
-                // Filter for supervisors only for the Sales Commission calculation below
                 const activeSupervisors = employees.filter(e => e.active && (e.role === 'SUPERVISOR' || e.isSupervisor === true));
 
                 let daysInRange = 1;
@@ -180,13 +316,11 @@
                 }
                 const laborSalary = (weeklyFixedLabor / 7) * daysInRange;
 
-                // 3. Labor: Supervisor Sales Commissions (% of Total Revenue)
                 const supervisorSalesCommTotal = activeSupervisors.reduce((acc, emp) => {
                     const pct = parseFloat(emp.commissionPct) || parseFloat(emp.commissionPercent) || 0;
                     return acc + (totalRevenue * (pct / 100));
                 }, 0);
 
-                // 4. Labor: Bolero Commissions (% of Boleada Revenue)
                 let totalBoleadaRevenue = 0;
                 fTickets.forEach(t => {
                     if (t.extras && Array.isArray(t.extras)) {
@@ -204,10 +338,7 @@
                     return acc + (totalBoleadaRevenue * (pct / 100));
                 }, 0);
 
-                // Total Labor Cost
                 const totalLabor = laborCommission + laborSalary + supervisorSalesCommTotal + boleroCommTotal;
-
-                // Operating Expenses (Non-Labor)
                 const operationalExp = fExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
                 const adminExp = fBizExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
                 const totalOpExpenses = operationalExp + adminExp;
@@ -215,12 +346,10 @@
                 const totalExpenses = totalLabor + totalOpExpenses;
                 const netProfit = totalRevenue - totalExpenses;
 
-                // Percentages
                 const profitMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
                 const totalLaborPct = totalRevenue > 0 ? (totalLabor / totalRevenue) * 100 : 0;
                 const totalOpExpensesPct = totalRevenue > 0 ? (totalOpExpenses / totalRevenue) * 100 : 0;
 
-                // Detailed Labor Percentages
                 const laborCommPct = totalRevenue > 0 ? (laborCommission / totalRevenue) * 100 : 0;
                 const laborSupCommPct = totalRevenue > 0 ? (supervisorSalesCommTotal / totalRevenue) * 100 : 0;
                 const laborBoleroCommPct = totalRevenue > 0 ? (boleroCommTotal / totalRevenue) * 100 : 0;
@@ -229,11 +358,7 @@
                 const avgTicket = totalRevenue / (fTickets.length || 1);
                 const avgTicketsPerDay = fTickets.length > 0 ? fTickets.length / daysInRange : 0;
 
-                // --- NEW: Armor All Analysis ---
-                // Regex to catch "armorall", "armor all", "armor-all", case insensitive
                 const armorRegex = /armor\s*-?all/i;
-
-                // Scan both operational and business expenses just in case it was categorized wrong
                 const allExpensesForPeriod = [...fExpenses, ...fBizExpenses];
 
                 const armorAllExpenses = allExpensesForPeriod.filter(e => {
@@ -244,14 +369,12 @@
                 const totalArmorAllCost = armorAllExpenses.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
                 const armorAllPerWash = fTickets.length > 0 ? totalArmorAllCost / fTickets.length : 0;
 
-                // --- Top 10 Gastos ---
                 const topGastos = allExpensesForPeriod
                     .sort((a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0))
                     .slice(0, 10);
 
                 // --- 2. Trends (Monthly) ---
                 const monthlyStats = {};
-                // Helper to init month object
                 const getMonthObj = (date) => {
                     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                     if (!monthlyStats[key]) monthlyStats[key] = { name: key, revenue: 0, expenses: 0, profit: 0, labor: 0 };
@@ -262,14 +385,13 @@
                 fExpenses.forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
                 fBizExpenses.forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
 
-                // Calculate profit and margin per month
                 Object.values(monthlyStats).forEach(m => {
                     m.profit = m.revenue - m.expenses - m.labor;
                     m.profitMargin = m.revenue > 0 ? (m.profit / m.revenue) * 100 : 0;
                 });
                 const chartFinancials = Object.values(monthlyStats).sort((a, b) => a.name.localeCompare(b.name));
 
-                // --- Daily Trends (Tickets, Venta, Pinos, Snacks) ---
+                // --- Daily Trends ---
                 const dailyStats = {};
                 fTickets.forEach(t => {
                     const dStr = new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: 'short' }).format(t.date);
@@ -332,9 +454,8 @@
                     chartDailyTrends, topGastos
                 };
 
-            }, [tickets, expenses, bizExpenses, cashCounts, employees, timeRange]);
+            }, [tickets, expenses, bizExpenses, cashCounts, employees, dateFilterType, selectedMonth, selectedYear, startDate, endDate]);
 
-            // Authentication View
             if (!isAuthenticated) {
                 return (
                     <div className="flex h-screen items-center justify-center bg-slate-100 p-4">
@@ -368,24 +489,93 @@
 
             if (!processed) return <div className="p-10 text-center">No hay datos disponibles.</div>;
 
+            const filterOptions = [
+                { id: 'MONTH', label: 'Mes' },
+                { id: 'YEAR', label: 'Año' },
+                { id: 'CUSTOM', label: 'Rango' },
+                { id: 'ALL', label: 'Todo' }
+            ];
+
             return (
                 <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
-                    <header className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-2">
                                 <Activity className="text-blue-600" /> Dashboard Gerencial
                             </h1>
                         </div>
-                        <div className="bg-white p-1 rounded-lg border flex shadow-sm">
-                            {['ALL', 'YEAR', 'MONTH'].map(range => (
-                                <button
-                                    key={range}
-                                    onClick={() => setTimeRange(range)}
-                                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${timeRange === range ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
-                                >
-                                    {range === 'ALL' ? 'Histórico' : (range === 'YEAR' ? 'Este Año' : 'Este Mes')}
-                                </button>
-                            ))}
+
+                        {/* THEMED DATE SELECTION MENU */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm w-full md:w-auto">
+
+                            {/* Toggle Pills */}
+                            <div className="flex bg-slate-100 p-1 rounded-lg w-full sm:w-auto">
+                                {filterOptions.map(option => (
+                                    <button
+                                        key={option.id}
+                                        onClick={() => setDateFilterType(option.id)}
+                                        className={`flex-1 sm:flex-none px-3 py-1.5 text-sm font-semibold rounded-md transition-all ${dateFilterType === option.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}
+                                    >
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Dynamic Filter Inputs */}
+                            <div className="flex items-center gap-2 px-1 w-full sm:w-auto">
+                                {dateFilterType === 'MONTH' && (
+                                    <>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedMonth}
+                                                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                                                className="appearance-none bg-white border border-slate-200 text-slate-700 py-2 pl-3 pr-8 rounded-lg text-sm font-semibold hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer w-full h-10"
+                                            >
+                                                {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                            </select>
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                                            </div>
+                                        </div>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedYear}
+                                                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                                                className="appearance-none bg-white border border-slate-200 text-slate-700 py-2 pl-3 pr-8 rounded-lg text-sm font-semibold hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer w-full h-10"
+                                            >
+                                                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                                            </select>
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {dateFilterType === 'YEAR' && (
+                                    <div className="relative w-full sm:w-auto">
+                                        <select
+                                            value={selectedYear}
+                                            onChange={(e) => setSelectedYear(Number(e.target.value))}
+                                            className="appearance-none bg-white border border-slate-200 text-slate-700 py-2 pl-3 pr-8 rounded-lg text-sm font-semibold hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer w-full sm:w-32 h-10"
+                                        >
+                                            {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {dateFilterType === 'CUSTOM' && (
+                                    <CustomDateRangePicker
+                                        startDate={startDate}
+                                        endDate={endDate}
+                                        setStartDate={setStartDate}
+                                        setEndDate={setEndDate}
+                                    />
+                                )}
+                            </div>
                         </div>
                     </header>
 
@@ -481,8 +671,8 @@
                             </div>
                         </div>
 
-                        {/* MONTHLY TRENDS - ONLY SHOW IN ALL OR YEAR VIEW */}
-                        {timeRange !== 'MONTH' && (
+                        {/* MONTHLY TRENDS - ONLY SHOW IF NOT A SINGLE MONTH FILTER */}
+                        {dateFilterType !== 'MONTH' && (
                             <div>
                                 <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Calendar size={20} /> Evolución Mensual</h2>
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
