@@ -2800,7 +2800,7 @@ Firma: __________________
                                         <th className="p-3">Fecha</th>
                                         <th className="p-3">Primer Arqueo</th>
                                         <th className="p-3">Último Arqueo</th>
-                                        <th className="p-3 text-right">Total en Caja (MXN)</th>
+                                        <th className="p-3 text-right">Dif Total (MXN)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2828,13 +2828,14 @@ Firma: __________________
                                             const dayLabel = `${dayNames[dateObj.getDay()]} ${dateStr}`;
                                             const firstArqueo = dayArqueos.length > 0 ? dayArqueos[0].timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
                                             const lastArqueo = dayArqueos.length > 1 ? dayArqueos[dayArqueos.length - 1].timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (dayArqueos.length === 1 ? firstArqueo : '—');
-                                            const isPositive = totals.cashNetMxn >= 0;
+                                            const totalDiffMxn = dayArqueos.reduce((sum, c) => sum + (c.diffMxn || 0) + ((c.diffUsd || 0) * (c.exchangeRate || exRate)), 0);
+                                            const isPositive = totalDiffMxn >= 0;
                                             return (
                                                 <tr key={dateStr} className="border-t hover:bg-gray-50">
                                                     <td className="p-3 font-semibold text-gray-700">{dayLabel}</td>
                                                     <td className="p-3 text-gray-500">{firstArqueo}</td>
                                                     <td className="p-3 text-gray-500">{lastArqueo}</td>
-                                                    <td className={`p-3 text-right font-black ${isPositive ? 'text-green-700' : 'text-red-700'}`}>{formatCurrency(totals.cashNetMxn)}</td>
+                                                    <td className={`p-3 text-right font-black ${isPositive ? 'text-green-700' : 'text-red-700'}`}>{formatCurrency(totalDiffMxn)}</td>
                                                 </tr>
                                             );
                                         });
