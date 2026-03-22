@@ -1039,7 +1039,7 @@ Firma: __________________
                 const qPending = query(
                     collection(db, "tickets"),
                     where("status", "==", "PENDING"),
-                    orderBy("timestamp", "desc")
+                    orderBy("timestamp", "asc")
                 );
                 const unsubT = onSnapshot(qPending, (snap) => {
                     setTickets(snap.docs.map(d => ({
@@ -1142,7 +1142,8 @@ Firma: __________________
                     const totals = calculateTicketTotals(serviceId, sizeId, data.extras, prices, commissions, snacks, snackPrice);
                     const ticketData = {
                         ...data, price: totals.totalPrice, commission: totals.totalCommission, basePrice: totals.basePrice,
-                        snackCount: snacks, status: 'PENDING', timestamp: serverTimestamp()
+                        snackCount: snacks, status: 'PENDING',
+                        ...(editingTicket ? {} : { timestamp: serverTimestamp() })
                     };
 
                     if (editingTicket) {
