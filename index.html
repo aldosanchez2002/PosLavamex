@@ -2826,9 +2826,14 @@ Firma: __________________
                                             const totals = computeCorteTotals(dayTickets, dayExpenses, dayDrops, dayCashIns, dayStart, getOpeningCash, exRate);
                                             const dateObj = new Date(dateStr + 'T12:00:00');
                                             const dayLabel = `${dayNames[dateObj.getDay()]} ${dateStr}`;
-                                            const firstArqueo = dayArqueos.length > 0 ? dayArqueos[0].timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
-                                            const lastArqueo = dayArqueos.length > 1 ? dayArqueos[dayArqueos.length - 1].timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (dayArqueos.length === 1 ? firstArqueo : '—');
-                                            const totalDiffMxn = dayArqueos.reduce((sum, c) => sum + (c.diffMxn || 0) + ((c.diffUsd || 0) * (c.exchangeRate || exRate)), 0);
+                                            const firstArqueoObj = dayArqueos.length > 0 ? dayArqueos[0] : null;
+                                            const lastArqueoObj = dayArqueos.length > 0 ? dayArqueos[dayArqueos.length - 1] : null;
+                                            const firstArqueo = firstArqueoObj ? firstArqueoObj.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+                                            const lastArqueo = lastArqueoObj ? lastArqueoObj.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+                                            const finalRate = lastArqueoObj ? (lastArqueoObj.exchangeRate || exRate) : exRate;
+                                            const totalDiffMxn = lastArqueoObj
+                                                ? (lastArqueoObj.declaredMxn - totals.cashNetMxn) + ((lastArqueoObj.declaredUsd - totals.cashNetUsd) * finalRate)
+                                                : 0;
                                             const isPositive = totalDiffMxn >= 0;
                                             return (
                                                 <tr key={dateStr} className="border-t hover:bg-gray-50">
