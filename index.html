@@ -2807,10 +2807,12 @@ Firma: __________________
                                     {(() => {
                                         const days = [];
                                         const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                                        const todayStr = getLocalDateStr();
                                         for (let i = 1; i <= 14; i++) {
                                             const d = new Date();
                                             d.setDate(d.getDate() - i);
-                                            days.push(getLocalDateStr(d));
+                                            const ds = getLocalDateStr(d);
+                                            if (ds !== todayStr) days.push(ds);
                                         }
                                         if (!historialData) return null;
                                         return days.map(dateStr => {
