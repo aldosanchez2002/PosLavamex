@@ -975,14 +975,60 @@ Firma: __________________
 
                 const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-                const head = [['Empleado', ...days.map(d => String(d))]];
+                const head = [['Empleado', ...days.map(d => String(d)), 'Total']];
                 const body = employees.map(emp => {
                     const row = [emp.name];
+                    let total = 0;
                     days.forEach(day => {
                         const dateStr = `${monthLabel}-${String(day).padStart(2, '0')}`;
                         const isPresent = attendanceData[dateStr]?.[emp.name];
+                        if (isPresent) total++;
                         row.push(isPresent ? 'X' : '');
                     });
+                    row.push(String(total));
+                    return row;
+                });
+
+                const totalColIdx = days.length + 1;
+                autoTable(doc, {
+                    startY: 30,
+                    head: head,
+                    body: body,
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 1, halign: 'center' },
+                    columnStyles: {
+                        0: { halign: 'left', fontStyle: 'bold', cellWidth: 40 },
+                        [totalColIdx]: { fontStyle: 'bold', fillColor: [220, 234, 255] }
+                    },
+                    headStyles: { fillColor: [44, 62, 80] }
+                });
+
+                doc.save(`Asistencia_${monthLabel}.pdf`);
+            },
+
+            generateAttendanceYearly: (yearLabel, employees, attendanceData) => {
+                const doc = new jsPDF({ orientation: 'landscape' });
+
+                doc.setFontSize(18);
+                doc.text(`REPORTE DE ASISTENCIA ANUAL: ${yearLabel}`, 14, 20);
+
+                const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+
+                const head = [['Empleado', ...monthNames, 'Total']];
+                const body = employees.map(emp => {
+                    const row = [emp.name];
+                    let yearTotal = 0;
+                    months.forEach(m => {
+                        const monthPrefix = `${yearLabel}-${m}`;
+                        let monthTotal = 0;
+                        Object.entries(attendanceData).forEach(([dateKey, records]) => {
+                            if (dateKey.startsWith(monthPrefix) && records[emp.name]) monthTotal++;
+                        });
+                        yearTotal += monthTotal;
+                        row.push(monthTotal > 0 ? String(monthTotal) : '');
+                    });
+                    row.push(String(yearTotal));
                     return row;
                 });
 
@@ -991,12 +1037,15 @@ Firma: __________________
                     head: head,
                     body: body,
                     theme: 'grid',
-                    styles: { fontSize: 8, cellPadding: 1, halign: 'center' },
-                    columnStyles: { 0: { halign: 'left', fontStyle: 'bold', cellWidth: 40 } },
+                    styles: { fontSize: 9, cellPadding: 2, halign: 'center' },
+                    columnStyles: {
+                        0: { halign: 'left', fontStyle: 'bold', cellWidth: 45 },
+                        13: { fontStyle: 'bold', fillColor: [220, 234, 255] }
+                    },
                     headStyles: { fillColor: [44, 62, 80] }
                 });
 
-                doc.save(`Asistencia_${monthLabel}.pdf`);
+                doc.save(`Asistencia_Anual_${yearLabel}.pdf`);
             }
         };
 
@@ -3141,24 +3190,48 @@ Firma: __________________
         };
 
         const AdminAsistencia = () => {
-            const { db, employees } = useContext(AppContext);
+            const { db } = useContext(AppContext);
             const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
+            const [reportYear, setReportYear] = useState(String(new Date().getFullYear()));
+
+            const fetchAllEmployees = async () => {
+                const snap = await getDocs(collection(db, "employees"));
+                return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            };
 
             const generateAttendanceReport = async () => {
+                const allEmployees = await fetchAllEmployees();
                 const q = query(collection(db, "attendance"), where("month", "==", reportMonth));
                 const snapshot = await getDocs(q);
                 const attendanceData = {};
                 snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
 
                 const daysInMonth = new Date(reportMonth.split('-')[0], reportMonth.split('-')[1], 0).getDate();
-                PdfService.generateAttendance(reportMonth, employees, attendanceData, daysInMonth);
+                PdfService.generateAttendance(reportMonth, allEmployees, attendanceData, daysInMonth);
+            };
+
+            const generateYearlyReport = async () => {
+                const allEmployees = await fetchAllEmployees();
+                const q = query(
+                    collection(db, "attendance"),
+                    where("month", ">=", `${reportYear}-01`),
+                    where("month", "<=", `${reportYear}-12`)
+                );
+                const snapshot = await getDocs(q);
+                const attendanceData = {};
+                snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
+                PdfService.generateAttendanceYearly(reportYear, allEmployees, attendanceData);
             };
 
             return (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
                     <h3 className="font-bold mb-4 text-gray-800 flex items-center"><Calendar className="mr-2" /> Reporte de Asistencia</h3>
                     <div className="mb-4"><label className="block text-sm font-bold text-gray-600 mb-2">Mes</label><input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-                    <Button onClick={generateAttendanceReport} className="w-full">Descargar PDF Mensual</Button>
+                    <Button onClick={generateAttendanceReport} className="w-full mb-6">Descargar PDF Mensual</Button>
+                    <div className="border-t border-gray-200 pt-4">
+                        <div className="mb-4"><label className="block text-sm font-bold text-gray-600 mb-2">Año</label><input type="number" value={reportYear} onChange={e => setReportYear(e.target.value)} min="2020" max="2099" className="border p-3 rounded-lg w-full text-lg" /></div>
+                        <Button onClick={generateYearlyReport} className="w-full">Descargar PDF Anual</Button>
+                    </div>
                 </div>
             );
         };
