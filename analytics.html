@@ -440,7 +440,8 @@
                 const chartEmpRevenue = Object.values(empStats).sort((a, b) => b.commission - a.commission).slice(0, 10);
 
                 // --- 5. Peak Hours ---
-                const hourlyBuckets = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}h`, tickets: 0 }));
+                const fmtHour = (h) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
+                const hourlyBuckets = Array.from({ length: 24 }, (_, h) => ({ hour: fmtHour(h), tickets: 0 }));
                 fTickets.forEach(t => { hourlyBuckets[t.date.getHours()].tickets += 1; });
                 const chartHourly = hourlyBuckets.slice(6, 21);
 
