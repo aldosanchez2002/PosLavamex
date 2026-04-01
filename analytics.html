@@ -30,7 +30,7 @@
         import {
             LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
             XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
-            ReferenceLine, ComposedChart
+            ReferenceLine, ComposedChart, ScatterChart, Scatter
         } from 'recharts';
         import {
             TrendingUp, Users, Calendar, Clock, DollarSign, Activity,
@@ -213,6 +213,7 @@
             const [bizExpenses, setBizExpenses] = useState([]);
             const [cashCounts, setCashCounts] = useState([]);
             const [employees, setEmployees] = useState([]);
+            const [attendance, setAttendance] = useState([]);
             const [loading, setLoading] = useState(true);
 
             // Filter State
@@ -232,14 +233,16 @@
                         const bizExpPromise = getDocs(query(collection(db, "business_expenses"), orderBy("timestamp", "desc")));
                         const cashCountsPromise = getDocs(query(collection(db, "cash_counts"), orderBy("timestamp", "desc")));
                         const empPromise = getDocs(query(collection(db, "employees")));
+                        const attendancePromise = getDocs(collection(db, "attendance"));
 
-                        const [tSnap, eSnap, beSnap, ccSnap, empSnap] = await Promise.all([ticketsPromise, expensesPromise, bizExpPromise, cashCountsPromise, empPromise]);
+                        const [tSnap, eSnap, beSnap, ccSnap, empSnap, attSnap] = await Promise.all([ticketsPromise, expensesPromise, bizExpPromise, cashCountsPromise, empPromise, attendancePromise]);
 
                         setTickets(tSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })).filter(t => t.status === 'PAID' || t.status === 'ARCHIVED'));
                         setExpenses(eSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })).filter(e => e.status === 'APPROVED'));
                         setBizExpenses(beSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })));
                         setCashCounts(ccSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })));
                         setEmployees(empSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        setAttendance(attSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
                     } catch (err) {
                         console.error(err);
@@ -423,25 +426,72 @@
                     { name: 'Gastos Admin', value: adminExp }
                 ].filter(i => i.value > 0);
 
-                // --- 4. Employee Performance ---
+                // --- 4. Employee Revenue Performance ---
                 const empStats = {};
                 fTickets.forEach(t => {
                     const washers = t.washers || (t.washer ? [t.washer] : []);
+                    const commShare = (t.commission || 0) / Math.max(washers.length, 1);
                     washers.forEach(w => {
-                        if (!empStats[w]) empStats[w] = { name: w, tickets: 0 };
+                        if (!empStats[w]) empStats[w] = { name: w, tickets: 0, commission: 0 };
                         empStats[w].tickets += 1;
+                        empStats[w].commission += commShare;
                     });
                 });
-                const chartEmployees = Object.values(empStats).sort((a, b) => b.tickets - a.tickets).slice(0, 10);
+                const chartEmpRevenue = Object.values(empStats).sort((a, b) => b.commission - a.commission).slice(0, 10);
 
-                // --- 7. Service Popularity ---
-                const serviceStats = {};
+                // --- 5. Peak Hours ---
+                const fmtHour = (h) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
+                const getJuarezHour = (date) => {
+                    const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Ciudad_Juarez', hour: 'numeric', hour12: false }).format(date), 10);
+                    return isNaN(h) || h === 24 ? 0 : h;
+                };
+                const hourlyBuckets = Array.from({ length: 24 }, (_, h) => ({ hour: fmtHour(h), tickets: 0 }));
+                fTickets.forEach(t => { hourlyBuckets[getJuarezHour(t.date)].tickets += 1; });
+                const chartHourly = hourlyBuckets.slice(7, 20);
+
+                // --- 6. Day-of-Week Pattern ---
+                const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                const dowBuckets = Array.from({ length: 7 }, (_, i) => ({ day: dayNames[i], tickets: 0, revenue: 0 }));
                 fTickets.forEach(t => {
-                    const svcName = t.service?.label || 'Solo Extras';
-                    if (!serviceStats[svcName]) serviceStats[svcName] = { name: svcName, value: 0 };
-                    serviceStats[svcName].value += 1;
+                    const d = t.date.getDay();
+                    dowBuckets[d].tickets += 1;
+                    dowBuckets[d].revenue += (t.price || 0);
                 });
-                const chartServices = Object.values(serviceStats).sort((a, b) => b.value - a.value);
+                const chartDOW = dowBuckets;
+
+                // --- 7. Attendance data ---
+                const attendanceByEmployee = {};
+                const dailyRevMap = {};
+                fTickets.forEach(t => {
+                    const key = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}-${String(t.date.getDate()).padStart(2, '0')}`;
+                    dailyRevMap[key] = (dailyRevMap[key] || 0) + (t.price || 0);
+                });
+
+                // Revenue vs staff per day (scatter: each point = one day)
+                const chartRevenueVsStaff = [];
+                attendance.forEach(dayRecord => {
+                    const dateObj = new Date((dayRecord.date || dayRecord.id) + 'T12:00:00');
+                    if (!filterDate({ date: dateObj })) return;
+                    const dateKey = dayRecord.date || dayRecord.id;
+                    const empCount = Object.values(dayRecord.records || {}).filter(Boolean).length;
+                    Object.entries(dayRecord.records || {}).forEach(([empName, present]) => {
+                        if (present) attendanceByEmployee[empName] = (attendanceByEmployee[empName] || 0) + 1;
+                    });
+                    const revenue = dailyRevMap[dateKey] || 0;
+                    if (empCount > 0 || revenue > 0) {
+                        chartRevenueVsStaff.push({ employees: empCount, revenue: Math.round(revenue), date: dateKey });
+                    }
+                });
+
+                // Commission per day worked (efficiency ranking)
+                const chartCommPerDay = Object.entries(empStats)
+                    .map(([name, stats]) => {
+                        const days = attendanceByEmployee[name] || 0;
+                        return { name, commPerDay: days > 0 ? Math.round(stats.commission / days) : 0, days };
+                    })
+                    .filter(e => e.days > 0)
+                    .sort((a, b) => b.commPerDay - a.commPerDay)
+                    .slice(0, 10);
 
                 return {
                     totalRevenue, totalExpenses, netProfit, profitMarginPct, avgTicket, ticketCount: fTickets.length,
@@ -450,11 +500,12 @@
                     laborCommPct, laborSalaryPct, laborSupCommPct, laborBoleroCommPct, totalLaborPct,
                     totalOpExpenses, totalOpExpensesPct,
                     armorAllPerWash, totalArmorAllCost, salariedCount,
-                    chartFinancials, chartExpenses, chartEmployees, chartServices,
-                    chartDailyTrends, topGastos
+                    chartFinancials, chartExpenses, chartEmpRevenue,
+                    chartRevenueVsStaff, chartCommPerDay,
+                    chartHourly, chartDOW, chartDailyTrends, topGastos
                 };
 
-            }, [tickets, expenses, bizExpenses, cashCounts, employees, dateFilterType, selectedMonth, selectedYear, startDate, endDate]);
+            }, [tickets, expenses, bizExpenses, cashCounts, employees, attendance, dateFilterType, selectedMonth, selectedYear, startDate, endDate]);
 
             if (!isAuthenticated) {
                 return (
@@ -724,10 +775,10 @@
                                     <PieChart>
                                         <Pie
                                             data={processed.chartExpenses}
-                                            cx="40%"
-                                            cy="50%"
-                                            innerRadius={80}
-                                            outerRadius={110}
+                                            cx="50%"
+                                            cy="40%"
+                                            innerRadius="30%"
+                                            outerRadius="55%"
                                             paddingAngle={5}
                                             dataKey="value"
                                         >
@@ -736,7 +787,7 @@
                                             ))}
                                         </Pie>
                                         <Tooltip formatter={(val) => formatCurrency(val)} />
-                                        <Legend style={{ fontSize: '12px' }} layout="vertical" verticalAlign="middle" align="right" />
+                                        <Legend style={{ fontSize: '11px' }} layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: '8px' }} />
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
@@ -822,31 +873,90 @@
                         </div>
                     </div>
 
-                    {/* SECTION 3: STAFF & PRODUCT */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="bg-white p-6 rounded-xl shadow-sm border h-96">
-                            <h3 className="font-bold text-slate-700 mb-4">Top Empleados (Vehículos Lavados)</h3>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={processed.chartEmployees} layout="vertical" margin={{ left: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                                    <XAxis type="number" />
-                                    <YAxis dataKey="name" type="category" width={150} style={{ fontSize: '11px', fontWeight: 'bold' }} />
-                                    <Tooltip />
-                                    <Bar dataKey="tickets" fill="#6366f1" radius={[0, 4, 4, 0]} name="Vehículos" barSize={20} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                    {/* SECTION 3: SCHEDULING */}
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Clock size={20} /> Patrones de Horario</h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
+                                <h3 className="font-bold text-slate-700 mb-4">Autos por Hora del Día</h3>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={processed.chartHourly}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="hour" style={{ fontSize: '11px' }} />
+                                        <YAxis allowDecimals={false} />
+                                        <Tooltip />
+                                        <Bar dataKey="tickets" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Autos" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
+                                <h3 className="font-bold text-slate-700 mb-4">Autos por Día de la Semana</h3>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={processed.chartDOW}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="day" style={{ fontSize: '12px' }} />
+                                        <YAxis allowDecimals={false} />
+                                        <Tooltip />
+                                        <Bar dataKey="tickets" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Autos" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECTION 4: STAFF */}
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Users size={20} /> Desempeño del Personal</h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-96">
+                                <h3 className="font-bold text-slate-700 mb-4">Comisión Total por Empleado</h3>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={processed.chartEmpRevenue} layout="vertical" margin={{ left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                                        <XAxis type="number" tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} style={{ fontSize: '10px' }} />
+                                        <YAxis dataKey="name" type="category" width={150} style={{ fontSize: '11px', fontWeight: 'bold' }} />
+                                        <Tooltip formatter={(val) => formatCurrency(val)} />
+                                        <Bar dataKey="commission" fill="#6366f1" radius={[0, 4, 4, 0]} name="Comisión" barSize={20} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-96">
+                                <h3 className="font-bold text-slate-700 mb-1">Comisión Promedio por Día Trabajado</h3>
+                                <p className="text-xs text-slate-400 mb-3">Cuánto gana cada empleado en promedio por cada día que asiste. Mide eficiencia, no solo volumen.</p>
+                                <ResponsiveContainer width="100%" height="85%">
+                                    <BarChart data={processed.chartCommPerDay} layout="vertical" margin={{ left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                                        <XAxis type="number" tickFormatter={(val) => `$${(val / 1000).toFixed(1)}k`} style={{ fontSize: '10px' }} />
+                                        <YAxis dataKey="name" type="category" width={150} style={{ fontSize: '11px', fontWeight: 'bold' }} />
+                                        <Tooltip formatter={(val, name) => name === 'Comisión/día' ? formatCurrency(val) : val} labelFormatter={(label) => label} />
+                                        <Bar dataKey="commPerDay" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Comisión/día" barSize={20} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
 
                         <div className="bg-white p-6 rounded-xl shadow-sm border h-96">
-                            <h3 className="font-bold text-slate-700 mb-4">Servicios Más Vendidos</h3>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={processed.chartServices} margin={{ bottom: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="name" style={{ fontSize: '10px' }} interval={0} angle={-15} textAnchor="end" />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Bar dataKey="value" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Cantidad" />
-                                </BarChart>
+                            <h3 className="font-bold text-slate-700 mb-1">Impacto de Asistencia en Ventas del Día</h3>
+                            <p className="text-xs text-slate-400 mb-4">Cada punto es un día. Eje X = empleados presentes ese día. Eje Y = venta total. Tendencia hacia arriba = más personal genera más ingresos.</p>
+                            <ResponsiveContainer width="100%" height="80%">
+                                <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis type="number" dataKey="employees" name="Empleados" allowDecimals={false} label={{ value: 'Empleados presentes', position: 'insideBottom', offset: -12, style: { fontSize: '11px', fill: '#94a3b8' } }} style={{ fontSize: '11px' }} />
+                                    <YAxis type="number" dataKey="revenue" name="Venta" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} style={{ fontSize: '10px' }} />
+                                    <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ payload }) => {
+                                        if (!payload || !payload.length) return null;
+                                        const d = payload[0].payload;
+                                        return (
+                                            <div className="bg-white border border-slate-200 rounded-lg p-3 shadow text-sm">
+                                                <div className="font-bold text-slate-700">{d.date}</div>
+                                                <div className="text-slate-500">{d.employees} empleados</div>
+                                                <div className="text-blue-600 font-bold">{formatCurrency(d.revenue)}</div>
+                                            </div>
+                                        );
+                                    }} />
+                                    <Scatter data={processed.chartRevenueVsStaff} fill="#3b82f6" opacity={0.65} />
+                                </ScatterChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
