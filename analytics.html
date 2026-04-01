@@ -441,9 +441,13 @@
 
                 // --- 5. Peak Hours ---
                 const fmtHour = (h) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
+                const getJuarezHour = (date) => {
+                    const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Ciudad_Juarez', hour: 'numeric', hour12: false }).format(date), 10);
+                    return isNaN(h) || h === 24 ? 0 : h;
+                };
                 const hourlyBuckets = Array.from({ length: 24 }, (_, h) => ({ hour: fmtHour(h), tickets: 0 }));
-                fTickets.forEach(t => { hourlyBuckets[t.date.getHours()].tickets += 1; });
-                const chartHourly = hourlyBuckets.slice(6, 21);
+                fTickets.forEach(t => { hourlyBuckets[getJuarezHour(t.date)].tickets += 1; });
+                const chartHourly = hourlyBuckets.slice(7, 20);
 
                 // --- 6. Day-of-Week Pattern ---
                 const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
