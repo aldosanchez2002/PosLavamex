@@ -2008,25 +2008,29 @@ Firma: __________________
                     timestamp: new Date()
                 });
 
-                const todayStr = getLocalDateStr();
-                const hasTodayArqueos = cashCounts.some(c => getLocalDateStr(c.timestamp) === todayStr);
+                if (role === 'ADMIN') {
+                    const todayStr = getLocalDateStr();
+                    const hasTodayArqueos = cashCounts.some(c => getLocalDateStr(c.timestamp) === todayStr);
 
-                if (!hasTodayArqueos) {
-                    // This is the first arqueo of today — check for overnight descuadre
-                    const prevArqueos = cashCounts
-                        .filter(c => getLocalDateStr(c.timestamp) < todayStr)
-                        .sort((a, b) => b.timestamp - a.timestamp);
+                    if (!hasTodayArqueos) {
+                        // This is the first arqueo of today — check for overnight descuadre
+                        const prevArqueos = cashCounts
+                            .filter(c => getLocalDateStr(c.timestamp) < todayStr)
+                            .sort((a, b) => b.timestamp - a.timestamp);
 
-                    if (prevArqueos.length > 0) {
-                        const lastPrevDay = getLocalDateStr(prevArqueos[0].timestamp);
-                        const prevClosing = prevArqueos[0];
-                        const nightDiffMxn = decMxnVal - (prevClosing.declaredMxn || 0);
-                        const nightDiffUsd = decUsdVal - (prevClosing.declaredUsd || 0);
+                        if (prevArqueos.length > 0) {
+                            const lastPrevDay = getLocalDateStr(prevArqueos[0].timestamp);
+                            const prevClosing = prevArqueos[0];
+                            const nightDiffMxn = decMxnVal - (prevClosing.declaredMxn || 0);
+                            const nightDiffUsd = decUsdVal - (prevClosing.declaredUsd || 0);
 
-                        if (Math.abs(nightDiffMxn) > 1 || Math.abs(nightDiffUsd) > 0.1) {
-                            alert(`⚠️ DESCUADRE NOCTURNO DETECTADO.\n\nEl saldo no coincide con el cierre del ${lastPrevDay}.\n\nCierre anterior: MXN ${formatCurrency(prevClosing.declaredMxn)} / USD $${(prevClosing.declaredUsd || 0).toFixed(2)}\nApertura hoy:    MXN ${formatCurrency(decMxnVal)} / USD $${decUsdVal.toFixed(2)}\nDiferencia:      MXN ${formatCurrency(nightDiffMxn)} / USD $${nightDiffUsd.toFixed(2)}`);
+                            if (Math.abs(nightDiffMxn) > 1 || Math.abs(nightDiffUsd) > 0.1) {
+                                alert(`⚠️ DESCUADRE NOCTURNO DETECTADO.\n\nEl saldo no coincide con el cierre del ${lastPrevDay}.\n\nCierre anterior: MXN ${formatCurrency(prevClosing.declaredMxn)} / USD $${(prevClosing.declaredUsd || 0).toFixed(2)}\nApertura hoy:    MXN ${formatCurrency(decMxnVal)} / USD $${decUsdVal.toFixed(2)}\nDiferencia:      MXN ${formatCurrency(nightDiffMxn)} / USD $${nightDiffUsd.toFixed(2)}`);
+                            } else {
+                                alert("✅ Apertura correcta. El saldo coincide con el cierre anterior.");
+                            }
                         } else {
-                            alert("✅ Apertura correcta. El saldo coincide con el cierre anterior.");
+                            alert("✅ Arqueo registrado.");
                         }
                     } else {
                         alert("✅ Arqueo registrado.");
