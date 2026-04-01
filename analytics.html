@@ -771,10 +771,10 @@
                                     <PieChart>
                                         <Pie
                                             data={processed.chartExpenses}
-                                            cx="40%"
-                                            cy="50%"
-                                            innerRadius={80}
-                                            outerRadius={110}
+                                            cx="50%"
+                                            cy="40%"
+                                            innerRadius="30%"
+                                            outerRadius="55%"
                                             paddingAngle={5}
                                             dataKey="value"
                                         >
@@ -783,7 +783,7 @@
                                             ))}
                                         </Pie>
                                         <Tooltip formatter={(val) => formatCurrency(val)} />
-                                        <Legend style={{ fontSize: '12px' }} layout="vertical" verticalAlign="middle" align="right" />
+                                        <Legend style={{ fontSize: '11px' }} layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: '8px' }} />
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
