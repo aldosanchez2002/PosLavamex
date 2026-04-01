@@ -1049,7 +1049,10 @@ Firma: __________________
 
         const AppProvider = ({ children }) => {
             const [role, setRole] = useState(() => localStorage.getItem('lavamex_role') || null);
-            const [view, setView] = useState('GREETER');
+            const [view, setView] = useState(() => {
+                const savedRole = localStorage.getItem('lavamex_role');
+                return savedRole === 'ADMIN' ? 'ADMIN' : 'GREETER';
+            });
             const [employees, setEmployees] = useState([]);
             const [tickets, setTickets] = useState([]);
             const [history, setHistory] = useState([]);
