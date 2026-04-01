@@ -447,7 +447,7 @@
                 };
                 const hourlyBuckets = Array.from({ length: 24 }, (_, h) => ({ hour: fmtHour(h), tickets: 0 }));
                 fTickets.forEach(t => { hourlyBuckets[getJuarezHour(t.date)].tickets += 1; });
-                const chartHourly = hourlyBuckets.slice(7, 20);
+                const chartHourly = hourlyBuckets.slice(6, 19);
 
                 // --- 6. Day-of-Week Pattern ---
                 const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
