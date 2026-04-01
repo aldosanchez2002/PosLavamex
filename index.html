@@ -1049,7 +1049,10 @@ Firma: __________________
 
         const AppProvider = ({ children }) => {
             const [role, setRole] = useState(() => localStorage.getItem('lavamex_role') || null);
-            const [view, setView] = useState('GREETER');
+            const [view, setView] = useState(() => {
+                const savedRole = localStorage.getItem('lavamex_role');
+                return savedRole === 'ADMIN' ? 'ADMIN' : 'GREETER';
+            });
             const [employees, setEmployees] = useState([]);
             const [tickets, setTickets] = useState([]);
             const [history, setHistory] = useState([]);
@@ -2008,16 +2011,35 @@ Firma: __________________
                     timestamp: new Date()
                 });
 
-                const totalDiff = diffMxn + (diffUsd * exRate);
-
                 if (role === 'ADMIN') {
-                    if (totalDiff < -1) {
-                        alert(`⚠️ DESCUADRE DETECTADO.\n\nDiferencia MXN: ${formatCurrency(diffMxn)}\nDiferencia USD: $${diffUsd.toFixed(2)}`);
+                    const todayStr = getLocalDateStr();
+                    const hasTodayArqueos = cashCounts.some(c => getLocalDateStr(c.timestamp) === todayStr);
+
+                    if (!hasTodayArqueos) {
+                        // This is the first arqueo of today — check for overnight descuadre
+                        const prevArqueos = cashCounts
+                            .filter(c => getLocalDateStr(c.timestamp) < todayStr)
+                            .sort((a, b) => b.timestamp - a.timestamp);
+
+                        if (prevArqueos.length > 0) {
+                            const lastPrevDay = getLocalDateStr(prevArqueos[0].timestamp);
+                            const prevClosing = prevArqueos[0];
+                            const nightDiffMxn = decMxnVal - (prevClosing.declaredMxn || 0);
+                            const nightDiffUsd = decUsdVal - (prevClosing.declaredUsd || 0);
+
+                            if (Math.abs(nightDiffMxn) > 1 || Math.abs(nightDiffUsd) > 0.1) {
+                                alert(`⚠️ DESCUADRE NOCTURNO DETECTADO.\n\nEl saldo no coincide con el cierre del ${lastPrevDay}.\n\nCierre anterior: MXN ${formatCurrency(prevClosing.declaredMxn)} / USD $${(prevClosing.declaredUsd || 0).toFixed(2)}\nApertura hoy:    MXN ${formatCurrency(decMxnVal)} / USD $${decUsdVal.toFixed(2)}\nDiferencia:      MXN ${formatCurrency(nightDiffMxn)} / USD $${nightDiffUsd.toFixed(2)}`);
+                            } else {
+                                alert("✅ Apertura correcta. El saldo coincide con el cierre anterior.");
+                            }
+                        } else {
+                            alert("✅ Arqueo registrado.");
+                        }
                     } else {
-                        alert("✅ CORTE CORRECTO. El dinero en caja coincide (o sobra).");
+                        alert("✅ Arqueo registrado.");
                     }
                 } else {
-                    alert("✅ Corte registrado.");
+                    alert("✅ Arqueo registrado.");
                 }
 
                 setShowCorte(false);
@@ -2730,8 +2752,32 @@ Firma: __________________
 
             const saveEditedExpense = () => { if (editingExpenseId) { updateExpense(editingExpenseId, { description: editExpDesc, amount: parseFloat(editExpAmt) || 0 }); setEditingExpenseId(null); } };
 
-            const latestCount = cashCounts.length > 0 ? cashCounts[0] : null;
-            const hasRecentDiscrepancy = latestCount && (Math.abs(latestCount.diffMxn) > 1 || Math.abs(latestCount.diffUsd) > 0.1) && getLocalDateStr(latestCount.timestamp) === getLocalDateStr();
+            const overnightDescuadre = (() => {
+                const todayStr = getLocalDateStr();
+                const todayArqueos = cashCounts
+                    .filter(c => getLocalDateStr(c.timestamp) === todayStr)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+
+                if (todayArqueos.length === 0) return null;
+
+                const todayFirst = todayArqueos[0];
+
+                const prevArqueos = cashCounts
+                    .filter(c => getLocalDateStr(c.timestamp) < todayStr)
+                    .sort((a, b) => b.timestamp - a.timestamp);
+
+                if (prevArqueos.length === 0) return null;
+
+                const lastPrevDay = getLocalDateStr(prevArqueos[0].timestamp);
+                const prevClosing = prevArqueos[0];
+
+                const diffMxn = (todayFirst.declaredMxn || 0) - (prevClosing.declaredMxn || 0);
+                const diffUsd = (todayFirst.declaredUsd || 0) - (prevClosing.declaredUsd || 0);
+
+                if (Math.abs(diffMxn) <= 1 && Math.abs(diffUsd) <= 0.1) return null;
+
+                return { prevClosing, todayFirst, diffMxn, diffUsd, lastPrevDay };
+            })();
 
             if (isFetching) return (
                 <div className="flex items-center justify-center p-16 text-gray-400 gap-3">
@@ -2742,14 +2788,15 @@ Firma: __________________
 
             return (
                 <div className="max-w-4xl mx-auto space-y-6">
-                    {hasRecentDiscrepancy && (
+                    {overnightDescuadre && (
                         <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm flex items-start gap-3">
                             <AlertTriangle className="shrink-0 mt-1" />
                             <div>
-                                <p className="font-bold">¡Atención! Descuadre en el último corte de caja</p>
+                                <p className="font-bold">¡Descuadre Nocturno! El saldo cambió entre el cierre y la apertura</p>
                                 <p className="text-sm">
-                                    Hora: {latestCount.timestamp.toLocaleTimeString()} - {latestCount.user}<br />
-                                    Diferencia: MXN {formatCurrency(latestCount.diffMxn)} / USD ${latestCount.diffUsd.toFixed(2)}
+                                    Cierre del {overnightDescuadre.lastPrevDay}: MXN {formatCurrency(overnightDescuadre.prevClosing.declaredMxn)} / USD ${(overnightDescuadre.prevClosing.declaredUsd || 0).toFixed(2)}<br />
+                                    Apertura de hoy: MXN {formatCurrency(overnightDescuadre.todayFirst.declaredMxn)} / USD ${(overnightDescuadre.todayFirst.declaredUsd || 0).toFixed(2)}<br />
+                                    Diferencia: MXN {formatCurrency(overnightDescuadre.diffMxn)} / USD ${overnightDescuadre.diffUsd.toFixed(2)}
                                 </p>
                             </div>
                         </div>
