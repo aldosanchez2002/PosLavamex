@@ -2223,7 +2223,7 @@ Firma: __________________
                                                 <span className="font-bold text-gray-700 pl-2">Pinos (${pinoPrice})</span>
                                                 <div className="flex items-center gap-3">
                                                     <button onClick={() => updateQuickItem(t.id, 'PINO', -1)} className="w-8 h-8 bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
-                                                    <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => e.id === 'QA_PINO').length}</span>
+                                                    <span className="w-4 text-center font-bold">{(t.extras || []).filter(e => ['PINO', 'QA_PINO'].includes(e.id)).length}</span>
                                                     <button onClick={() => updateQuickItem(t.id, 'PINO', 1)} className="w-8 h-8 bg-blue-100 rounded-full font-bold text-blue-600 hover:bg-blue-200">+</button>
                                                 </div>
                                             </div>
@@ -3626,15 +3626,18 @@ Firma: __________________
             const rangeAdminSnacks = activeAdminSnacks;
 
             let snackCustomers = 0;
-            let pinoCount = 0;
+            let pinoFromTickets = 0;
+            let pinoFromCashier = 0;
             rangeTickets.forEach(t => {
                 snackCustomers += (t.snackCount || 0);
                 if (t.extras) {
                     t.extras.forEach(e => {
-                        if (['PINO', 'QA_PINO'].includes(e.id)) pinoCount++;
+                        if (e.id === 'PINO') pinoFromTickets++;
+                        else if (e.id === 'QA_PINO') pinoFromCashier++;
                     });
                 }
             });
+            const pinoCount = pinoFromTickets + pinoFromCashier;
 
             let snackEmployees = 0;
             rangeDeductions.forEach(d => {
@@ -3677,7 +3680,6 @@ Firma: __________________
                                 <Package className="w-5 h-5 text-green-500" /> Pinos Vendidos
                             </h3>
                             <div className="space-y-3 text-sm">
-                                <div className="flex justify-between border-b pb-2"><span>Clientes (Tickets)</span> <span className="font-bold">{pinoCount}</span></div>
                                 <div className="flex justify-between text-lg text-green-700 pt-2 font-black"><span>TOTAL PINOS</span> <span>{pinoCount}</span></div>
                             </div>
                         </div>
