@@ -108,8 +108,7 @@
             },
             EXCHANGE_RATE: 18.10,
             SNACK_PRICE: 30,
-            INITIAL_EMPLOYEES: [
-            ],
+
             PRICES: {
                 GENERAL: { AUTO: 200, SUV_CHICA: 240, PICKUP: 360, SUV_GDE: 360 },
                 WAX: { AUTO: 540, SUV_CHICA: 640, PICKUP: 820, SUV_GDE: 820 },
@@ -1097,9 +1096,6 @@ Firma: __________________
 
             useEffect(() => {
                 const unsub = onSnapshot(query(collection(db, "employees"), orderBy("name")), (snap) => {
-                    if (snap.empty && employees.length === 0) {
-                        DEFAULTS.INITIAL_EMPLOYEES.forEach(e => addDoc(collection(db, "employees"), e));
-                    }
                     setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => !e.archived));
                 });
                 return () => unsub();
