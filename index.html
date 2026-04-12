@@ -445,7 +445,6 @@
                         }
                     } else {
                         alert("Tu navegador no soporta compartir. Copia el texto manualmente.");
-                        console.log("<HTML>" + content);
                     }
                 }
             },
@@ -2047,11 +2046,13 @@ Firma: __________________
                 const expensesToday = expenses.filter(e => e.status === 'APPROVED' && getLocalDateStr(e.timestamp) === todayStr)
                     .reduce((a, b) => a + (b.amount || 0), 0);
 
-                const dropsTodayMxn = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountMxn || 0), 0);
-                const dropsTodayUsd = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountUsd || 0), 0);
+                const dropsToday = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr);
+                const dropsTodayMxn = dropsToday.reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const dropsTodayUsd = dropsToday.reduce((a, b) => a + (b.amountUsd || 0), 0);
 
-                const cashInsTodayMxn = cashIns.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountMxn || 0), 0);
-                const cashInsTodayUsd = cashIns.filter(d => getLocalDateStr(d.timestamp) === todayStr).reduce((a, b) => a + (b.amountUsd || 0), 0);
+                const cashInsToday = cashIns.filter(d => getLocalDateStr(d.timestamp) === todayStr);
+                const cashInsTodayMxn = cashInsToday.reduce((a, b) => a + (b.amountMxn || 0), 0);
+                const cashInsTodayUsd = cashInsToday.reduce((a, b) => a + (b.amountUsd || 0), 0);
 
                 const openingCash = getOpeningCash(startOfToday);
                 let expectedMxn = openingCash.mxn;
