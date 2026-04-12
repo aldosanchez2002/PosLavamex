@@ -108,8 +108,6 @@
             },
             EXCHANGE_RATE: 18.10,
             SNACK_PRICE: 30,
-            INITIAL_EMPLOYEES: [
-            ],
             PRICES: {
                 GENERAL: { AUTO: 200, SUV_CHICA: 240, PICKUP: 360, SUV_GDE: 360 },
                 WAX: { AUTO: 540, SUV_CHICA: 640, PICKUP: 820, SUV_GDE: 820 },
@@ -1097,9 +1095,6 @@ Firma: __________________
 
             useEffect(() => {
                 const unsub = onSnapshot(query(collection(db, "employees"), orderBy("name")), (snap) => {
-                    if (snap.empty && employees.length === 0) {
-                        DEFAULTS.INITIAL_EMPLOYEES.forEach(e => addDoc(collection(db, "employees"), e));
-                    }
                     setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => !e.archived));
                 });
                 return () => unsub();
@@ -1166,13 +1161,13 @@ Firma: __________________
                 sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
                 sixtyDaysAgo.setHours(0, 0, 0, 0);
 
-                const unsubD  = onSnapshot(query(collection(db, "deductions"),        where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setDeductions(mapSnap(snap)));
-                const unsubE  = onSnapshot(query(collection(db, "expenses"),           where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setExpenses(mapSnap(snap)));
-                const unsubBE = onSnapshot(query(collection(db, "business_expenses"),  where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setBusinessExpenses(mapSnap(snap)));
-                const unsubCC = onSnapshot(query(collection(db, "cash_counts"),        where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc"), limit(50)),(snap) => setCashCounts(mapSnap(snap)));
-                const unsubCD = onSnapshot(query(collection(db, "cash_drops"),         where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setCashDrops(mapSnap(snap)));
-                const unsubCI = onSnapshot(query(collection(db, "cash_ins"),           where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setCashIns(mapSnap(snap)));
-                const unsubAS = onSnapshot(query(collection(db, "admin_snacks"),       where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setAdminSnacks(mapSnap(snap)));
+                const unsubD = onSnapshot(query(collection(db, "deductions"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => setDeductions(mapSnap(snap)));
+                const unsubE = onSnapshot(query(collection(db, "expenses"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => setExpenses(mapSnap(snap)));
+                const unsubBE = onSnapshot(query(collection(db, "business_expenses"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => setBusinessExpenses(mapSnap(snap)));
+                const unsubCC = onSnapshot(query(collection(db, "cash_counts"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc"), limit(50)), (snap) => setCashCounts(mapSnap(snap)));
+                const unsubCD = onSnapshot(query(collection(db, "cash_drops"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => setCashDrops(mapSnap(snap)));
+                const unsubCI = onSnapshot(query(collection(db, "cash_ins"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => setCashIns(mapSnap(snap)));
+                const unsubAS = onSnapshot(query(collection(db, "admin_snacks"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => setAdminSnacks(mapSnap(snap)));
                 return () => { unsubT(); unsubD(); unsubE(); unsubBE(); unsubCC(); unsubCD(); unsubCI(); unsubAS(); };
             }, []);
 
