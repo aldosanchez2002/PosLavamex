@@ -159,6 +159,15 @@
             return `${y}-${m}-${day}`;
         };
 
+        const mapSnap = (snap, extraDateFields = []) => snap.docs.map(d => {
+            const data = d.data();
+            return {
+                id: d.id, ...data,
+                timestamp: data.timestamp?.toDate() || new Date(),
+                ...Object.fromEntries(extraDateFields.map(f => [f, data[f]?.toDate() || null]))
+            };
+        });
+
         const getMonthStr = (d = new Date()) => {
             const y = d.getFullYear();
             const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -1142,13 +1151,7 @@ Firma: __________________
                     where("status", "==", "PENDING"),
                     orderBy("timestamp", "asc")
                 );
-                const unsubT = onSnapshot(qPending, (snap) => {
-                    setTickets(snap.docs.map(d => ({
-                        id: d.id, ...d.data(),
-                        timestamp: d.data().timestamp?.toDate() || new Date(),
-                        paidAt: d.data().paidAt?.toDate() || null
-                    })));
-                });
+                const unsubT = onSnapshot(qPending, (snap) => setTickets(mapSnap(snap, ['paidAt'])));
 
                 const todayStart = new Date();
                 todayStart.setHours(0, 0, 0, 0);
@@ -1157,62 +1160,19 @@ Firma: __________________
                     where("status", "==", "PAID"),
                     where("paidAt", ">=", todayStart),
                     orderBy("paidAt", "desc")
-                )).then(snap => {
-                    setHistory(snap.docs.map(d => ({
-                        id: d.id, ...d.data(),
-                        timestamp: d.data().timestamp?.toDate() || new Date(),
-                        paidAt: d.data().paidAt?.toDate() || null
-                    })));
-                });
+                )).then(snap => setHistory(mapSnap(snap, ['paidAt'])));
+
                 const sixtyDaysAgo = new Date();
                 sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
                 sixtyDaysAgo.setHours(0, 0, 0, 0);
 
-                const unsubD = onSnapshot(query(collection(db, "deductions"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => {
-                    setDeductions(snap.docs.map(d => {
-                        const data = d.data();
-                        return {
-                            id: d.id, ...data,
-                            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp || new Date())
-                        };
-                    }));
-                });
-                const unsubE = onSnapshot(query(collection(db, "expenses"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => {
-                    setExpenses(snap.docs.map(d => ({
-                        id: d.id, ...d.data(),
-                        timestamp: d.data().timestamp?.toDate() || new Date()
-                    })));
-                });
-                const unsubBE = onSnapshot(query(collection(db, "business_expenses"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => {
-                    setBusinessExpenses(snap.docs.map(d => ({
-                        id: d.id, ...d.data(),
-                        timestamp: d.data().timestamp?.toDate() || new Date()
-                    })));
-                });
-                const unsubCC = onSnapshot(query(collection(db, "cash_counts"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc"), limit(50)), (snap) => {
-                    setCashCounts(snap.docs.map(d => ({
-                        id: d.id, ...d.data(),
-                        timestamp: d.data().timestamp?.toDate() || new Date()
-                    })));
-                });
-                const unsubCD = onSnapshot(query(collection(db, "cash_drops"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => {
-                    setCashDrops(snap.docs.map(d => ({
-                        id: d.id, ...d.data(),
-                        timestamp: d.data().timestamp?.toDate() || new Date()
-                    })));
-                });
-                const unsubCI = onSnapshot(query(collection(db, "cash_ins"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => {
-                    setCashIns(snap.docs.map(d => ({
-                        id: d.id, ...d.data(),
-                        timestamp: d.data().timestamp?.toDate() || new Date()
-                    })));
-                });
-                const unsubAS = onSnapshot(query(collection(db, "admin_snacks"), where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")), (snap) => {
-                    setAdminSnacks(snap.docs.map(d => ({
-                        id: d.id, ...d.data(),
-                        timestamp: d.data().timestamp?.toDate() || new Date()
-                    })));
-                });
+                const unsubD  = onSnapshot(query(collection(db, "deductions"),        where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setDeductions(mapSnap(snap)));
+                const unsubE  = onSnapshot(query(collection(db, "expenses"),           where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setExpenses(mapSnap(snap)));
+                const unsubBE = onSnapshot(query(collection(db, "business_expenses"),  where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setBusinessExpenses(mapSnap(snap)));
+                const unsubCC = onSnapshot(query(collection(db, "cash_counts"),        where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc"), limit(50)),(snap) => setCashCounts(mapSnap(snap)));
+                const unsubCD = onSnapshot(query(collection(db, "cash_drops"),         where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setCashDrops(mapSnap(snap)));
+                const unsubCI = onSnapshot(query(collection(db, "cash_ins"),           where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setCashIns(mapSnap(snap)));
+                const unsubAS = onSnapshot(query(collection(db, "admin_snacks"),       where("timestamp", ">=", sixtyDaysAgo), orderBy("timestamp", "desc")),          (snap) => setAdminSnacks(mapSnap(snap)));
                 return () => { unsubT(); unsubD(); unsubE(); unsubBE(); unsubCC(); unsubCD(); unsubCI(); unsubAS(); };
             }, []);
 
@@ -1986,6 +1946,8 @@ Firma: __________________
                 }
             };
 
+            const roundUsd = (mxnPrice) => Math.ceil((mxnPrice / exRate) * 4) / 4;
+
             const handleCorte = async () => {
                 const { totalCard } = calculateCurrentExpectedCash();
 
@@ -2103,7 +2065,7 @@ Firma: __________________
             let changeUsd = 0;
             if (t) {
                 if (isOnlyUsd) {
-                    const roundedUsdPrice = Math.ceil((t.price / exRate) * 4) / 4;
+                    const roundedUsdPrice = roundUsd(t.price);
                     changeUsd = usdVal - roundedUsdPrice;
                     changeMxn = changeUsd * exRate;
                 } else {
@@ -2144,7 +2106,7 @@ Firma: __________________
                                             <span className="truncate pr-2">#{ticket.id.slice(-4).toUpperCase()}{ticket.vehicleDesc ? <span className="uppercase"> - {ticket.vehicleDesc}</span> : ''}</span>
                                             <div className="text-right">
                                                 <div className="whitespace-nowrap">{formatCurrency(ticket.price)} MXN</div>
-                                                <div className="text-xs text-green-600 font-normal">${(Math.ceil((ticket.price / exRate) * 4) / 4).toFixed(2)} USD</div>
+                                                <div className="text-xs text-green-600 font-normal">${roundUsd(ticket.price).toFixed(2)} USD</div>
                                             </div>
                                         </div>
                                         <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || 'Extras'} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size?.label || '-'}</span></div>
@@ -2157,7 +2119,7 @@ Firma: __________________
                                 <div className="w-full max-w-md my-auto">
                                     <div className="text-center mb-2">
                                         <h2 className="text-4xl font-bold text-gray-800">{formatCurrency(t.price)}</h2>
-                                        <div className="text-xl text-green-600 font-medium">${(Math.ceil((t.price / exRate) * 4) / 4).toFixed(2)} USD</div>
+                                        <div className="text-xl text-green-600 font-medium">${roundUsd(t.price).toFixed(2)} USD</div>
                                     </div>
                                     <div className="text-center mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-inner">
                                         <div className="text-lg font-bold text-gray-800 uppercase tracking-wide border-b border-gray-200 pb-2 mb-2">
