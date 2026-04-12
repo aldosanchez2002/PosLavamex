@@ -2069,29 +2069,6 @@ Firma: __________________
 
                 allToday.forEach(t => {
                     const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false, method: 'CASH' };
-
-                    if (pay.method === 'CARD') {
-                        totalCard += t.price;
-                    } else {
-                        expectedMxn += (pay.mxn || 0);
-                        expectedUsd += (pay.usd || 0);
-
-                        if (pay.isOnlyUsd) {
-                            expectedUsd -= (pay.changeUsd || 0);
-                        } else {
-                            expectedMxn -= (pay.changeMxn || 0);
-                        }
-                    }
-                });
-
-                expectedMxn -= expensesToday;
-                expectedMxn -= dropsTodayMxn;
-                expectedMxn -= dropsTodayUsd;
-                expectedMxn = openingCash.mxn;
-                expectedUsd = openingCash.usd;
-
-                allToday.forEach(t => {
-                    const pay = t.paymentDetails || { mxn: 0, usd: 0, changeMxn: 0, changeUsd: 0, isOnlyUsd: false, method: 'CASH' };
                     if (pay.method === 'CARD') {
                         totalCard += t.price;
                     } else {
