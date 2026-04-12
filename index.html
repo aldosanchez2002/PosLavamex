@@ -1988,23 +1988,14 @@ Firma: __________________
             };
 
             const handleCorte = async () => {
-                const { expectedMxn, expectedUsd, totalCard } = calculateCurrentExpectedCash();
+                const { totalCard } = calculateCurrentExpectedCash();
 
                 const decMxnVal = parseFloat(declaredMxn) || 0;
                 const decUsdVal = parseFloat(declaredUsd) || 0;
 
-                const diffMxn = decMxnVal - expectedMxn;
-                const diffUsd = decUsdVal - expectedUsd;
-
-                const isMatch = Math.abs(diffMxn) < 1 && Math.abs(diffUsd) < 0.1;
-
                 await addCashCount({
                     declaredMxn: decMxnVal,
                     declaredUsd: decUsdVal,
-                    expectedMxn,
-                    expectedUsd,
-                    diffMxn,
-                    diffUsd,
                     card: totalCard,
                     exchangeRate: exRate,
                     user: role,
