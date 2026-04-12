@@ -884,8 +884,6 @@ Firma: __________________
                         didParseCell: (data) => {
                             if (data.row.index === arqueoBody.length - 1) {
                                 data.cell.styles.fontStyle = 'bold';
-                                if (totalDiffMxn < -5) data.cell.styles.textColor = [0, 0, 0];
-                                else if (totalDiffMxn > 5) data.cell.styles.textColor = [0, 0, 0];
                             }
                         }
                     });
@@ -3522,14 +3520,10 @@ Firma: __________________
             const activeDeductions = localData ? localData.deductions : deductions.filter(d => filterRange(d.timestamp));
             const activeAdminSnacks = localData ? localData.adminSnacks : adminSnacks.filter(a => filterRange(a.timestamp));
 
-            const rangeTickets = activeTickets;
-            const rangeDeductions = activeDeductions;
-            const rangeAdminSnacks = activeAdminSnacks;
-
             let snackCustomers = 0;
             let pinoFromTickets = 0;
             let pinoFromCashier = 0;
-            rangeTickets.forEach(t => {
+            activeTickets.forEach(t => {
                 snackCustomers += (t.snackCount || 0);
                 if (t.extras) {
                     t.extras.forEach(e => {
@@ -3541,14 +3535,14 @@ Firma: __________________
             const pinoCount = pinoFromTickets + pinoFromCashier;
 
             let snackEmployees = 0;
-            rangeDeductions.forEach(d => {
+            activeDeductions.forEach(d => {
                 if ((d.description || '').toLowerCase().includes('snack')) {
                     snackEmployees += 1;
                 }
             });
 
             let snackAdmin = 0;
-            rangeAdminSnacks.forEach(a => {
+            activeAdminSnacks.forEach(a => {
                 snackAdmin += (a.quantity || 1);
             });
 
@@ -3601,10 +3595,10 @@ Firma: __________________
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rangeAdminSnacks.length === 0 ? (
+                                    {activeAdminSnacks.length === 0 ? (
                                         <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay cortesías registradas en este periodo.</td></tr>
                                     ) : (
-                                        rangeAdminSnacks.sort((a, b) => b.timestamp - a.timestamp).map(a => (
+                                        activeAdminSnacks.sort((a, b) => b.timestamp - a.timestamp).map(a => (
                                             <tr key={a.id} className="border-t hover:bg-orange-50">
                                                 <td className="p-3">{a.timestamp instanceof Date ? a.timestamp.toLocaleString() : '...'}</td>
                                                 <td className="p-3 uppercase text-xs font-bold text-gray-600">{a.user}</td>
