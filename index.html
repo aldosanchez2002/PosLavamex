@@ -260,7 +260,7 @@
         const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
             const payroll = {};
             const initPayrollItem = () => {
-                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, debugDetails: [], daysWorked: 0, datesWorked: [], role: null, curp: null };
+                const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, daysWorked: 0, datesWorked: [], role: null, curp: null };
                 SERVICES.forEach(svc => {
                     item.serviceGrid[svc.id] = {};
                     SIZES.forEach(sz => item.serviceGrid[svc.id][sz.id] = 0);
@@ -299,7 +299,6 @@
 
                     if (washersList.includes(empName)) {
                         const washerCount = washersList.length;
-                        if (washerCount === 0) return;
 
                         let totalTicketCommission = item.commission || 0;
 
@@ -715,30 +714,6 @@ Firma: __________________
                             doc.text(`Deducciones: -${formatCurrency(p.deductionTotal)}`, 14, currentY);
                             doc.setTextColor(0);
                             currentY += 10;
-                        }
-
-                        if (p.debugDetails && p.debugDetails.length > 0) {
-                            doc.setFontSize(8);
-                            doc.setTextColor(255, 0, 0);
-                            doc.text("DEBUG: Detalle por Ticket (Vehículo | Comisión)", 14, currentY);
-                            doc.setTextColor(0);
-
-                            const debugBody = p.debugDetails.map(d => [
-                                d.id,
-                                d.desc,
-                                formatCurrency(d.amount)
-                            ]);
-
-                            autoTable(doc, {
-                                startY: currentY + 2,
-                                head: [['ID', 'Vehículo', 'Comisión']],
-                                body: debugBody,
-                                theme: 'grid',
-                                styles: { fontSize: 7, cellPadding: 1 },
-                                headStyles: { fillColor: [220, 50, 50], textColor: [255, 255, 255] },
-                                margin: { right: 100 }
-                            });
-                            currentY = doc.lastAutoTable.finalY + 10;
                         }
 
                         doc.setFontSize(8);
