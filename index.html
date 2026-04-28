@@ -2091,6 +2091,9 @@ Firma: __________________
                                     <button onClick={() => setShowActions(v => !v)} title={showActions ? 'Ocultar acciones' : 'Mostrar acciones'} className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-500 transition-colors shadow-sm">
                                         <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${showActions ? 'rotate-90' : '-rotate-90'}`} />
                                     </button>
+                                    <button onClick={() => setShowSnack(true)} className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">
+                                        <Coffee className="w-4 h-4" /> Snack
+                                    </button>
                                     <button onClick={() => setShowCorte(true)} className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-white text-sm font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">
                                         <ClipboardList className="w-4 h-4" /> Corte
                                     </button>
@@ -2114,12 +2117,8 @@ Firma: __________________
 
                             {showActions && <div className="border-t bg-gray-50 shrink-0 p-2 space-y-2">
                                 <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-1.5">Deducciones</p>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-1.5">Empleados</p>
                                     <div className="grid grid-cols-3 gap-1.5">
-                                        <button onClick={() => setShowSnack(true)} className="flex flex-col items-center gap-1 py-2 px-1 rounded-lg bg-orange-50 hover:bg-orange-100 active:bg-orange-200 border border-orange-200 text-orange-700 transition-colors">
-                                            <Coffee className="w-5 h-5" />
-                                            <span className="text-xs font-bold leading-none">Snack</span>
-                                        </button>
                                         <button onClick={() => setShowAvance(true)} className="flex flex-col items-center gap-1 py-2 px-1 rounded-lg bg-green-50 hover:bg-green-100 active:bg-green-200 border border-green-200 text-green-700 transition-colors">
                                             <Banknote className="w-5 h-5" />
                                             <span className="text-xs font-bold leading-none">Avance</span>
@@ -2128,15 +2127,15 @@ Firma: __________________
                                             <Briefcase className="w-5 h-5" />
                                             <span className="text-xs font-bold leading-none">Varios</span>
                                         </button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-1.5">Caja</p>
-                                    <div className="grid grid-cols-3 gap-1.5">
                                         <button onClick={() => setShowAttendance(true)} className="flex flex-col items-center gap-1 py-2 px-1 rounded-lg bg-blue-50 hover:bg-blue-100 active:bg-blue-200 border border-blue-200 text-blue-700 transition-colors">
                                             <UserCheck className="w-5 h-5" />
                                             <span className="text-xs font-bold leading-none">Asistencia</span>
                                         </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-1.5">Caja</p>
+                                    <div className="grid grid-cols-2 gap-1.5">
                                         <button onClick={() => setShowAdminSnack(true)} className="flex flex-col items-center gap-1 py-2 px-1 rounded-lg bg-yellow-50 hover:bg-yellow-100 active:bg-yellow-200 border border-yellow-200 text-yellow-700 transition-colors">
                                             <Coffee className="w-5 h-5" />
                                             <span className="text-xs font-bold leading-none">Snack Adm</span>
