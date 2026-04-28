@@ -342,7 +342,7 @@
                 }, 0);
 
                 const totalLabor = laborCommission + laborSalary + supervisorSalesCommTotal + boleroCommTotal;
-                const operationalExp = fExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
+                const operationalExp = fExpenses.filter(e => !e.gastoAjeno).reduce((acc, e) => acc + (e.amount || 0), 0);
                 const adminExp = fBizExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
                 const totalOpExpenses = operationalExp + adminExp;
 
@@ -362,7 +362,7 @@
                 const avgTicketsPerDay = fTickets.length > 0 ? fTickets.length / daysInRange : 0;
 
                 const armorRegex = /armor\s*-?all/i;
-                const allExpensesForPeriod = [...fExpenses, ...fBizExpenses];
+                const allExpensesForPeriod = [...fExpenses.filter(e => !e.gastoAjeno), ...fBizExpenses];
 
                 const armorAllExpenses = allExpensesForPeriod.filter(e => {
                     const desc = e.description || e.note || e.concept || '';
@@ -385,7 +385,7 @@
                 }
 
                 fTickets.forEach(t => { const m = getMonthObj(t.date); m.revenue += (t.price || 0); m.labor += (t.commission || 0); });
-                fExpenses.forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
+                fExpenses.filter(e => !e.gastoAjeno).forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
                 fBizExpenses.forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
 
                 Object.values(monthlyStats).forEach(m => {
