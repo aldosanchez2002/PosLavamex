@@ -2088,14 +2088,14 @@ Firma: __________________
                             <div className="px-3 py-2.5 bg-gray-50 border-b flex justify-between items-center shrink-0">
                                 <span className="font-bold text-gray-700">Tickets ({tickets.length})</span>
                                 <div className="flex items-center gap-1.5">
-                                    <button onClick={() => setShowActions(v => !v)} title={showActions ? 'Ocultar acciones' : 'Mostrar acciones'} className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-500 transition-colors shadow-sm">
-                                        <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${showActions ? 'rotate-90' : '-rotate-90'}`} />
-                                    </button>
-                                    <button onClick={() => setShowSnack(true)} className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">
+                                    <button onClick={() => setShowSnack(true)} className="flex items-center gap-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 border border-orange-300 text-sm font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">
                                         <Coffee className="w-4 h-4" /> Snack
                                     </button>
                                     <button onClick={() => setShowCorte(true)} className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-white text-sm font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">
                                         <ClipboardList className="w-4 h-4" /> Corte
+                                    </button>
+                                    <button onClick={() => setShowActions(v => !v)} title={showActions ? 'Ocultar acciones' : 'Mostrar acciones'} className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-500 transition-colors shadow-sm">
+                                        <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${showActions ? 'rotate-90' : '-rotate-90'}`} />
                                     </button>
                                 </div>
                             </div>
