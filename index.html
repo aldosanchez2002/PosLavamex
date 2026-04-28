@@ -1862,6 +1862,7 @@ Firma: __________________
             const [showAttendance, setShowAttendance] = useState(false);
             const [showExpense, setShowExpense] = useState(false);
             const [showCorte, setShowCorte] = useState(false);
+            const [showActions, setShowActions] = useState(true);
             const [corteTab, setCorteTab] = useState('ARQUEO');
 
             const [localAttendance, setLocalAttendance] = useState({});
@@ -2086,9 +2087,14 @@ Firma: __________________
                         <div className="w-full md:w-1/3 bg-white rounded-xl shadow border overflow-hidden flex flex-col h-1/3 md:h-full shrink-0">
                             <div className="px-3 py-2.5 bg-gray-50 border-b flex justify-between items-center shrink-0">
                                 <span className="font-bold text-gray-700">Tickets ({tickets.length})</span>
-                                <button onClick={() => setShowCorte(true)} className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-white text-sm font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">
-                                    <ClipboardList className="w-4 h-4" /> Corte
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                    <button onClick={() => setShowActions(v => !v)} title={showActions ? 'Ocultar acciones' : 'Mostrar acciones'} className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-500 transition-colors shadow-sm">
+                                        <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${showActions ? 'rotate-90' : '-rotate-90'}`} />
+                                    </button>
+                                    <button onClick={() => setShowCorte(true)} className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-white text-sm font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">
+                                        <ClipboardList className="w-4 h-4" /> Corte
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="overflow-y-auto flex-1 p-2 space-y-2">
@@ -2106,7 +2112,7 @@ Firma: __________________
                                 ))}
                             </div>
 
-                            <div className="border-t bg-gray-50 shrink-0 p-2 space-y-2">
+                            {showActions && <div className="border-t bg-gray-50 shrink-0 p-2 space-y-2">
                                 <div>
                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-1.5">Deducciones</p>
                                     <div className="grid grid-cols-3 gap-1.5">
@@ -2141,7 +2147,7 @@ Firma: __________________
                                         </button>
                                     </div>
                                 </div>
-                            </div>
+                            </div>}
                         </div>
                         <div className="flex-1 bg-white rounded-xl shadow border p-4 md:p-6 flex flex-col items-center h-2/3 md:h-full overflow-y-auto pb-20">
                             {t ? (
