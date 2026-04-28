@@ -2240,7 +2240,7 @@ Firma: __________________
                                     <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={avanceAmt} onChange={e => setAvanceAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" min="1" /></div>
                                     {avanceEmp && avanceAmt && parseFloat(avanceAmt) > 0 && (
                                         <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800 font-medium">
-                                            Se descontará <span className="font-bold">{formatCurrency(parseFloat(avanceAmt))}</span> de la nómina de <span className="font-bold">{avanceEmp}</span> y se creará un gasto pendiente de aprobación del admin.
+                                            Se descontará <span className="font-bold">{formatCurrency(parseFloat(avanceAmt))}</span> de la nómina de <span className="font-bold">{avanceEmp}</span>. El avance aparecerá reflejado en el corte de caja cuando sea aprobado.
                                         </div>
                                     )}
                                 </div>
