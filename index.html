@@ -1366,7 +1366,7 @@ Firma: __________________
                 }
             });
 
-            const processPayment = () => handleDbAction(async () => {
+            const processPayment = (onSuccess) => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
                 const isExceptionOnly = !t.service && (!t.extras || t.extras.every(e => ['PINO', 'SNACKS', 'QA_PINO', 'QA_BOLEADA', 'BOLEADA'].includes(e.id)));
@@ -1399,6 +1399,7 @@ Firma: __________________
                     const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
                     PrintService.print(html, role);
                     setActiveId(null); setPayment({ mxn: '', usd: '' });
+                    if (onSuccess) onSuccess({ changeMxn, changeUsd, isOnlyUsd });
                 } finally { setIsSubmitting(false); }
             });
 
@@ -1879,6 +1880,8 @@ Firma: __________________
             const [expAmt, setExpAmt] = useState('');
             const [expAjeno, setExpAjeno] = useState(false);
 
+            const [changeModal, setChangeModal] = useState(null);
+
             const [declaredMxn, setDeclaredMxn] = useState('');
             const [declaredUsd, setDeclaredUsd] = useState('');
 
@@ -2234,7 +2237,7 @@ Firma: __________________
                                             <div className="flex gap-3">
                                                 {role !== 'CASHIER' && <Button onClick={() => deleteTicket(t.id)} variant="danger" title="Borrar"><Trash2 className="w-6 h-6" /></Button>}
                                                 {role !== 'CASHIER' && <Button onClick={() => startEdit(t)} variant="warning" title="Editar"><Pencil className="w-6 h-6" /></Button>}
-                                                <Button onClick={processPayment} disabled={isSubmitting} variant="success" className="flex-1 shadow-lg">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</Button>
+                                                <Button onClick={() => processPayment(({ changeMxn, changeUsd, isOnlyUsd }) => { if (changeMxn > 0.005 || changeUsd > 0.005) setChangeModal({ changeMxn, changeUsd, isOnlyUsd }); })} disabled={isSubmitting} variant="success" className="flex-1 shadow-lg">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</Button>
                                                 {role === 'CASHIER' && <Button onClick={processCardPayment} disabled={isSubmitting} title="Tarjeta"><CreditCard className="w-6 h-6" /></Button>}
                                             </div>
                                         </>
@@ -2242,6 +2245,25 @@ Firma: __________________
                                 </div>
                             ) : <div className="text-gray-400 flex flex-col items-center my-auto"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
                         </div>
+
+                        {changeModal && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm text-center p-8">
+                                    <div className="text-gray-500 font-bold uppercase tracking-widest text-sm mb-3">Cambio a entregar</div>
+                                    {changeModal.isOnlyUsd ? (
+                                        <div className="text-6xl font-black text-green-600 mb-2">${changeModal.changeUsd.toFixed(2)} <span className="text-3xl">USD</span></div>
+                                    ) : (
+                                        <>
+                                            <div className="text-6xl font-black text-green-600 mb-2">{formatCurrency(changeModal.changeMxn)} <span className="text-3xl">MXN</span></div>
+                                            {changeModal.changeUsd > 0.005 && <div className="text-xl text-blue-500 font-bold mb-2">${changeModal.changeUsd.toFixed(2)} USD</div>}
+                                        </>
+                                    )}
+                                    <button onClick={() => setChangeModal(null)} className="mt-6 w-full bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-black text-xl py-4 rounded-xl shadow-lg transition-colors">
+                                        ✓ Cambio entregado
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {showSnack && <Modal title={`Snack Empleado ($${snackPrice})`} icon={Coffee} onClose={() => setShowSnack(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowSnack(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddSnack} disabled={!snackEmp} variant="warning" className="flex-1">Confirmar</Button></div>}><select className="w-full border p-3 rounded-lg mb-6 text-lg bg-white" onChange={e => setSnackEmp(e.target.value)} value={snackEmp}><option value="">Seleccionar Empleado...</option>{employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}</select></Modal>}
 
