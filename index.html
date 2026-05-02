@@ -2649,8 +2649,18 @@ Firma: __________________
         };
 
         const AdminCorte = () => {
-            const { history, tickets, expenses, deductions, exRate, updateExpense, resolveExpense, cashCounts, cashDrops, cashIns, getOpeningCash, setView, db } = useContext(AppContext);
+            const { history, tickets, expenses, deductions, exRate, updateExpense, resolveExpense, cashCounts, cashDrops, cashIns, getOpeningCash, setView, addCashIn, db } = useContext(AppContext);
             const [corteMode, setCorteMode] = useState('DAY');
+            const [showAddCash, setShowAddCash] = useState(false);
+            const [acMxn, setAcMxn] = useState('');
+            const [acUsd, setAcUsd] = useState('');
+            const [acReason, setAcReason] = useState('');
+            const handleAddCash = () => {
+                if (!acMxn && !acUsd) return;
+                addCashIn(acMxn, acUsd, acReason);
+                setAcMxn(''); setAcUsd(''); setAcReason('');
+                setShowAddCash(false);
+            };
             const [corteDate, setCorteDate] = useState(getLocalDateStr());
             const [corteMonth, setCorteMonth] = useState(getMonthStr());
             const [corteRangeStart, setCorteRangeStart] = useState(() => getDefaultPayPeriod().start);
@@ -2863,7 +2873,8 @@ Firma: __________________
             );
 
             return (
-                <div className="max-w-4xl mx-auto space-y-6">
+                <>
+                <div className="space-y-6 p-4 md:p-6">
                     {overnightDescuadre && (
                         <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm flex items-start gap-3">
                             <AlertTriangle className="shrink-0 mt-1" />
@@ -2897,7 +2908,10 @@ Firma: __________________
                         <div onClick={() => setView('HISTORY')} className="cursor-pointer hover:scale-105 transition-transform bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div><div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div><div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div></div>
 
                         <div onClick={printCorte} className="cursor-pointer hover:scale-105 transition-transform bg-white p-4 rounded-xl shadow border border-gray-100 flex flex-col justify-center">
-                            <div className="flex items-center gap-2 mb-2 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja </div>
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2 text-gray-500 font-bold text-sm"><Banknote size={18} /> En Caja</div>
+                                <button onClick={e => { e.stopPropagation(); setShowAddCash(true); }} className="text-xs px-2 py-1 rounded-lg bg-green-100 text-green-700 font-bold hover:bg-green-200 flex items-center gap-1"><PlusCircle size={12} /> Agregar</button>
+                            </div>
                             <div className="mb-2">
                                 <div className="flex justify-between items-end">
                                     <span className="text-xs text-gray-400 font-bold">MXN</span>
@@ -3027,6 +3041,22 @@ Firma: __________________
                         </div>
                     </div>
                 </div>
+                {showAddCash && (
+                    <Modal title="Agregar Efectivo a Caja" icon={Banknote} onClose={() => setShowAddCash(false)} footer={
+                        <div className="flex gap-3">
+                            <Button onClick={() => setShowAddCash(false)} variant="secondary" className="flex-1">Cancelar</Button>
+                            <Button onClick={handleAddCash} variant="success" className="flex-1">Agregar</Button>
+                        </div>
+                    }>
+                        <div className="space-y-4">
+                            <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">Este monto se sumará al dinero esperado en caja. Úsalo cuando necesites meter cambio o aumentar el fondo.</div>
+                            <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label><input type="number" value={acMxn} onChange={e => setAcMxn(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" /></div>
+                            <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label><input type="number" value={acUsd} onChange={e => setAcUsd(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" /></div>
+                            <div><label className="block text-sm font-bold text-gray-600 mb-1">Razón (Opcional)</label><input value={acReason} onChange={e => setAcReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Refill de cambio" /></div>
+                        </div>
+                    </Modal>
+                )}
+                </>
             );
         };
 
@@ -3608,13 +3638,26 @@ Firma: __________________
 
         const AdminMercancia = () => {
             const { history, tickets, deductions, adminSnacks, approveAdminSnack, deleteAdminSnack, db } = useContext(AppContext);
-            const [startDate, setStartDate] = useState(() => getDefaultPayPeriod().start);
-            const [endDate, setEndDate] = useState(() => getDefaultPayPeriod().end);
+            const [mercMode, setMercMode] = useState('RANGE');
+            const [mercDate, setMercDate] = useState(getLocalDateStr());
+            const [mercMonth, setMercMonth] = useState(getMonthStr());
+            const [mercRangeStart, setMercRangeStart] = useState(() => getDefaultPayPeriod().start);
+            const [mercRangeEnd, setMercRangeEnd] = useState(() => getDefaultPayPeriod().end);
             const [localData, setLocalData] = useState(null);
             const [isFetching, setIsFetching] = useState(false);
 
-            const start = new Date(startDate + 'T00:00:00');
-            const end = new Date(endDate + 'T23:59:59.999');
+            let start, end;
+            if (mercMode === 'DAY') {
+                start = new Date(mercDate + 'T00:00:00');
+                end = new Date(mercDate + 'T23:59:59.999');
+            } else if (mercMode === 'MONTH') {
+                start = new Date(mercMonth + '-01T00:00:00');
+                const [mY, mM] = mercMonth.split('-').map(Number);
+                end = new Date(mY, mM, 0, 23, 59, 59, 999);
+            } else {
+                start = new Date(mercRangeStart + 'T00:00:00');
+                end = new Date(mercRangeEnd + 'T23:59:59.999');
+            }
 
             useEffect(() => {
                 const sixtyDaysAgo = new Date();
@@ -3636,7 +3679,7 @@ Firma: __________________
                     });
                     setIsFetching(false);
                 });
-            }, [startDate, endDate]);
+            }, [mercMode, mercDate, mercMonth, mercRangeStart, mercRangeEnd]);
 
             const filterRange = (ts) => { if (!ts) return false; const date = new Date(ts.toDate ? ts.toDate() : ts); return date >= start && date <= end; };
 
@@ -3689,8 +3732,17 @@ Firma: __________________
 
             return (
                 <div className="space-y-6">
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
-                        <DateRangeSelector label="Rango de Fechas" start={startDate} end={endDate} onRangeChange={(s, e) => { setStartDate(s); setEndDate(e); }} />
+                    <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+                            <button onClick={() => setMercMode('DAY')} className={`px-3 py-1 rounded-md text-sm font-bold ${mercMode === 'DAY' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Día</button>
+                            <button onClick={() => setMercMode('MONTH')} className={`px-3 py-1 rounded-md text-sm font-bold ${mercMode === 'MONTH' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Mes</button>
+                            <button onClick={() => setMercMode('RANGE')} className={`px-3 py-1 rounded-md text-sm font-bold ${mercMode === 'RANGE' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Rango</button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {mercMode === 'DAY' && <CustomDateInput type="date" value={mercDate} onChange={setMercDate} />}
+                            {mercMode === 'MONTH' && <CustomDateInput type="month" value={mercMonth} onChange={setMercMonth} />}
+                            {mercMode === 'RANGE' && <DateRangeSelector start={mercRangeStart} end={mercRangeEnd} onRangeChange={(s, e) => { setMercRangeStart(s); setMercRangeEnd(e); }} />}
+                        </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-white p-6 rounded-xl shadow border border-gray-200">
@@ -3774,20 +3826,24 @@ Firma: __________________
             const [deletedTickets, setDeletedTickets] = useState([]);
             const [isFetching, setIsFetching] = useState(false);
 
-            const getWeekStart = () => {
-                const d = new Date();
-                const day = d.getDay();
-                const diff = day === 0 ? -6 : 1 - day;
-                const monday = new Date(d);
-                monday.setDate(d.getDate() + diff);
-                return getLocalDateStr(monday);
-            };
+            const [corteMode, setCorteMode] = useState('DAY');
+            const [corteDate, setCorteDate] = useState(getLocalDateStr());
+            const [corteMonth, setCorteMonth] = useState(getMonthStr());
+            const [corteRangeStart, setCorteRangeStart] = useState(() => getDefaultPayPeriod().start);
+            const [corteRangeEnd, setCorteRangeEnd] = useState(() => getDefaultPayPeriod().end);
 
-            const [startDate, setStartDate] = useState(getWeekStart);
-            const [endDate, setEndDate] = useState(() => getLocalDateStr());
-
-            const rangeStart = new Date(startDate + 'T00:00:00');
-            const rangeEnd = new Date(endDate + 'T23:59:59.999');
+            let rangeStart, rangeEnd;
+            if (corteMode === 'DAY') {
+                rangeStart = new Date(corteDate + 'T00:00:00');
+                rangeEnd = new Date(corteDate + 'T23:59:59.999');
+            } else if (corteMode === 'MONTH') {
+                rangeStart = new Date(corteMonth + '-01T00:00:00');
+                const [apY, apM] = corteMonth.split('-').map(Number);
+                rangeEnd = new Date(apY, apM, 0, 23, 59, 59, 999);
+            } else {
+                rangeStart = new Date(corteRangeStart + 'T00:00:00');
+                rangeEnd = new Date(corteRangeEnd + 'T23:59:59.999');
+            }
 
             const inRange = (ts) => ts instanceof Date && ts >= rangeStart && ts <= rangeEnd;
 
@@ -3817,15 +3873,23 @@ Firma: __________________
                     }
                 };
                 fetchDeleted();
-            }, [startDate, endDate]);
+            }, [corteMode, corteDate, corteMonth, corteRangeStart, corteRangeEnd]);
 
             const fmtDateTime = (d) => d instanceof Date ? d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...';
 
             return (
                 <div className="space-y-6">
-                    <div className="bg-white p-3 rounded-xl shadow border border-gray-200 flex flex-wrap gap-3 items-center justify-between shrink-0">
-                        <span className="font-bold text-gray-700 flex items-center gap-2"><Calendar className="w-5 h-5 text-blue-600" /> Período:</span>
-                        <DateRangeSelector start={startDate} end={endDate} onRangeChange={(s, e) => { setStartDate(s); setEndDate(e); }} />
+                    <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+                            <button onClick={() => setCorteMode('DAY')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'DAY' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Día</button>
+                            <button onClick={() => setCorteMode('MONTH')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'MONTH' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Mes</button>
+                            <button onClick={() => setCorteMode('RANGE')} className={`px-3 py-1 rounded-md text-sm font-bold ${corteMode === 'RANGE' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Rango</button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {corteMode === 'DAY' && <CustomDateInput type="date" value={corteDate} onChange={setCorteDate} />}
+                            {corteMode === 'MONTH' && <CustomDateInput type="month" value={corteMonth} onChange={setCorteMonth} />}
+                            {corteMode === 'RANGE' && <DateRangeSelector start={corteRangeStart} end={corteRangeEnd} onRangeChange={(s, e) => { setCorteRangeStart(s); setCorteRangeEnd(e); }} />}
+                        </div>
                     </div>
 
                     {totalPending > 0 ? (
@@ -4008,40 +4072,9 @@ Firma: __________________
         };
 
         const AdminCorteTab = () => {
-            const { addCashIn } = useContext(AppContext);
-            const [showAddCash, setShowAddCash] = useState(false);
-            const [acMxn, setAcMxn] = useState('');
-            const [acUsd, setAcUsd] = useState('');
-            const [acReason, setAcReason] = useState('');
-            const handleAddCash = () => {
-                if (!acMxn && !acUsd) return;
-                addCashIn(acMxn, acUsd, acReason);
-                setAcMxn(''); setAcUsd(''); setAcReason('');
-                setShowAddCash(false);
-            };
             return (
-                <div className="space-y-6">
-                    <div className="flex justify-end">
-                        <button onClick={() => setShowAddCash(true)} className="px-5 py-2.5 rounded-xl font-bold bg-green-600 text-white shadow-md flex items-center gap-2 hover:bg-green-700 transition-colors">
-                            <PlusCircle size={18} /> AGREGAR EFECTIVO
-                        </button>
-                    </div>
+                <div className="-mx-4 md:-mx-6 -mb-4 md:-mb-6">
                     <AdminCorte />
-                    {showAddCash && (
-                        <Modal title="Agregar Efectivo a Caja" icon={Banknote} onClose={() => setShowAddCash(false)} footer={
-                            <div className="flex gap-3">
-                                <Button onClick={() => setShowAddCash(false)} variant="secondary" className="flex-1">Cancelar</Button>
-                                <Button onClick={handleAddCash} variant="success" className="flex-1">Agregar</Button>
-                            </div>
-                        }>
-                            <div className="space-y-4">
-                                <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">Este monto se sumará al dinero esperado en caja. Úsalo cuando necesites meter cambio o aumentar el fondo.</div>
-                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label><input type="number" value={acMxn} onChange={e => setAcMxn(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" /></div>
-                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label><input type="number" value={acUsd} onChange={e => setAcUsd(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" /></div>
-                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Razón (Opcional)</label><input value={acReason} onChange={e => setAcReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Refill de cambio" /></div>
-                            </div>
-                        </Modal>
-                    )}
                 </div>
             );
         };
