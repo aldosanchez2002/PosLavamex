@@ -3031,7 +3031,7 @@ Firma: __________________
         };
 
         const AdminNomina = () => {
-            const { employees, history, deductions, commissions, extrasList, db, tickets } = useContext(AppContext);
+            const { employees, history, deductions, commissions, extrasList, db, tickets, addCashIn } = useContext(AppContext);
             const [startDate, setStartDate] = useState(() => getDefaultPayPeriod().start);
             const [endDate, setEndDate] = useState(() => getDefaultPayPeriod().end);
             const [attendanceData, setAttendanceData] = useState([]);
@@ -3041,6 +3041,41 @@ Firma: __________________
 
             const [previewData, setPreviewData] = useState(null);
             const [previewName, setPreviewName] = useState(null);
+
+            const [showAddCash, setShowAddCash] = useState(false);
+            const [acMxn, setAcMxn] = useState('');
+            const [acUsd, setAcUsd] = useState('');
+            const [acReason, setAcReason] = useState('');
+            const handleAddCash = () => {
+                if (!acMxn && !acUsd) return;
+                addCashIn(acMxn, acUsd, acReason);
+                setAcMxn(''); setAcUsd(''); setAcReason('');
+                setShowAddCash(false);
+            };
+
+            const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
+            const [reportYear, setReportYear] = useState(String(new Date().getFullYear()));
+            const fetchAllEmployees = async () => {
+                const snap = await getDocs(collection(db, "employees"));
+                return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            };
+            const generateAttendanceReport = async () => {
+                const allEmployees = await fetchAllEmployees();
+                const q = query(collection(db, "attendance"), where("month", "==", reportMonth));
+                const snapshot = await getDocs(q);
+                const attendanceData = {};
+                snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
+                const daysInMonth = new Date(reportMonth.split('-')[0], reportMonth.split('-')[1], 0).getDate();
+                PdfService.generateAttendance(reportMonth, allEmployees, attendanceData, daysInMonth);
+            };
+            const generateYearlyReport = async () => {
+                const allEmployees = await fetchAllEmployees();
+                const q = query(collection(db, "attendance"), where("month", ">=", `${reportYear}-01`), where("month", "<=", `${reportYear}-12`));
+                const snapshot = await getDocs(q);
+                const attendanceData = {};
+                snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
+                PdfService.generateAttendanceYearly(reportYear, allEmployees, attendanceData);
+            };
 
             const start = new Date(startDate + 'T00:00:00');
             const end = new Date(endDate + 'T23:59:59.999');
@@ -3307,6 +3342,55 @@ Firma: __________________
                                         </table>
                                     </div>
                                 )}
+                            </div>
+                        </Modal>
+                    )}
+
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                        <h3 className="font-bold mb-4 text-gray-800 flex items-center gap-2"><Calendar className="w-5 h-5" /> Reporte de Asistencia</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-600 mb-2">Mes</label>
+                                <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="border p-3 rounded-lg w-full text-lg mb-3" />
+                                <Button onClick={generateAttendanceReport} className="w-full">Descargar PDF Mensual</Button>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-600 mb-2">Año</label>
+                                <input type="number" value={reportYear} onChange={e => setReportYear(e.target.value)} min="2020" max="2099" className="border p-3 rounded-lg w-full text-lg mb-3" />
+                                <Button onClick={generateYearlyReport} className="w-full">Descargar PDF Anual</Button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                        <button onClick={() => setShowAddCash(true)} className="px-5 py-2.5 rounded-xl font-bold whitespace-nowrap bg-green-600 text-white shadow-md flex items-center gap-2 hover:bg-green-700 transition-colors">
+                            <PlusCircle size={18} /> AGREGAR EFECTIVO
+                        </button>
+                    </div>
+
+                    {showAddCash && (
+                        <Modal title="Agregar Efectivo a Caja" icon={Banknote} onClose={() => setShowAddCash(false)} footer={
+                            <div className="flex gap-3">
+                                <Button onClick={() => setShowAddCash(false)} variant="secondary" className="flex-1">Cancelar</Button>
+                                <Button onClick={handleAddCash} variant="success" className="flex-1">Agregar</Button>
+                            </div>
+                        }>
+                            <div className="space-y-4">
+                                <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">
+                                    Este monto se sumará al dinero esperado en caja. Úsalo cuando necesites meter cambio o aumentar el fondo.
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label>
+                                    <input type="number" value={acMxn} onChange={e => setAcMxn(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label>
+                                    <input type="number" value={acUsd} onChange={e => setAcUsd(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Razón (Opcional)</label>
+                                    <input value={acReason} onChange={e => setAcReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Refill de cambio" />
+                                </div>
                             </div>
                         </Modal>
                     )}
@@ -3611,6 +3695,21 @@ Firma: __________________
             );
         };
 
+        const AdminConfiguracion = () => {
+            const [configTab, setConfigTab] = useState('GENERAL');
+            return (
+                <div className="space-y-4">
+                    <div className="flex gap-2">
+                        {['GENERAL', 'PRECIOS'].map(t => (
+                            <button key={t} onClick={() => setConfigTab(t)} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${configTab === t ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border'}`}>{t}</button>
+                        ))}
+                    </div>
+                    {configTab === 'GENERAL' && <AdminConfig />}
+                    {configTab === 'PRECIOS' && <AdminPrecios />}
+                </div>
+            );
+        };
+
         const AdminBusinessExpenses = () => {
             const { businessExpenses, addBusinessExpense } = useContext(AppContext);
             const [desc, setDesc] = useState('');
@@ -3748,32 +3847,6 @@ Firma: __________________
 
             return (
                 <div className="space-y-6">
-                    {pendingSnacks.length > 0 && (
-                        <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl overflow-hidden">
-                            <div className="p-4 bg-yellow-400 font-bold text-yellow-900 flex items-center gap-2">
-                                <AlertTriangle className="w-5 h-5" /> {pendingSnacks.length} Solicitud{pendingSnacks.length > 1 ? 'es' : ''} Pendiente{pendingSnacks.length > 1 ? 's' : ''} de Aprobación
-                            </div>
-                            <div className="divide-y divide-yellow-200">
-                                {pendingSnacks.sort((a, b) => b.timestamp - a.timestamp).map(a => (
-                                    <div key={a.id} className="p-4 flex items-center gap-4">
-                                        <div className={`p-2 rounded-lg ${a.type === 'PINO' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                                            {a.type === 'PINO' ? <Package className="w-5 h-5" /> : <Coffee className="w-5 h-5" />}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-gray-800">{a.type === 'PINO' ? 'Pino' : 'Snack'} × {a.quantity || 1} <span className="text-xs font-normal text-gray-500 uppercase ml-1">— {a.requestedBy || a.user}</span></div>
-                                            <div className="text-sm text-gray-600 truncate">"{a.reason}"</div>
-                                            <div className="text-xs text-gray-400">{a.timestamp instanceof Date ? a.timestamp.toLocaleString() : '...'}</div>
-                                        </div>
-                                        <div className="flex gap-2 shrink-0">
-                                            <button onClick={() => approveAdminSnack(a.id)} className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-sm transition-colors">Aprobar</button>
-                                            <button onClick={() => deleteAdminSnack(a.id)} className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-2 rounded-lg text-sm transition-colors">Rechazar</button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
                         <DateRangeSelector label="Rango de Fechas" start={startDate} end={endDate} onRangeChange={(s, e) => { setStartDate(s); setEndDate(e); }} />
                     </div>
@@ -4043,73 +4116,41 @@ Firma: __________________
                             </div>
                         )}
                     </div>
+
+                    <AdminBusinessExpenses />
                 </div>
             );
         };
 
         const AdminPanel = () => {
-            const { addCashIn, expenses, adminSnacks } = useContext(AppContext);
+            const { expenses, adminSnacks } = useContext(AppContext);
             const pendingCount = expenses.filter(e => e.status === 'PENDING').length + adminSnacks.filter(s => s.status === 'PENDING').length;
             const [tab, setTab] = useState('CORTE');
-            const [showAddCash, setShowAddCash] = useState(false);
-            const [acMxn, setAcMxn] = useState('');
-            const [acUsd, setAcUsd] = useState('');
-            const [acReason, setAcReason] = useState('');
 
-            const handleAddCash = () => {
-                if (!acMxn && !acUsd) return;
-                addCashIn(acMxn, acUsd, acReason);
-                setAcMxn(''); setAcUsd(''); setAcReason('');
-                setShowAddCash(false);
-            };
+            const tabs = [
+                { id: 'CORTE', label: 'CORTE' },
+                { id: 'NOMINA', label: 'NÓMINA' },
+                { id: 'MERCANCIA', label: 'MERCANCÍA' },
+                { id: 'APROBACIONES', label: 'APROBACIONES', badge: pendingCount },
+                { id: 'CONFIG', label: 'CONFIGURACIÓN' },
+            ];
 
             return (
                 <div className="p-4 md:p-6 h-full overflow-y-auto">
-                    <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1 items-center">
-                        {['CORTE', 'NOMINA', 'ASISTENCIA', 'GASTOS_ADM', 'MERCANCIA', 'CONFIG', 'PRECIOS'].map(t => <button key={t} onClick={() => setTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors ${tab === t ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>{t === 'GASTOS_ADM' ? 'GASTOS NEGOCIO' : (t === 'MERCANCIA' ? 'MERCANCÍA' : t)}</button>)}
-                        <button onClick={() => setTab('APROBACIONES')} className={`relative px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${tab === 'APROBACIONES' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>
-                            <ShieldCheck size={16} /> APROBACIONES
-                            {pendingCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-black w-5 h-5 rounded-full flex items-center justify-center">{pendingCount}</span>}
-                        </button>
-                        <button onClick={() => setShowAddCash(true)} className="px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors bg-green-600 text-white shadow-md flex items-center gap-2 hover:bg-green-700">
-                            <PlusCircle size={18} /> AGREGAR EFECTIVO
-                        </button>
+                    <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
+                        {tabs.map(t => (
+                            <button key={t.id} onClick={() => setTab(t.id)} className={`relative px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${tab === t.id ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>
+                                {t.id === 'APROBACIONES' && <ShieldCheck size={16} />}
+                                {t.label}
+                                {t.badge > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-black w-5 h-5 rounded-full flex items-center justify-center">{t.badge}</span>}
+                            </button>
+                        ))}
                     </div>
                     {tab === 'CORTE' && <AdminCorte />}
                     {tab === 'NOMINA' && <AdminNomina />}
-                    {tab === 'ASISTENCIA' && <AdminAsistencia />}
-                    {tab === 'GASTOS_ADM' && <AdminBusinessExpenses />}
                     {tab === 'MERCANCIA' && <AdminMercancia />}
-                    {tab === 'CONFIG' && <AdminConfig />}
-                    {tab === 'PRECIOS' && <AdminPrecios />}
                     {tab === 'APROBACIONES' && <AdminAprobaciones />}
-
-                    {showAddCash && (
-                        <Modal title="Agregar Efectivo a Caja" icon={Banknote} onClose={() => setShowAddCash(false)} footer={
-                            <div className="flex gap-3">
-                                <Button onClick={() => setShowAddCash(false)} variant="secondary" className="flex-1">Cancelar</Button>
-                                <Button onClick={handleAddCash} variant="success" className="flex-1">Agregar</Button>
-                            </div>
-                        }>
-                            <div className="space-y-4">
-                                <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">
-                                    Este monto se sumará al dinero esperado en caja (similar al fondo inicial). Úsalo cuando necesites meter cambio o aumentar el fondo.
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label>
-                                    <input type="number" value={acMxn} onChange={e => setAcMxn(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label>
-                                    <input type="number" value={acUsd} onChange={e => setAcUsd(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Razón (Opcional)</label>
-                                    <input value={acReason} onChange={e => setAcReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Refill de cambio" />
-                                </div>
-                            </div>
-                        </Modal>
-                    )}
+                    {tab === 'CONFIG' && <AdminConfiguracion />}
                 </div>
             );
         };
