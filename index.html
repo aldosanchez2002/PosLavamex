@@ -1351,13 +1351,24 @@ Firma: __________________
                 status: status, processedAt: serverTimestamp(), processedBy: role
             }));
 
-            const addAdminSnack = (qty) => handleDbAction(async () => {
+            const addAdminSnack = ({ type, quantity, reason }) => handleDbAction(async () => {
                 await addDoc(collection(db, "admin_snacks"), {
-                    quantity: parseInt(qty, 10) || 1,
+                    type: type || 'SNACK',
+                    quantity: parseInt(quantity, 10) || 1,
+                    reason: reason || '',
+                    status: 'PENDING',
                     timestamp: serverTimestamp(),
-                    user: role
+                    requestedBy: role
                 });
-                alert("Snack de admin registrado.");
+                alert("Solicitud enviada. Esperando aprobación del administrador.");
+            });
+
+            const approveAdminSnack = (id) => handleDbAction(async () => {
+                await updateDoc(doc(db, "admin_snacks", id), {
+                    status: 'APPROVED',
+                    approvedBy: role,
+                    approvedAt: serverTimestamp()
+                });
             });
 
             const deleteAdminSnack = (id) => handleDbAction(async () => {
@@ -1429,7 +1440,7 @@ Firma: __________________
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, addAvance, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
-                updateEmployee, addAdminSnack, deleteAdminSnack,
+                updateEmployee, addAdminSnack, approveAdminSnack, deleteAdminSnack,
                 getOpeningCash,
                 db, isSubmitting
             };
@@ -1870,6 +1881,8 @@ Firma: __________________
 
             const [snackEmp, setSnackEmp] = useState('');
             const [adminSnackQty, setAdminSnackQty] = useState(1);
+            const [adminSnackType, setAdminSnackType] = useState('SNACK');
+            const [adminSnackReason, setAdminSnackReason] = useState('');
             const [variosEmp, setVariosEmp] = useState('');
             const [variosDesc, setVariosDesc] = useState('');
             const [variosAmt, setVariosAmt] = useState('');
@@ -1922,9 +1935,12 @@ Firma: __________________
             };
 
             const handleAddAdminSnack = () => {
-                addAdminSnack(adminSnackQty);
+                if (!adminSnackReason.trim()) return alert("Ingresa un motivo para la solicitud.");
+                addAdminSnack({ type: adminSnackType, quantity: adminSnackQty, reason: adminSnackReason.trim() });
                 setShowAdminSnack(false);
                 setAdminSnackQty(1);
+                setAdminSnackType('SNACK');
+                setAdminSnackReason('');
             };
 
             const handleAddVarios = () => {
@@ -2268,16 +2284,33 @@ Firma: __________________
                         {showSnack && <Modal title={`Snack Empleado ($${snackPrice})`} icon={Coffee} onClose={() => setShowSnack(false)} footer={<div className="flex gap-3"><Button onClick={() => setShowSnack(false)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddSnack} disabled={!snackEmp} variant="warning" className="flex-1">Confirmar</Button></div>}><select className="w-full border p-3 rounded-lg mb-6 text-lg bg-white" onChange={e => setSnackEmp(e.target.value)} value={snackEmp}><option value="">Seleccionar Empleado...</option>{employees.map(e => <option key={e.id || e.name} value={e.name}>{e.name}</option>)}</select></Modal>}
 
                         {showAdminSnack && (
-                            <Modal title="Snack Administrador" icon={Coffee} onClose={() => setShowAdminSnack(false)} footer={
+                            <Modal title="Solicitar Cortesía" icon={Coffee} onClose={() => { setShowAdminSnack(false); setAdminSnackQty(1); setAdminSnackType('SNACK'); setAdminSnackReason(''); }} footer={
                                 <div className="flex gap-3">
-                                    <Button onClick={() => setShowAdminSnack(false)} variant="secondary" className="flex-1">Cancelar</Button>
-                                    <Button onClick={handleAddAdminSnack} variant="warning" className="flex-1">Registrar</Button>
+                                    <Button onClick={() => { setShowAdminSnack(false); setAdminSnackQty(1); setAdminSnackType('SNACK'); setAdminSnackReason(''); }} variant="secondary" className="flex-1">Cancelar</Button>
+                                    <Button onClick={handleAddAdminSnack} variant="warning" className="flex-1">Solicitar</Button>
                                 </div>
                             }>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Cantidad de Snacks</label>
-                                    <input type="number" value={adminSnackQty} onChange={e => setAdminSnackQty(e.target.value)} className="w-full border p-3 rounded-lg text-lg" min="1" />
-                                    <p className="text-xs text-gray-500 mt-2">Los snacks de administrador son cortesías aprobadas y no afectarán el monto esperado en el corte de caja.</p>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-2">Tipo de Cortesía</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={() => setAdminSnackType('SNACK')} className={`p-3 rounded-xl border-2 font-bold text-sm flex flex-col items-center gap-1 transition-colors ${adminSnackType === 'SNACK' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>
+                                                <Coffee className="w-5 h-5" /> Snack
+                                            </button>
+                                            <button onClick={() => setAdminSnackType('PINO')} className={`p-3 rounded-xl border-2 font-bold text-sm flex flex-col items-center gap-1 transition-colors ${adminSnackType === 'PINO' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>
+                                                <Package className="w-5 h-5" /> Pino
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Cantidad</label>
+                                        <input type="number" value={adminSnackQty} onChange={e => setAdminSnackQty(e.target.value)} className="w-full border p-3 rounded-lg text-lg" min="1" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Motivo <span className="text-red-500">*</span></label>
+                                        <input value={adminSnackReason} onChange={e => setAdminSnackReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Cortesía a cliente frecuente, visita de proveedor..." />
+                                    </div>
+                                    <p className="text-xs text-gray-400">La solicitud quedará pendiente hasta que el administrador la apruebe.</p>
                                 </div>
                             </Modal>
                         )}
@@ -3610,7 +3643,7 @@ Firma: __________________
         };
 
         const AdminMercancia = () => {
-            const { history, tickets, deductions, adminSnacks, deleteAdminSnack, db } = useContext(AppContext);
+            const { history, tickets, deductions, adminSnacks, approveAdminSnack, deleteAdminSnack, db } = useContext(AppContext);
             const [startDate, setStartDate] = useState(() => getDefaultPayPeriod().start);
             const [endDate, setEndDate] = useState(() => getDefaultPayPeriod().end);
             const [localData, setLocalData] = useState(null);
@@ -3647,6 +3680,10 @@ Firma: __________________
             const activeDeductions = localData ? localData.deductions : deductions.filter(d => filterRange(d.timestamp));
             const activeAdminSnacks = localData ? localData.adminSnacks : adminSnacks.filter(a => filterRange(a.timestamp));
 
+            const pendingSnacks = adminSnacks.filter(a => a.status === 'PENDING');
+
+            const isApproved = (a) => a.status === 'APPROVED' || !a.status;
+
             let snackCustomers = 0;
             let pinoFromTickets = 0;
             let pinoFromCashier = 0;
@@ -3659,18 +3696,22 @@ Firma: __________________
                     });
                 }
             });
-            const pinoCount = pinoFromTickets + pinoFromCashier;
+
+            let snackAdmin = 0;
+            let pinoAdmin = 0;
+            activeAdminSnacks.forEach(a => {
+                if (!isApproved(a)) return;
+                if (a.type === 'PINO') pinoAdmin += (a.quantity || 1);
+                else snackAdmin += (a.quantity || 1);
+            });
+
+            const pinoCount = pinoFromTickets + pinoFromCashier + pinoAdmin;
 
             let snackEmployees = 0;
             activeDeductions.forEach(d => {
                 if ((d.description || '').toLowerCase().includes('snack')) {
                     snackEmployees += 1;
                 }
-            });
-
-            let snackAdmin = 0;
-            activeAdminSnacks.forEach(a => {
-                snackAdmin += (a.quantity || 1);
             });
 
             const totalSnacks = snackCustomers + snackEmployees + snackAdmin;
@@ -3684,6 +3725,32 @@ Firma: __________________
 
             return (
                 <div className="space-y-6">
+                    {pendingSnacks.length > 0 && (
+                        <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl overflow-hidden">
+                            <div className="p-4 bg-yellow-400 font-bold text-yellow-900 flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5" /> {pendingSnacks.length} Solicitud{pendingSnacks.length > 1 ? 'es' : ''} Pendiente{pendingSnacks.length > 1 ? 's' : ''} de Aprobación
+                            </div>
+                            <div className="divide-y divide-yellow-200">
+                                {pendingSnacks.sort((a, b) => b.timestamp - a.timestamp).map(a => (
+                                    <div key={a.id} className="p-4 flex items-center gap-4">
+                                        <div className={`p-2 rounded-lg ${a.type === 'PINO' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                            {a.type === 'PINO' ? <Package className="w-5 h-5" /> : <Coffee className="w-5 h-5" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-bold text-gray-800">{a.type === 'PINO' ? 'Pino' : 'Snack'} × {a.quantity || 1} <span className="text-xs font-normal text-gray-500 uppercase ml-1">— {a.requestedBy || a.user}</span></div>
+                                            <div className="text-sm text-gray-600 truncate">"{a.reason}"</div>
+                                            <div className="text-xs text-gray-400">{a.timestamp instanceof Date ? a.timestamp.toLocaleString() : '...'}</div>
+                                        </div>
+                                        <div className="flex gap-2 shrink-0">
+                                            <button onClick={() => approveAdminSnack(a.id)} className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-sm transition-colors">Aprobar</button>
+                                            <button onClick={() => deleteAdminSnack(a.id)} className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-2 rounded-lg text-sm transition-colors">Rechazar</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
                         <DateRangeSelector label="Rango de Fechas" start={startDate} end={endDate} onRangeChange={(s, e) => { setStartDate(s); setEndDate(e); }} />
                     </div>
@@ -3693,7 +3760,7 @@ Firma: __________________
                             <div className="space-y-3 text-sm">
                                 <div className="flex justify-between border-b pb-2"><span>Clientes (Tickets)</span> <span className="font-bold">{snackCustomers}</span></div>
                                 <div className="flex justify-between border-b pb-2"><span>Empleados (Deducciones)</span> <span className="font-bold">{snackEmployees}</span></div>
-                                <div className="flex justify-between border-b pb-2"><span>Administración (Cortesías)</span> <span className="font-bold">{snackAdmin}</span></div>
+                                <div className="flex justify-between border-b pb-2"><span>Cortesías Aprobadas</span> <span className="font-bold">{snackAdmin}</span></div>
                                 <div className="flex justify-between text-lg text-orange-700 pt-2 font-black"><span>TOTAL SNACKS</span> <span>{totalSnacks}</span></div>
                             </div>
                         </div>
@@ -3702,6 +3769,9 @@ Firma: __________________
                                 <Package className="w-5 h-5 text-green-500" /> Pinos Vendidos
                             </h3>
                             <div className="space-y-3 text-sm">
+                                <div className="flex justify-between border-b pb-2"><span>Tickets (Greeter)</span> <span className="font-bold">{pinoFromTickets}</span></div>
+                                <div className="flex justify-between border-b pb-2"><span>Caja (QA)</span> <span className="font-bold">{pinoFromCashier}</span></div>
+                                <div className="flex justify-between border-b pb-2"><span>Cortesías Aprobadas</span> <span className="font-bold">{pinoAdmin}</span></div>
                                 <div className="flex justify-between text-lg text-green-700 pt-2 font-black"><span>TOTAL PINOS</span> <span>{pinoCount}</span></div>
                             </div>
                         </div>
@@ -3716,20 +3786,35 @@ Firma: __________________
                                 <thead className="bg-orange-100 text-orange-800">
                                     <tr>
                                         <th className="p-3">Fecha y Hora</th>
-                                        <th className="p-3">Usuario</th>
-                                        <th className="p-3 text-right">Cantidad</th>
+                                        <th className="p-3">Solicitante</th>
+                                        <th className="p-3">Tipo</th>
+                                        <th className="p-3">Motivo</th>
+                                        <th className="p-3 text-right">Cant.</th>
+                                        <th className="p-3 text-center">Estado</th>
                                         <th className="p-3 text-center">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {activeAdminSnacks.length === 0 ? (
-                                        <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay cortesías registradas en este periodo.</td></tr>
+                                        <tr><td colSpan="7" className="p-4 text-center text-gray-400">No hay cortesías registradas en este periodo.</td></tr>
                                     ) : (
                                         activeAdminSnacks.sort((a, b) => b.timestamp - a.timestamp).map(a => (
                                             <tr key={a.id} className="border-t hover:bg-orange-50">
-                                                <td className="p-3">{a.timestamp instanceof Date ? a.timestamp.toLocaleString() : '...'}</td>
-                                                <td className="p-3 uppercase text-xs font-bold text-gray-600">{a.user}</td>
-                                                <td className="p-3 text-right font-bold text-orange-600">{a.quantity}</td>
+                                                <td className="p-3 whitespace-nowrap">{a.timestamp instanceof Date ? a.timestamp.toLocaleString() : '...'}</td>
+                                                <td className="p-3 uppercase text-xs font-bold text-gray-600">{a.requestedBy || a.user}</td>
+                                                <td className="p-3">
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${a.type === 'PINO' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                        {a.type === 'PINO' ? <Package size={10} /> : <Coffee size={10} />} {a.type === 'PINO' ? 'Pino' : 'Snack'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-gray-600 max-w-xs truncate">{a.reason || <span className="text-gray-300 italic">—</span>}</td>
+                                                <td className="p-3 text-right font-bold text-orange-600">{a.quantity || 1}</td>
+                                                <td className="p-3 text-center">
+                                                    {isApproved(a)
+                                                        ? <span className="bg-green-100 text-green-700 font-bold text-xs px-2 py-1 rounded-full">Aprobado</span>
+                                                        : <span className="bg-yellow-100 text-yellow-700 font-bold text-xs px-2 py-1 rounded-full">Pendiente</span>
+                                                    }
+                                                </td>
                                                 <td className="p-3 text-center">
                                                     <button onClick={() => deleteAdminSnack(a.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded-lg" title="Eliminar cortesía">
                                                         <Trash2 size={16} />
