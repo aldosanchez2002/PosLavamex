@@ -177,9 +177,14 @@
             let revenueCashTickets = 0;
             let netMxnFlow = 0;
             let netUsdFlow = 0;
+            let cortesiasAbsorbed = 0;
+            let cortesiasCount = 0;
 
             tickets.forEach(t => {
-                if (t.paymentDetails?.method === 'CARD') {
+                if (t.paymentDetails?.method === 'CORTESIA') {
+                    cortesiasAbsorbed += t.price;
+                    cortesiasCount++;
+                } else if (t.paymentDetails?.method === 'CARD') {
                     revenueCard += t.price;
                 } else {
                     revenueCashTickets += t.price;
@@ -226,6 +231,8 @@
                 dropsUsd,
                 cashInsMxn,
                 cashInsUsd,
+                cortesiasAbsorbed,
+                cortesiasCount,
                 exchangeRate: exRate
             };
         };
@@ -278,7 +285,7 @@
                 payroll[emp.name].curp = emp.curp;
             });
 
-            const totalGrossSales = history.reduce((acc, t) => acc + (t.price || 0), 0);
+            const totalGrossSales = history.filter(t => t.paymentDetails?.method !== 'CORTESIA').reduce((acc, t) => acc + (t.price || 0), 0);
 
             let totalBoleadaCount = 0;
             let totalBoleadaRevenue = 0;
@@ -2583,7 +2590,7 @@ Firma: __________________
                 return tDate === targetDateStr;
             });
 
-            const totalSum = targetTickets.reduce((acc, t) => acc + (t.price || 0), 0);
+            const totalSum = targetTickets.filter(t => t.paymentDetails?.method !== 'CORTESIA').reduce((acc, t) => acc + (t.price || 0), 0);
             const targetDeductions = deductions.filter(d => d.amount > 0 && getLocalDateStr(d.timestamp) === targetDateStr);
 
             const isToday = targetDateStr === getLocalDateStr();
@@ -2653,6 +2660,7 @@ Firma: __________________
                         <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
                             <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
                                 <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" /> Tickets Pagados {dateLabel}</div>
+                                <span className="text-green-700 font-black">{formatCurrency(totalSum)}</span>
                             </div>
                             <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
                                 <table className="w-full text-sm text-left">
@@ -2675,7 +2683,12 @@ Firma: __________________
                                                     <div className="font-medium">{t.service?.label || 'Extras'}</div>
                                                     {t.snackCount > 0 && <span className="text-xs text-orange-600 font-bold block">(+{t.snackCount} Snacks)</span>}
                                                 </td>
-                                                <td className="p-3 font-bold text-green-600 text-right">{formatCurrency(t.price)}</td>
+                                                <td className="p-3 font-bold text-right">
+                                                    {t.paymentDetails?.method === 'CORTESIA'
+                                                        ? <span className="text-purple-600 font-bold">CORTESÍA <span className="line-through text-gray-400 font-normal text-xs">{formatCurrency(t.price)}</span></span>
+                                                        : <span className="text-green-600">{formatCurrency(t.price)}</span>
+                                                    }
+                                                </td>
                                             </tr>
                                         ))}
                                         {targetTickets.length === 0 && (
@@ -2955,7 +2968,16 @@ Firma: __________________
                         <Button onClick={printCorte}><Printer size={18} /> PDF</Button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div onClick={() => setView('HISTORY')} className="cursor-pointer hover:scale-105 transition-transform bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div><div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div><div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div></div>
+                        <div onClick={() => setView('HISTORY')} className="cursor-pointer hover:scale-105 transition-transform bg-gradient-to-br from-green-500 to-emerald-600 text-white p-6 rounded-xl shadow-lg">
+                            <div className="flex items-center gap-2 mb-1 opacity-90"><TrendingUp size={18} /> Venta Total</div>
+                            <div className="text-3xl font-bold">{formatCurrency(corteTotals.total)}</div>
+                            <div className="text-sm opacity-80 mt-1">{corteTickets.length} Tickets</div>
+                            {corteTotals.cortesiasCount > 0 && (
+                                <div className="mt-2 pt-2 border-t border-white/30 text-xs opacity-90 flex items-center gap-1">
+                                    <Gift size={12} /> {corteTotals.cortesiasCount} cortesía{corteTotals.cortesiasCount !== 1 ? 's' : ''} absorbida{corteTotals.cortesiasCount !== 1 ? 's' : ''}: {formatCurrency(corteTotals.cortesiasAbsorbed)}
+                                </div>
+                            )}
+                        </div>
 
                         <div onClick={printCorte} className="cursor-pointer hover:scale-105 transition-transform bg-white p-4 rounded-xl shadow border border-gray-100 flex flex-col justify-center">
                             <div className="flex items-center justify-between mb-2">
