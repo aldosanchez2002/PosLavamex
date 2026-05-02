@@ -1307,10 +1307,8 @@ Firma: __________________
 
             const archiveEmployee = (id) => handleDbAction(() => updateDoc(doc(db, "employees", id), { archived: true }));
 
-            const deleteTicket = (id) => handleDbAction(async () => {
-                if (confirm("¿Seguro que deseas borrar este ticket?")) {
-                    await updateDoc(doc(db, "tickets", id), { status: 'CANCELLED', deletedAt: serverTimestamp() });
-                }
+            const deleteTicket = (id, reason) => handleDbAction(async () => {
+                await updateDoc(doc(db, "tickets", id), { status: 'CANCELLED', deletedAt: serverTimestamp(), deletionReason: reason || '' });
             });
 
             const addDeduction = (employee, amount, description) => handleDbAction(() => addDoc(collection(db, "deductions"), {
@@ -1625,6 +1623,8 @@ Firma: __________________
             const [desc, setDesc] = useState('');
             const [vDesc, setVDesc] = useState('');
             const [vPrice, setVPrice] = useState('');
+            const [deleteModal, setDeleteModal] = useState(null);
+            const [deleteReason, setDeleteReason] = useState('');
 
             const isDesktop = role === 'CASHIER' || role === 'ADMIN';
             const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
@@ -1853,7 +1853,7 @@ Firma: __________________
                                             <div className="flex gap-3 pt-2">
                                                 <Button onClick={() => startEdit(t)} variant="warning" className="flex-1 py-2 text-sm"><Pencil size={16} /> Editar</Button>
                                                 <Button onClick={() => handleReprint(t)} variant="secondary" className="flex-1 py-2 text-sm"><Printer size={16} /> Imprimir</Button>
-                                                <Button onClick={() => deleteTicket(t.id)} variant="danger" className="flex-1 py-2 text-sm"><Trash2 size={16} /> Borrar</Button>
+                                                <Button onClick={() => { setDeleteModal(t.id); setDeleteReason(''); }} variant="danger" className="flex-1 py-2 text-sm"><Trash2 size={16} /> Borrar</Button>
                                             </div>
                                         )}
                                     </div>
@@ -1862,6 +1862,25 @@ Firma: __________________
                         )}
                     </div>
                 </div>
+
+                {deleteModal && (
+                    <Modal title="Borrar Ticket" icon={Trash2} onClose={() => setDeleteModal(null)} footer={
+                        <div className="flex gap-3">
+                            <Button onClick={() => setDeleteModal(null)} variant="secondary" className="flex-1">Cancelar</Button>
+                            <Button onClick={() => { deleteTicket(deleteModal, deleteReason); setDeleteModal(null); setDeleteReason(''); }} disabled={!deleteReason.trim()} variant="danger" className="flex-1">Confirmar</Button>
+                        </div>
+                    }>
+                        <p className="text-gray-600 text-sm mb-3">Explica el motivo por el que se elimina este ticket. Este campo es obligatorio.</p>
+                        <textarea
+                            value={deleteReason}
+                            onChange={e => setDeleteReason(e.target.value)}
+                            placeholder="Motivo de eliminación..."
+                            rows={3}
+                            className="w-full p-3 border-2 border-red-300 rounded-lg text-sm focus:border-red-500 focus:outline-none resize-none"
+                            autoFocus
+                        />
+                    </Modal>
+                )}
             );
         };
 
@@ -2537,6 +2556,7 @@ Firma: __________________
                                                     <th className="p-3">Hora Eliminado</th>
                                                     <th className="p-3">Descripción</th>
                                                     <th className="p-3">Servicio / Extras</th>
+                                                    <th className="p-3">Motivo</th>
                                                     <th className="p-3 text-right">Monto Original</th>
                                                 </tr>
                                             </thead>
@@ -2551,6 +2571,7 @@ Firma: __________________
                                                             <div className="font-medium text-gray-800">{t.service?.label || 'Extras Solo'} {t.size ? `(${t.size.label})` : ''}</div>
                                                             {t.extras && t.extras.length > 0 && <div className="text-xs text-gray-500 mt-1">+{t.extras.map(e => e.label).join(', ')}</div>}
                                                         </td>
+                                                        <td className="p-3 text-gray-700 italic max-w-[200px]">{t.deletionReason || <span className="text-gray-400">—</span>}</td>
                                                         <td className="p-3 font-bold text-gray-500 line-through text-right">{formatCurrency(t.price)}</td>
                                                     </tr>
                                                 ))}
