@@ -1765,6 +1765,7 @@ Firma: __________________
             );
 
             return (
+                <>
                 <div className="flex flex-col h-full overflow-hidden bg-gray-100">
                     <div className="flex bg-white shadow-sm border-b shrink-0">
                         <button onClick={() => setSubTab('FORM')} className={`flex-1 py-4 text-center font-bold flex items-center justify-center gap-2 transition-colors ${subTab === 'FORM' ? 'text-blue-600 border-b-4 border-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>
@@ -1881,6 +1882,7 @@ Firma: __________________
                         />
                     </Modal>
                 )}
+                </>
             );
         };
 
