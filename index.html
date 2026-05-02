@@ -3859,13 +3859,13 @@ Firma: __________________
             const [deletedTickets, setDeletedTickets] = useState([]);
             const [isFetching, setIsFetching] = useState(false);
 
-            const todayStr = getLocalDateStr();
-            const todayStart = new Date(todayStr + 'T00:00:00');
-            const todayEnd = new Date(todayStr + 'T23:59:59.999');
+            const monthStart = new Date();
+            monthStart.setDate(monthStart.getDate() - 30);
+            monthStart.setHours(0, 0, 0, 0);
 
-            const pendingExpenses = expenses.filter(e => e.status === 'PENDING');
-            const pendingSnacks = adminSnacks.filter(s => s.status === 'PENDING');
-            const todayDrops = cashDrops.filter(d => d.timestamp instanceof Date && d.timestamp >= todayStart && d.timestamp <= todayEnd);
+            const pendingExpenses = expenses.filter(e => e.status === 'PENDING').sort((a, b) => a.timestamp - b.timestamp);
+            const pendingSnacks = adminSnacks.filter(s => s.status === 'PENDING').sort((a, b) => a.timestamp - b.timestamp);
+            const monthDrops = cashDrops.filter(d => d.timestamp instanceof Date && d.timestamp >= monthStart).sort((a, b) => a.timestamp - b.timestamp);
             const totalPending = pendingExpenses.length + pendingSnacks.length;
 
             useEffect(() => {
@@ -3875,8 +3875,8 @@ Firma: __________________
                         const snap = await getDocs(query(
                             collection(db, "tickets"),
                             where("status", "==", "CANCELLED"),
-                            where("timestamp", ">=", todayStart),
-                            where("timestamp", "<=", todayEnd)
+                            where("timestamp", ">=", monthStart),
+                            orderBy("timestamp", "asc")
                         ));
                         setDeletedTickets(snap.docs.map(d => ({
                             id: d.id, ...d.data(),
@@ -3967,17 +3967,17 @@ Firma: __________________
 
                     <div className="bg-white rounded-xl shadow border overflow-hidden">
                         <div className="p-4 bg-blue-50 border-b font-bold text-blue-800 flex items-center justify-between">
-                            <div className="flex items-center gap-2"><Upload className="w-4 h-4" /> Envíos del Día</div>
-                            <span className="bg-blue-200 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">{todayDrops.length}</span>
+                            <div className="flex items-center gap-2"><Upload className="w-4 h-4" /> Envíos (Último Mes)</div>
+                            <span className="bg-blue-200 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">{monthDrops.length}</span>
                         </div>
-                        {todayDrops.length === 0 ? (
-                            <div className="p-4 text-center text-gray-400 text-sm">Sin envíos registrados hoy</div>
+                        {monthDrops.length === 0 ? (
+                            <div className="p-4 text-center text-gray-400 text-sm">Sin envíos en el último mes</div>
                         ) : (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-blue-50 text-blue-700 font-bold"><tr><th className="p-3">Código</th><th className="p-3">Hora</th><th className="p-3">Usuario</th><th className="p-3 text-right">MXN</th><th className="p-3 text-right">USD</th></tr></thead>
                                     <tbody>
-                                        {todayDrops.map(d => (
+                                        {monthDrops.map(d => (
                                             <tr key={d.id} className="border-t hover:bg-gray-50">
                                                 <td className="p-3 font-mono font-bold text-xs">{d.code}</td>
                                                 <td className="p-3 text-gray-600">{d.timestamp instanceof Date ? d.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td>
@@ -3994,13 +3994,13 @@ Firma: __________________
 
                     <div className="bg-white rounded-xl shadow border overflow-hidden">
                         <div className="p-4 bg-red-50 border-b font-bold text-red-800 flex items-center justify-between">
-                            <div className="flex items-center gap-2"><Trash2 className="w-4 h-4" /> Tickets Eliminados Hoy</div>
+                            <div className="flex items-center gap-2"><Trash2 className="w-4 h-4" /> Tickets Eliminados (Último Mes)</div>
                             <span className="bg-red-200 text-red-800 text-xs font-bold px-2 py-1 rounded-full">{deletedTickets.length}</span>
                         </div>
                         {isFetching ? (
                             <div className="p-4 text-center text-gray-400 text-sm flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={16} /> Cargando...</div>
                         ) : deletedTickets.length === 0 ? (
-                            <div className="p-4 text-center text-gray-400 text-sm">Sin tickets eliminados hoy</div>
+                            <div className="p-4 text-center text-gray-400 text-sm">Sin tickets eliminados en el último mes</div>
                         ) : (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left">
