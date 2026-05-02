@@ -3959,7 +3959,50 @@ Firma: __________________
                         )}
                     </div>
 
-                    <AdminBusinessExpenses />
+                    <AdminRegistrarGasto />
+                </div>
+            );
+        };
+
+        const AdminRegistrarGasto = () => {
+            const { addBusinessExpense } = useContext(AppContext);
+            const [desc, setDesc] = useState('');
+            const [amt, setAmt] = useState('');
+            const handleSubmit = () => { if (!desc || !amt) return; addBusinessExpense(desc, amt); setDesc(''); setAmt(''); };
+            return (
+                <div className="bg-purple-50 border-purple-200 border p-4 rounded-xl shadow-sm">
+                    <h3 className="font-bold text-purple-800 mb-2 flex items-center gap-2"><Briefcase size={18} /> Registrar Gasto Administrativo</h3>
+                    <p className="text-sm text-purple-600 mb-3 font-medium">Gastos pagados externamente (SAM's, IMSS, etc). No afectan el corte diario.</p>
+                    <div className="flex gap-2 flex-col md:flex-row">
+                        <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción del gasto" className="border p-3 rounded-lg flex-1 shadow-sm" />
+                        <input type="number" value={amt} onChange={e => setAmt(e.target.value)} placeholder="Monto ($)" className="border p-3 rounded-lg w-full md:w-36 shadow-sm" />
+                        <Button onClick={handleSubmit} variant="primary" className="bg-purple-600 hover:bg-purple-700 shadow-md">Guardar</Button>
+                    </div>
+                </div>
+            );
+        };
+
+        const AdminHistorialGastos = () => {
+            const { businessExpenses } = useContext(AppContext);
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+                    <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><Briefcase size={16} /> Historial de Gastos Administrativos</h4>
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-500 border-b"><tr><th className="p-3">Fecha</th><th className="p-3">Descripción</th><th className="p-3 text-right">Monto</th><th className="p-3 text-right">Registrado Por</th></tr></thead>
+                        <tbody>
+                            {businessExpenses.length === 0
+                                ? <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay gastos registrados.</td></tr>
+                                : businessExpenses.map(e => (
+                                    <tr key={e.id} className="border-b hover:bg-gray-50 last:border-b-0">
+                                        <td className="p-3 text-gray-600"><div>{e.timestamp.toLocaleDateString()}</div><div className="text-xs">{e.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></td>
+                                        <td className="p-3 font-medium text-gray-800">{e.description}</td>
+                                        <td className="p-3 text-right font-bold text-purple-700">{formatCurrency(e.amount)}</td>
+                                        <td className="p-3 text-right text-xs text-gray-400 uppercase">{e.createdBy}</td>
+                                    </tr>
+                                ))
+                            }
+                        </tbody>
+                    </table>
                 </div>
             );
         };
@@ -3983,7 +4026,6 @@ Firma: __________________
                             <PlusCircle size={18} /> AGREGAR EFECTIVO
                         </button>
                     </div>
-                    <AdminAprobaciones />
                     <AdminCorte />
                     {showAddCash && (
                         <Modal title="Agregar Efectivo a Caja" icon={Banknote} onClose={() => setShowAddCash(false)} footer={
@@ -3993,9 +4035,7 @@ Firma: __________________
                             </div>
                         }>
                             <div className="space-y-4">
-                                <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">
-                                    Este monto se sumará al dinero esperado en caja. Úsalo cuando necesites meter cambio o aumentar el fondo.
-                                </div>
+                                <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">Este monto se sumará al dinero esperado en caja. Úsalo cuando necesites meter cambio o aumentar el fondo.</div>
                                 <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label><input type="number" value={acMxn} onChange={e => setAcMxn(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" /></div>
                                 <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label><input type="number" value={acUsd} onChange={e => setAcUsd(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" /></div>
                                 <div><label className="block text-sm font-bold text-gray-600 mb-1">Razón (Opcional)</label><input value={acReason} onChange={e => setAcReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Refill de cambio" /></div>
@@ -4006,19 +4046,27 @@ Firma: __________________
             );
         };
 
-        const AdminAprobacionesMain = () => {
+        const AdminReportes = () => {
             const [subTab, setSubTab] = useState('CORTE');
-            const subTabs = [{ id: 'CORTE', label: 'Corte' }, { id: 'NOMINA', label: 'Nómina' }, { id: 'ASISTENCIA', label: 'Asistencia' }];
+            const subTabs = [
+                { id: 'CORTE', label: 'Corte' },
+                { id: 'NOMINA', label: 'Nómina' },
+                { id: 'ASISTENCIA', label: 'Asistencia' },
+                { id: 'MERCANCIA', label: 'Mercancía' },
+                { id: 'GASTOS', label: 'Historial Gastos' },
+            ];
             return (
                 <div className="space-y-4">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                         {subTabs.map(t => (
-                            <button key={t.id} onClick={() => setSubTab(t.id)} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${subTab === t.id ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border'}`}>{t.label}</button>
+                            <button key={t.id} onClick={() => setSubTab(t.id)} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap transition-colors ${subTab === t.id ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border'}`}>{t.label}</button>
                         ))}
                     </div>
                     {subTab === 'CORTE' && <AdminCorteTab />}
                     {subTab === 'NOMINA' && <AdminNomina />}
                     {subTab === 'ASISTENCIA' && <AdminAsistencia />}
+                    {subTab === 'MERCANCIA' && <AdminMercancia />}
+                    {subTab === 'GASTOS' && <AdminHistorialGastos />}
                 </div>
             );
         };
@@ -4045,8 +4093,8 @@ Firma: __________________
                             </button>
                         ))}
                     </div>
-                    {tab === 'APROBACIONES' && <AdminAprobacionesMain />}
-                    {tab === 'REPORTES' && <AdminMercancia />}
+                    {tab === 'APROBACIONES' && <AdminAprobaciones />}
+                    {tab === 'REPORTES' && <AdminReportes />}
                     {tab === 'CONFIG' && <AdminConfiguracion />}
                 </div>
             );
