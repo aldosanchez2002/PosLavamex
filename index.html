@@ -3031,7 +3031,7 @@ Firma: __________________
         };
 
         const AdminNomina = () => {
-            const { employees, history, deductions, commissions, extrasList, db, tickets, addCashIn } = useContext(AppContext);
+            const { employees, history, deductions, commissions, extrasList, db, tickets } = useContext(AppContext);
             const [startDate, setStartDate] = useState(() => getDefaultPayPeriod().start);
             const [endDate, setEndDate] = useState(() => getDefaultPayPeriod().end);
             const [attendanceData, setAttendanceData] = useState([]);
@@ -3041,41 +3041,6 @@ Firma: __________________
 
             const [previewData, setPreviewData] = useState(null);
             const [previewName, setPreviewName] = useState(null);
-
-            const [showAddCash, setShowAddCash] = useState(false);
-            const [acMxn, setAcMxn] = useState('');
-            const [acUsd, setAcUsd] = useState('');
-            const [acReason, setAcReason] = useState('');
-            const handleAddCash = () => {
-                if (!acMxn && !acUsd) return;
-                addCashIn(acMxn, acUsd, acReason);
-                setAcMxn(''); setAcUsd(''); setAcReason('');
-                setShowAddCash(false);
-            };
-
-            const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
-            const [reportYear, setReportYear] = useState(String(new Date().getFullYear()));
-            const fetchAllEmployees = async () => {
-                const snap = await getDocs(collection(db, "employees"));
-                return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            };
-            const generateAttendanceReport = async () => {
-                const allEmployees = await fetchAllEmployees();
-                const q = query(collection(db, "attendance"), where("month", "==", reportMonth));
-                const snapshot = await getDocs(q);
-                const attendanceData = {};
-                snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
-                const daysInMonth = new Date(reportMonth.split('-')[0], reportMonth.split('-')[1], 0).getDate();
-                PdfService.generateAttendance(reportMonth, allEmployees, attendanceData, daysInMonth);
-            };
-            const generateYearlyReport = async () => {
-                const allEmployees = await fetchAllEmployees();
-                const q = query(collection(db, "attendance"), where("month", ">=", `${reportYear}-01`), where("month", "<=", `${reportYear}-12`));
-                const snapshot = await getDocs(q);
-                const attendanceData = {};
-                snapshot.forEach(doc => { attendanceData[doc.id] = doc.data().records; });
-                PdfService.generateAttendanceYearly(reportYear, allEmployees, attendanceData);
-            };
 
             const start = new Date(startDate + 'T00:00:00');
             const end = new Date(endDate + 'T23:59:59.999');
@@ -3345,55 +3310,6 @@ Firma: __________________
                             </div>
                         </Modal>
                     )}
-
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                        <h3 className="font-bold mb-4 text-gray-800 flex items-center gap-2"><Calendar className="w-5 h-5" /> Reporte de Asistencia</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-600 mb-2">Mes</label>
-                                <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="border p-3 rounded-lg w-full text-lg mb-3" />
-                                <Button onClick={generateAttendanceReport} className="w-full">Descargar PDF Mensual</Button>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-gray-600 mb-2">Año</label>
-                                <input type="number" value={reportYear} onChange={e => setReportYear(e.target.value)} min="2020" max="2099" className="border p-3 rounded-lg w-full text-lg mb-3" />
-                                <Button onClick={generateYearlyReport} className="w-full">Descargar PDF Anual</Button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end">
-                        <button onClick={() => setShowAddCash(true)} className="px-5 py-2.5 rounded-xl font-bold whitespace-nowrap bg-green-600 text-white shadow-md flex items-center gap-2 hover:bg-green-700 transition-colors">
-                            <PlusCircle size={18} /> AGREGAR EFECTIVO
-                        </button>
-                    </div>
-
-                    {showAddCash && (
-                        <Modal title="Agregar Efectivo a Caja" icon={Banknote} onClose={() => setShowAddCash(false)} footer={
-                            <div className="flex gap-3">
-                                <Button onClick={() => setShowAddCash(false)} variant="secondary" className="flex-1">Cancelar</Button>
-                                <Button onClick={handleAddCash} variant="success" className="flex-1">Agregar</Button>
-                            </div>
-                        }>
-                            <div className="space-y-4">
-                                <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">
-                                    Este monto se sumará al dinero esperado en caja. Úsalo cuando necesites meter cambio o aumentar el fondo.
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label>
-                                    <input type="number" value={acMxn} onChange={e => setAcMxn(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label>
-                                    <input type="number" value={acUsd} onChange={e => setAcUsd(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Razón (Opcional)</label>
-                                    <input value={acReason} onChange={e => setAcReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Refill de cambio" />
-                                </div>
-                            </div>
-                        </Modal>
-                    )}
                 </div>
             );
         };
@@ -3445,53 +3361,23 @@ Firma: __________________
             );
         };
 
-        const AdminConfig = () => {
-            const { exRate, snackPrice, updateGlobalSettings, employees, addEmployee, archiveEmployee, updateEmployee } = useContext(AppContext);
-            const [localExRate, setLocalExRate] = useState(exRate);
-            const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
+        const AdminConfigEmpleados = () => {
+            const { employees, addEmployee, archiveEmployee, updateEmployee } = useContext(AppContext);
             const [newEmpName, setNewEmpName] = useState('');
             const [editingEmp, setEditingEmp] = useState(null);
 
-            useEffect(() => {
-                setLocalExRate(exRate);
-                setLocalSnackPrice(snackPrice);
-            }, [exRate, snackPrice]);
-
             const handleAddEmployee = () => { if (newEmpName.trim()) { addEmployee(newEmpName.trim()); setNewEmpName(''); } };
-
-            const handleEditEmployee = (emp) => {
-                setEditingEmp({
-                    ...emp,
-                    role: emp.role || 'WASHER',
-                    baseSalary: emp.baseSalary || 0,
-                    commissionPct: emp.commissionPct || 0,
-                    curp: emp.curp || ''
-                });
-            };
-
+            const handleEditEmployee = (emp) => setEditingEmp({ ...emp, role: emp.role || 'WASHER', baseSalary: emp.baseSalary || 0, commissionPct: emp.commissionPct || 0, curp: emp.curp || '' });
             const saveEmployeeChanges = () => {
                 if (!editingEmp) return;
-                updateEmployee(editingEmp.id, {
-                    role: editingEmp.role,
-                    baseSalary: parseFloat(editingEmp.baseSalary) || 0,
-                    commissionPct: parseFloat(editingEmp.commissionPct) || 0,
-                    curp: editingEmp.curp || ''
-                });
+                updateEmployee(editingEmp.id, { role: editingEmp.role, baseSalary: parseFloat(editingEmp.baseSalary) || 0, commissionPct: parseFloat(editingEmp.commissionPct) || 0, curp: editingEmp.curp || '' });
                 setEditingEmp(null);
             };
 
             return (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto">
-                    <h3 className="font-bold mb-4 text-gray-800">General</h3>
-                    <div className="mb-6 flex flex-col gap-4">
-                        <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-                        <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
-                        <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full mt-2">Guardar Ajustes Generales</Button>
-                    </div>
-
-                    <h3 className="font-bold mb-4 border-t pt-4 text-gray-800">Empleados</h3>
-                    <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} placeholder="Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><Button onClick={handleAddEmployee}><PlusCircle className="w-5 h-5" /></Button></div>
-                    <div className="space-y-2">{employees.map((e) => (
+                    <div className="flex gap-2 mb-4"><input value={newEmpName} onChange={e => setNewEmpName(e.target.value)} placeholder="Nuevo Empleado" className="border p-3 rounded-lg flex-1" /><Button onClick={handleAddEmployee}><PlusCircle className="w-5 h-5" /></Button></div>
+                    <div className="space-y-2">{employees.map(e => (
                         <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                             <div>
                                 <span className="font-medium block">{e.name}</span>
@@ -3499,80 +3385,34 @@ Firma: __________________
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className={`text-xs font-bold px-2 py-1 rounded ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.active ? 'Presente' : 'Ausente'}</span>
-                                <button onClick={() => handleEditEmployee(e)} className="text-blue-500 hover:text-blue-700" title="Editar Rol"><UserCog size={18} /></button>
-                                <button onClick={() => { if (confirm(`¿Ocultar a ${e.name}?`)) archiveEmployee(e.id); }} className="text-red-500 hover:text-red-700" title="Ocultar empleado"><EyeOff size={18} /></button>
+                                <button onClick={() => handleEditEmployee(e)} className="text-blue-500 hover:text-blue-700"><UserCog size={18} /></button>
+                                <button onClick={() => { if (confirm(`¿Ocultar a ${e.name}?`)) archiveEmployee(e.id); }} className="text-red-500 hover:text-red-700"><EyeOff size={18} /></button>
                             </div>
                         </div>
                     ))}</div>
-
                     {editingEmp && (
-                        <Modal title={`Editar Empleado: ${editingEmp.name}`} icon={UserCog} onClose={() => setEditingEmp(null)} footer={
-                            <div className="flex gap-2">
-                                <Button onClick={() => setEditingEmp(null)} variant="secondary" className="flex-1">Cancelar</Button>
-                                <Button onClick={saveEmployeeChanges} variant="primary" className="flex-1">Guardar</Button>
-                            </div>
-                        }>
+                        <Modal title={`Editar Empleado: ${editingEmp.name}`} icon={UserCog} onClose={() => setEditingEmp(null)} footer={<div className="flex gap-2"><Button onClick={() => setEditingEmp(null)} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={saveEmployeeChanges} variant="primary" className="flex-1">Guardar</Button></div>}>
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-1">Rol</label>
-                                    <select
-                                        className="w-full border p-2 rounded bg-white"
-                                        value={editingEmp.role}
-                                        onChange={(e) => setEditingEmp({ ...editingEmp, role: e.target.value })}
-                                    >
-                                        <option value="WASHER">Lavador (Comisión Estandar)</option>
-                                        <option value="SUPERVISOR">Supervisor (Sueldo + % Ventas)</option>
-                                        <option value="BOLERO">Bolero (% de Boleadas)</option>
-                                    </select>
-                                </div>
-                                {editingEmp.role === 'SUPERVISOR' && (
-                                    <>
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-600 mb-1">CURP</label>
-                                            <input
-                                                type="text"
-                                                className="w-full border p-2 rounded uppercase"
-                                                value={editingEmp.curp || ''}
-                                                onChange={(e) => setEditingEmp({ ...editingEmp, curp: e.target.value.toUpperCase() })}
-                                                placeholder="Ingrese CURP"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-600 mb-1">Sueldo Base Semanal ($)</label>
-                                            <input
-                                                type="number"
-                                                className="w-full border p-2 rounded"
-                                                value={editingEmp.baseSalary}
-                                                onChange={(e) => setEditingEmp({ ...editingEmp, baseSalary: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-600 mb-1">Comisión de Ventas Totales (%)</label>
-                                            <input
-                                                type="number"
-                                                className="w-full border p-2 rounded"
-                                                value={editingEmp.commissionPct}
-                                                onChange={(e) => setEditingEmp({ ...editingEmp, commissionPct: e.target.value })}
-                                                placeholder="Ej. 5"
-                                            />
-                                        </div>
-                                    </>
-                                )}
-                                {editingEmp.role === 'BOLERO' && (
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-600 mb-1">Comisión de Boleadas (%)</label>
-                                        <input
-                                            type="number"
-                                            className="w-full border p-2 rounded"
-                                            value={editingEmp.commissionPct}
-                                            onChange={(e) => setEditingEmp({ ...editingEmp, commissionPct: e.target.value })}
-                                            placeholder="Ej. 50"
-                                        />
-                                    </div>
-                                )}
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Rol</label><select className="w-full border p-2 rounded bg-white" value={editingEmp.role} onChange={e => setEditingEmp({ ...editingEmp, role: e.target.value })}><option value="WASHER">Lavador (Comisión Estandar)</option><option value="SUPERVISOR">Supervisor (Sueldo + % Ventas)</option><option value="BOLERO">Bolero (% de Boleadas)</option></select></div>
+                                {editingEmp.role === 'SUPERVISOR' && (<><div><label className="block text-sm font-bold text-gray-600 mb-1">CURP</label><input type="text" className="w-full border p-2 rounded uppercase" value={editingEmp.curp || ''} onChange={e => setEditingEmp({ ...editingEmp, curp: e.target.value.toUpperCase() })} placeholder="Ingrese CURP" /></div><div><label className="block text-sm font-bold text-gray-600 mb-1">Sueldo Base Semanal ($)</label><input type="number" className="w-full border p-2 rounded" value={editingEmp.baseSalary} onChange={e => setEditingEmp({ ...editingEmp, baseSalary: e.target.value })} /></div><div><label className="block text-sm font-bold text-gray-600 mb-1">Comisión de Ventas Totales (%)</label><input type="number" className="w-full border p-2 rounded" value={editingEmp.commissionPct} onChange={e => setEditingEmp({ ...editingEmp, commissionPct: e.target.value })} placeholder="Ej. 5" /></div></>)}
+                                {editingEmp.role === 'BOLERO' && (<div><label className="block text-sm font-bold text-gray-600 mb-1">Comisión de Boleadas (%)</label><input type="number" className="w-full border p-2 rounded" value={editingEmp.commissionPct} onChange={e => setEditingEmp({ ...editingEmp, commissionPct: e.target.value })} placeholder="Ej. 50" /></div>)}
                             </div>
                         </Modal>
                     )}
+                </div>
+            );
+        };
+
+        const AdminConfigCambio = () => {
+            const { exRate, snackPrice, updateGlobalSettings } = useContext(AppContext);
+            const [localExRate, setLocalExRate] = useState(exRate);
+            const [localSnackPrice, setLocalSnackPrice] = useState(snackPrice);
+            useEffect(() => { setLocalExRate(exRate); setLocalSnackPrice(snackPrice); }, [exRate, snackPrice]);
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-lg mx-auto flex flex-col gap-4">
+                    <div><label className="block text-sm font-bold text-gray-600 mb-2">Cambio de Dólar ($)</label><input type="number" value={localExRate} onChange={e => setLocalExRate(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
+                    <div><label className="block text-sm font-bold text-gray-600 mb-2">Precio Snack ($)</label><input type="number" value={localSnackPrice} onChange={e => setLocalSnackPrice(e.target.value)} className="border p-3 rounded-lg w-full text-lg" /></div>
+                    <Button onClick={() => { updateGlobalSettings(parseFloat(localExRate), parseFloat(localSnackPrice)); alert("Ajustes actualizados"); }} className="w-full">Guardar Ajustes</Button>
                 </div>
             );
         };
@@ -3696,15 +3536,17 @@ Firma: __________________
         };
 
         const AdminConfiguracion = () => {
-            const [configTab, setConfigTab] = useState('GENERAL');
+            const [configTab, setConfigTab] = useState('EMPLEADOS');
+            const subTabs = [{ id: 'EMPLEADOS', label: 'Empleados' }, { id: 'CAMBIO', label: 'Cambio' }, { id: 'PRECIOS', label: 'Precios' }];
             return (
                 <div className="space-y-4">
                     <div className="flex gap-2">
-                        {['GENERAL', 'PRECIOS'].map(t => (
-                            <button key={t} onClick={() => setConfigTab(t)} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${configTab === t ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border'}`}>{t}</button>
+                        {subTabs.map(t => (
+                            <button key={t.id} onClick={() => setConfigTab(t.id)} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${configTab === t.id ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border'}`}>{t.label}</button>
                         ))}
                     </div>
-                    {configTab === 'GENERAL' && <AdminConfig />}
+                    {configTab === 'EMPLEADOS' && <AdminConfigEmpleados />}
+                    {configTab === 'CAMBIO' && <AdminConfigCambio />}
                     {configTab === 'PRECIOS' && <AdminPrecios />}
                 </div>
             );
@@ -4122,17 +3964,74 @@ Firma: __________________
             );
         };
 
+        const AdminCorteTab = () => {
+            const { addCashIn } = useContext(AppContext);
+            const [showAddCash, setShowAddCash] = useState(false);
+            const [acMxn, setAcMxn] = useState('');
+            const [acUsd, setAcUsd] = useState('');
+            const [acReason, setAcReason] = useState('');
+            const handleAddCash = () => {
+                if (!acMxn && !acUsd) return;
+                addCashIn(acMxn, acUsd, acReason);
+                setAcMxn(''); setAcUsd(''); setAcReason('');
+                setShowAddCash(false);
+            };
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-end">
+                        <button onClick={() => setShowAddCash(true)} className="px-5 py-2.5 rounded-xl font-bold bg-green-600 text-white shadow-md flex items-center gap-2 hover:bg-green-700 transition-colors">
+                            <PlusCircle size={18} /> AGREGAR EFECTIVO
+                        </button>
+                    </div>
+                    <AdminAprobaciones />
+                    <AdminCorte />
+                    {showAddCash && (
+                        <Modal title="Agregar Efectivo a Caja" icon={Banknote} onClose={() => setShowAddCash(false)} footer={
+                            <div className="flex gap-3">
+                                <Button onClick={() => setShowAddCash(false)} variant="secondary" className="flex-1">Cancelar</Button>
+                                <Button onClick={handleAddCash} variant="success" className="flex-1">Agregar</Button>
+                            </div>
+                        }>
+                            <div className="space-y-4">
+                                <div className="bg-green-50 p-3 rounded-lg text-sm text-green-800 border border-green-200">
+                                    Este monto se sumará al dinero esperado en caja. Úsalo cuando necesites meter cambio o aumentar el fondo.
+                                </div>
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label><input type="number" value={acMxn} onChange={e => setAcMxn(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" /></div>
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label><input type="number" value={acUsd} onChange={e => setAcUsd(e.target.value)} className="w-full border p-3 rounded-lg font-bold text-lg" placeholder="0.00" /></div>
+                                <div><label className="block text-sm font-bold text-gray-600 mb-1">Razón (Opcional)</label><input value={acReason} onChange={e => setAcReason(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Refill de cambio" /></div>
+                            </div>
+                        </Modal>
+                    )}
+                </div>
+            );
+        };
+
+        const AdminAprobacionesMain = () => {
+            const [subTab, setSubTab] = useState('CORTE');
+            const subTabs = [{ id: 'CORTE', label: 'Corte' }, { id: 'NOMINA', label: 'Nómina' }, { id: 'ASISTENCIA', label: 'Asistencia' }];
+            return (
+                <div className="space-y-4">
+                    <div className="flex gap-2">
+                        {subTabs.map(t => (
+                            <button key={t.id} onClick={() => setSubTab(t.id)} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${subTab === t.id ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border'}`}>{t.label}</button>
+                        ))}
+                    </div>
+                    {subTab === 'CORTE' && <AdminCorteTab />}
+                    {subTab === 'NOMINA' && <AdminNomina />}
+                    {subTab === 'ASISTENCIA' && <AdminAsistencia />}
+                </div>
+            );
+        };
+
         const AdminPanel = () => {
             const { expenses, adminSnacks } = useContext(AppContext);
             const pendingCount = expenses.filter(e => e.status === 'PENDING').length + adminSnacks.filter(s => s.status === 'PENDING').length;
-            const [tab, setTab] = useState('CORTE');
+            const [tab, setTab] = useState('APROBACIONES');
 
             const tabs = [
-                { id: 'CORTE', label: 'CORTE' },
-                { id: 'NOMINA', label: 'NÓMINA' },
-                { id: 'MERCANCIA', label: 'MERCANCÍA' },
-                { id: 'APROBACIONES', label: 'APROBACIONES', badge: pendingCount },
-                { id: 'CONFIG', label: 'CONFIGURACIÓN' },
+                { id: 'APROBACIONES', label: 'Aprobaciones', icon: ShieldCheck, badge: pendingCount },
+                { id: 'REPORTES', label: 'Reportes', icon: null },
+                { id: 'CONFIG', label: 'Configuración', icon: Settings },
             ];
 
             return (
@@ -4140,16 +4039,14 @@ Firma: __________________
                     <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
                         {tabs.map(t => (
                             <button key={t.id} onClick={() => setTab(t.id)} className={`relative px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${tab === t.id ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border'}`}>
-                                {t.id === 'APROBACIONES' && <ShieldCheck size={16} />}
+                                {t.icon && <t.icon size={16} />}
                                 {t.label}
                                 {t.badge > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-black w-5 h-5 rounded-full flex items-center justify-center">{t.badge}</span>}
                             </button>
                         ))}
                     </div>
-                    {tab === 'CORTE' && <AdminCorte />}
-                    {tab === 'NOMINA' && <AdminNomina />}
-                    {tab === 'MERCANCIA' && <AdminMercancia />}
-                    {tab === 'APROBACIONES' && <AdminAprobaciones />}
+                    {tab === 'APROBACIONES' && <AdminAprobacionesMain />}
+                    {tab === 'REPORTES' && <AdminMercancia />}
                     {tab === 'CONFIG' && <AdminConfiguracion />}
                 </div>
             );
