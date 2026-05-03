@@ -60,7 +60,7 @@
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
             Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
-            EyeOff, ClipboardList, ShieldCheck, UserCog, Zap, Package, ChevronLeft, ChevronRight, Gift
+            EyeOff, ClipboardList, ShieldCheck, UserCog, Zap, Package, ChevronLeft, ChevronRight, Gift, BarChart2
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -3068,7 +3068,7 @@ Firma: __________________
                                         const days = [];
                                         const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                                         const todayStr = getLocalDateStr();
-                                        const startOffset = new Date().getHours() >= 17 ? 0 : 1;
+                                        const startOffset = new Date().getHours() >= 16 ? 0 : 1;
                                         for (let i = startOffset; i <= 14; i++) {
                                             const d = new Date();
                                             d.setDate(d.getDate() - i);
@@ -3078,13 +3078,18 @@ Firma: __________________
                                         return days.map(dateStr => {
                                             const dayStart = new Date(dateStr + 'T00:00:00');
                                             const dayEnd = new Date(dateStr + 'T23:59:59.999');
-                                            const dayTickets = historialData.tickets.filter(t => {
+                                            const isToday = dateStr === todayStr;
+                                            const srcTickets = isToday ? history.concat(tickets.filter(t => t.status === 'PAID')) : historialData.tickets;
+                                            const srcExpenses = isToday ? expenses : historialData.expenses;
+                                            const srcDrops = isToday ? cashDrops : historialData.cashDrops;
+                                            const srcCashIns = isToday ? cashIns : historialData.cashIns;
+                                            const dayTickets = srcTickets.filter(t => {
                                                 const pd = t.paidAt || t.timestamp;
                                                 return pd >= dayStart && pd <= dayEnd;
                                             });
-                                            const dayExpenses = historialData.expenses.filter(e => { const d = new Date(e.timestamp); return d >= dayStart && d <= dayEnd; });
-                                            const dayDrops = historialData.cashDrops.filter(d => { const dt = new Date(d.timestamp); return dt >= dayStart && dt <= dayEnd; });
-                                            const dayCashIns = historialData.cashIns.filter(d => { const dt = new Date(d.timestamp); return dt >= dayStart && dt <= dayEnd; });
+                                            const dayExpenses = srcExpenses.filter(e => { const d = new Date(e.timestamp); return d >= dayStart && d <= dayEnd; });
+                                            const dayDrops = srcDrops.filter(d => { const dt = new Date(d.timestamp); return dt >= dayStart && dt <= dayEnd; });
+                                            const dayCashIns = srcCashIns.filter(d => { const dt = new Date(d.timestamp); return dt >= dayStart && dt <= dayEnd; });
                                             const dayArqueos = cashCounts.filter(c => { const dt = new Date(c.timestamp); return dt >= dayStart && dt <= dayEnd; }).sort((a, b) => a.timestamp - b.timestamp);
                                             const totals = computeCorteTotals(dayTickets, dayExpenses, dayDrops, dayCashIns, dayStart, getOpeningCash, exRate);
                                             const dateObj = new Date(dateStr + 'T12:00:00');
@@ -4218,6 +4223,10 @@ Firma: __________________
                                 {t.badge > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-black w-5 h-5 rounded-full flex items-center justify-center">{t.badge}</span>}
                             </button>
                         ))}
+                        <a href="https://lavamex.work/analytics" target="_blank" rel="noopener noreferrer" className="relative px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors flex items-center gap-2 bg-white text-gray-600 border hover:bg-gray-50">
+                            <BarChart2 size={16} />
+                            Analíticas
+                        </a>
                     </div>
                     {tab === 'APROBACIONES' && <AdminAprobaciones />}
                     {tab === 'REPORTES' && <AdminReportes />}
