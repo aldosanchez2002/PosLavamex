@@ -1384,10 +1384,11 @@ Firma: __________________
                 }
             });
 
-            const addCortesia = ({ ticketId, ticketDesc, reason }) => handleDbAction(async () => {
+            const addCortesia = ({ ticketId, ticketDesc, ticketPrice, reason }) => handleDbAction(async () => {
                 await addDoc(collection(db, "cortesias"), {
                     ticketId,
                     ticketDesc: ticketDesc || '',
+                    ticketPrice: ticketPrice || 0,
                     reason: reason || '',
                     status: 'PENDING',
                     timestamp: serverTimestamp(),
@@ -2004,7 +2005,7 @@ Firma: __________________
             const handleRequestCortesia = () => {
                 if (!t) return;
                 if (!cortesiaReason.trim()) return alert("Ingresa un motivo para la cortesía.");
-                addCortesia({ ticketId: t.id, ticketDesc: `#${t.id.slice(-4).toUpperCase()} ${t.vehicleDesc || ''}`.trim(), reason: cortesiaReason.trim() });
+                addCortesia({ ticketId: t.id, ticketDesc: `#${t.id.slice(-4).toUpperCase()} ${t.vehicleDesc || ''}`.trim(), ticketPrice: t.price, reason: cortesiaReason.trim() });
                 setShowCortesia(false);
                 setCortesiaReason('');
             };
@@ -3067,11 +3068,11 @@ Firma: __________________
                                         const days = [];
                                         const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                                         const todayStr = getLocalDateStr();
-                                        for (let i = 1; i <= 14; i++) {
+                                        const startOffset = new Date().getHours() >= 17 ? 0 : 1;
+                                        for (let i = startOffset; i <= 14; i++) {
                                             const d = new Date();
                                             d.setDate(d.getDate() - i);
-                                            const ds = getLocalDateStr(d);
-                                            if (ds !== todayStr) days.push(ds);
+                                            days.push(getLocalDateStr(d));
                                         }
                                         if (!historialData) return null;
                                         return days.map(dateStr => {
@@ -3934,6 +3935,24 @@ Firma: __________________
 
             const fmtDateTime = (d) => d instanceof Date ? d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...';
 
+            const allItems = [
+                ...pendingExpenses.map(e => ({ ...e, _type: 'GASTO' })),
+                ...pendingSnacks.map(s => ({ ...s, _type: 'CORTESIA_ADM' })),
+                ...pendingCortesias.map(c => ({ ...c, _type: 'CORTESIA_COBRO' })),
+                ...deletedTickets.map(t => ({ ...t, _type: 'DELETED' })),
+            ].sort((a, b) => {
+                const ta = a.timestamp instanceof Date ? a.timestamp : new Date(0);
+                const tb = b.timestamp instanceof Date ? b.timestamp : new Date(0);
+                return ta - tb;
+            });
+
+            const TYPE_META = {
+                GASTO:          { label: 'Gasto',           badge: 'bg-red-100 text-red-700',     icon: TrendingDown },
+                CORTESIA_ADM:   { label: 'Cortesía',        badge: 'bg-orange-100 text-orange-700', icon: Coffee },
+                CORTESIA_COBRO: { label: 'Cobro Cortesía',  badge: 'bg-purple-100 text-purple-700', icon: Gift },
+                DELETED:        { label: 'Eliminado',       badge: 'bg-gray-100 text-gray-500',   icon: Trash2 },
+            };
+
             return (
                 <div className="space-y-6">
                     <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4">
@@ -3954,7 +3973,7 @@ Firma: __________________
                             <AlertTriangle className="w-6 h-6 text-yellow-600 shrink-0" />
                             <div>
                                 <div className="font-bold text-yellow-900">{totalPending} elemento{totalPending !== 1 ? 's' : ''} pendiente{totalPending !== 1 ? 's' : ''} de aprobación</div>
-                                <div className="text-sm text-yellow-700">{pendingExpenses.length} gasto{pendingExpenses.length !== 1 ? 's' : ''} · {pendingSnacks.length} cortesía{pendingSnacks.length !== 1 ? 's' : ''} · {pendingCortesias.length} cortesía{pendingCortesias.length !== 1 ? 's' : ''} de cobro</div>
+                                <div className="text-sm text-yellow-700">{pendingExpenses.length} gasto{pendingExpenses.length !== 1 ? 's' : ''} · {pendingSnacks.length} cortesía{pendingSnacks.length !== 1 ? 's' : ''} · {pendingCortesias.length} cobro{pendingCortesias.length !== 1 ? 's' : ''} cortesía</div>
                             </div>
                         </div>
                     ) : (
@@ -3965,119 +3984,81 @@ Firma: __________________
                     )}
 
                     <div className="bg-white rounded-xl shadow border overflow-hidden">
-                        <div className="p-4 bg-red-50 border-b font-bold text-red-800 flex items-center justify-between">
-                            <div className="flex items-center gap-2"><Trash2 className="w-4 h-4" /> Tickets Eliminados</div>
-                            <span className="bg-red-200 text-red-800 text-xs font-bold px-2 py-1 rounded-full">{deletedTickets.length}</span>
+                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex items-center justify-between">
+                            <div className="flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Actividad del período</div>
+                            <span className="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-1 rounded-full">{allItems.length}</span>
                         </div>
                         {isFetching ? (
-                            <div className="p-4 text-center text-gray-400 text-sm flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={16} /> Cargando...</div>
-                        ) : deletedTickets.length === 0 ? (
-                            <div className="p-4 text-center text-gray-400 text-sm">Sin tickets eliminados en este período</div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-red-50 text-red-700 font-bold"><tr><th className="p-3">ID</th><th className="p-3">Creado</th><th className="p-3">Eliminado</th><th className="p-3">Descripción</th><th className="p-3">Servicio</th><th className="p-3">Motivo</th><th className="p-3 text-right">Monto</th></tr></thead>
-                                    <tbody>
-                                        {deletedTickets.map(t => (
-                                            <tr key={t.id} className="border-t hover:bg-red-50 bg-red-50/30">
-                                                <td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td>
-                                                <td className="p-3 text-gray-500 whitespace-nowrap">{fmtDateTime(t.timestamp)}</td>
-                                                <td className="p-3 text-red-600 font-bold whitespace-nowrap">{fmtDateTime(t.deletedAt)}</td>
-                                                <td className="p-3 font-bold text-gray-700 uppercase">{t.vehicleDesc || '-'}</td>
-                                                <td className="p-3 text-gray-600">{t.service?.label || '-'} {t.size ? `(${t.size.label})` : ''}</td>
-                                                <td className="p-3 italic text-gray-700 max-w-[180px]">{t.deletionReason || <span className="text-gray-400">—</span>}</td>
-                                                <td className="p-3 font-bold text-gray-500 line-through text-right">{formatCurrency(t.price)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow border overflow-hidden">
-                        <div className="p-4 bg-red-50 border-b font-bold text-red-800 flex items-center justify-between">
-                            <div className="flex items-center gap-2"><TrendingDown className="w-4 h-4" /> Gastos Pendientes</div>
-                            <span className="bg-red-200 text-red-800 text-xs font-bold px-2 py-1 rounded-full">{pendingExpenses.length}</span>
-                        </div>
-                        {pendingExpenses.length === 0 ? (
-                            <div className="p-4 text-center text-gray-400 text-sm">Sin gastos pendientes en este período</div>
+                            <div className="p-6 text-center text-gray-400 text-sm flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={16} /> Cargando...</div>
+                        ) : allItems.length === 0 ? (
+                            <div className="p-6 text-center text-gray-400 text-sm">Sin actividad en este período</div>
                         ) : (
                             <div className="divide-y">
-                                {pendingExpenses.map(e => (
-                                    <div key={e.id} className="p-4 flex items-center gap-4">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-gray-800 flex items-center gap-2">
-                                                {e.description}
-                                                {e.gastoAjeno && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded shrink-0">AJENO</span>}
+                                {allItems.map(item => {
+                                    const meta = TYPE_META[item._type];
+                                    const Icon = meta.icon;
+
+                                    let title, reason, requester, valueNode, actionsNode;
+
+                                    if (item._type === 'GASTO') {
+                                        title = <span className="font-bold text-gray-800">{item.description}{item.gastoAjeno && <span className="ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded">AJENO</span>}</span>;
+                                        requester = `por ${item.createdBy}`;
+                                        reason = null;
+                                        valueNode = <span className="font-black text-red-600">{formatCurrency(item.amount)}</span>;
+                                        actionsNode = (
+                                            <div className="flex gap-1.5 shrink-0">
+                                                <button onClick={() => resolveExpense(item.id, 'APPROVED')} className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1"><Check size={12} /> Aprobar</button>
+                                                <button onClick={() => resolveExpense(item.id, 'REJECTED')} className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1"><X size={12} /> Rechazar</button>
                                             </div>
-                                            <div className="text-xs text-gray-500 mt-0.5">{fmtDateTime(e.timestamp)} · por {e.createdBy}</div>
-                                        </div>
-                                        <div className="font-black text-red-600 text-lg shrink-0">{formatCurrency(e.amount)}</div>
-                                        <div className="flex gap-2 shrink-0">
-                                            <button onClick={() => resolveExpense(e.id, 'APPROVED')} className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1"><Check size={14} /> Aprobar</button>
-                                            <button onClick={() => resolveExpense(e.id, 'REJECTED')} className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1"><X size={14} /> Rechazar</button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                                        );
+                                    } else if (item._type === 'CORTESIA_ADM') {
+                                        title = <span className="font-bold text-gray-800">{item.type === 'PINO' ? 'Pino' : 'Snack'} × {item.quantity || 1}</span>;
+                                        requester = `por ${item.requestedBy || item.user}`;
+                                        reason = item.reason;
+                                        valueNode = null;
+                                        actionsNode = (
+                                            <div className="flex gap-1.5 shrink-0">
+                                                <button onClick={() => approveAdminSnack(item.id)} className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1"><Check size={12} /> Aprobar</button>
+                                                <button onClick={() => deleteAdminSnack(item.id)} className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1"><X size={12} /> Rechazar</button>
+                                            </div>
+                                        );
+                                    } else if (item._type === 'CORTESIA_COBRO') {
+                                        title = <span className="font-bold text-gray-800">{item.ticketDesc || 'Ticket sin descripción'}</span>;
+                                        requester = `por ${item.requestedBy}`;
+                                        reason = item.reason;
+                                        valueNode = <span className="font-bold text-purple-600 line-through text-sm">{formatCurrency(item.ticketPrice || 0)}</span>;
+                                        actionsNode = (
+                                            <div className="flex gap-1.5 shrink-0">
+                                                <button onClick={() => approveCortesia(item.id)} className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1"><Check size={12} /> Aprobar</button>
+                                                <button onClick={() => rejectCortesia(item.id)} className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1"><X size={12} /> Rechazar</button>
+                                            </div>
+                                        );
+                                    } else {
+                                        title = <span className="font-bold text-gray-700">#{item.id.slice(-4).toUpperCase()}{item.vehicleDesc ? ` — ${item.vehicleDesc.toUpperCase()}` : ''}</span>;
+                                        requester = `eliminado ${fmtDateTime(item.deletedAt)}`;
+                                        reason = item.deletionReason;
+                                        valueNode = <span className="font-bold text-gray-400 line-through text-sm">{formatCurrency(item.price)}</span>;
+                                        actionsNode = null;
+                                    }
 
-                    <div className="bg-white rounded-xl shadow border overflow-hidden">
-                        <div className="p-4 bg-orange-50 border-b font-bold text-orange-800 flex items-center justify-between">
-                            <div className="flex items-center gap-2"><Coffee className="w-4 h-4" /> Cortesías Pendientes</div>
-                            <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-1 rounded-full">{pendingSnacks.length}</span>
-                        </div>
-                        {pendingSnacks.length === 0 ? (
-                            <div className="p-4 text-center text-gray-400 text-sm">Sin cortesías pendientes en este período</div>
-                        ) : (
-                            <div className="divide-y">
-                                {pendingSnacks.map(a => (
-                                    <div key={a.id} className="p-4 flex items-center gap-4">
-                                        <div className={`p-2 rounded-lg shrink-0 ${a.type === 'PINO' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                                            {a.type === 'PINO' ? <Package className="w-5 h-5" /> : <Coffee className="w-5 h-5" />}
+                                    return (
+                                        <div key={`${item._type}-${item.id}`} className="p-4 flex items-start gap-3">
+                                            <div className={`mt-0.5 p-2 rounded-lg shrink-0 ${meta.badge}`}>
+                                                <Icon className="w-4 h-4" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className={`text-xs font-black px-2 py-0.5 rounded-full ${meta.badge}`}>{meta.label}</span>
+                                                    {title}
+                                                </div>
+                                                {reason && <div className="text-sm text-gray-500 italic mt-0.5 truncate">"{reason}"</div>}
+                                                <div className="text-xs text-gray-400 mt-0.5">{fmtDateTime(item.timestamp)} · {requester}</div>
+                                            </div>
+                                            {valueNode && <div className="shrink-0 text-right pt-0.5">{valueNode}</div>}
+                                            {actionsNode || <div className="w-[120px] shrink-0" />}
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-gray-800">{a.type === 'PINO' ? 'Pino' : 'Snack'} × {a.quantity || 1} <span className="text-xs font-normal text-gray-500 ml-1">— {a.requestedBy || a.user}</span></div>
-                                            <div className="text-sm text-gray-600 italic truncate">"{a.reason}"</div>
-                                            <div className="text-xs text-gray-400">{fmtDateTime(a.timestamp)}</div>
-                                        </div>
-                                        <div className="flex gap-2 shrink-0">
-                                            <button onClick={() => approveAdminSnack(a.id)} className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1"><Check size={14} /> Aprobar</button>
-                                            <button onClick={() => deleteAdminSnack(a.id)} className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1"><X size={14} /> Rechazar</button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow border overflow-hidden">
-                        <div className="p-4 bg-purple-50 border-b font-bold text-purple-800 flex items-center justify-between">
-                            <div className="flex items-center gap-2"><Gift className="w-4 h-4" /> Cortesías de Cobro Pendientes</div>
-                            <span className="bg-purple-200 text-purple-800 text-xs font-bold px-2 py-1 rounded-full">{pendingCortesias.length}</span>
-                        </div>
-                        {pendingCortesias.length === 0 ? (
-                            <div className="p-4 text-center text-gray-400 text-sm">Sin cortesías de cobro pendientes en este período</div>
-                        ) : (
-                            <div className="divide-y">
-                                {pendingCortesias.map(c => (
-                                    <div key={c.id} className="p-4 flex items-center gap-4">
-                                        <div className="p-2 rounded-lg shrink-0 bg-purple-100 text-purple-700">
-                                            <Gift className="w-5 h-5" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-gray-800">{c.ticketDesc || 'Ticket sin descripción'} <span className="text-xs font-normal text-gray-500 ml-1">— {c.requestedBy}</span></div>
-                                            <div className="text-sm text-gray-600 italic truncate">"{c.reason}"</div>
-                                            <div className="text-xs text-gray-400">{fmtDateTime(c.timestamp)}</div>
-                                        </div>
-                                        <div className="flex gap-2 shrink-0">
-                                            <button onClick={() => approveCortesia(c.id)} className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1"><Check size={14} /> Aprobar</button>
-                                            <button onClick={() => rejectCortesia(c.id)} className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1"><X size={14} /> Rechazar</button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
