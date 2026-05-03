@@ -3068,11 +3068,11 @@ Firma: __________________
                                         const days = [];
                                         const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                                         const todayStr = getLocalDateStr();
-                                        for (let i = 1; i <= 14; i++) {
+                                        const startOffset = new Date().getHours() >= 17 ? 0 : 1;
+                                        for (let i = startOffset; i <= 14; i++) {
                                             const d = new Date();
                                             d.setDate(d.getDate() - i);
-                                            const ds = getLocalDateStr(d);
-                                            if (ds !== todayStr) days.push(ds);
+                                            days.push(getLocalDateStr(d));
                                         }
                                         if (!historialData) return null;
                                         return days.map(dateStr => {
