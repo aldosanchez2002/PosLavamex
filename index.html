@@ -3078,13 +3078,18 @@ Firma: __________________
                                         return days.map(dateStr => {
                                             const dayStart = new Date(dateStr + 'T00:00:00');
                                             const dayEnd = new Date(dateStr + 'T23:59:59.999');
-                                            const dayTickets = historialData.tickets.filter(t => {
+                                            const isToday = dateStr === todayStr;
+                                            const srcTickets = isToday ? history.concat(tickets.filter(t => t.status === 'PAID')) : historialData.tickets;
+                                            const srcExpenses = isToday ? expenses : historialData.expenses;
+                                            const srcDrops = isToday ? cashDrops : historialData.cashDrops;
+                                            const srcCashIns = isToday ? cashIns : historialData.cashIns;
+                                            const dayTickets = srcTickets.filter(t => {
                                                 const pd = t.paidAt || t.timestamp;
                                                 return pd >= dayStart && pd <= dayEnd;
                                             });
-                                            const dayExpenses = historialData.expenses.filter(e => { const d = new Date(e.timestamp); return d >= dayStart && d <= dayEnd; });
-                                            const dayDrops = historialData.cashDrops.filter(d => { const dt = new Date(d.timestamp); return dt >= dayStart && dt <= dayEnd; });
-                                            const dayCashIns = historialData.cashIns.filter(d => { const dt = new Date(d.timestamp); return dt >= dayStart && dt <= dayEnd; });
+                                            const dayExpenses = srcExpenses.filter(e => { const d = new Date(e.timestamp); return d >= dayStart && d <= dayEnd; });
+                                            const dayDrops = srcDrops.filter(d => { const dt = new Date(d.timestamp); return dt >= dayStart && dt <= dayEnd; });
+                                            const dayCashIns = srcCashIns.filter(d => { const dt = new Date(d.timestamp); return dt >= dayStart && dt <= dayEnd; });
                                             const dayArqueos = cashCounts.filter(c => { const dt = new Date(c.timestamp); return dt >= dayStart && dt <= dayEnd; }).sort((a, b) => a.timestamp - b.timestamp);
                                             const totals = computeCorteTotals(dayTickets, dayExpenses, dayDrops, dayCashIns, dayStart, getOpeningCash, exRate);
                                             const dateObj = new Date(dateStr + 'T12:00:00');
