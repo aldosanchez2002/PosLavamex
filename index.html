@@ -60,7 +60,7 @@
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
             Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
-            EyeOff, ClipboardList, ShieldCheck, UserCog, Zap, Package, ChevronLeft, ChevronRight, Gift, BarChart2
+            EyeOff, ClipboardList, ShieldCheck, UserCog, Zap, Package, ChevronLeft, ChevronRight, Gift, BarChart2, Layers
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -1447,6 +1447,71 @@ Firma: __________________
                 } finally { setIsSubmitting(false); }
             });
 
+            const processMultiPayment = (ticketIds, onSuccess) => handleDbAction(async () => {
+                if (isSubmitting) return;
+                const selectedTickets = ticketIds.map(id => tickets.find(x => x.id === id)).filter(Boolean);
+                if (selectedTickets.length < 2) return;
+
+                const combinedPrice = selectedTickets.reduce((sum, t) => sum + t.price, 0);
+                const mxnVal = parseFloat(payment.mxn) || 0;
+                const usdVal = parseFloat(payment.usd) || 0;
+                const isOnlyUsd = usdVal > 0 && mxnVal === 0;
+
+                let changeMxn = 0;
+                let changeUsd = 0;
+
+                if (isOnlyUsd) {
+                    const roundedUsdPrice = Math.ceil((combinedPrice / exRate) * 4) / 4;
+                    if (usdVal < roundedUsdPrice) return alert("Falta dinero");
+                    changeUsd = usdVal - roundedUsdPrice;
+                    changeMxn = changeUsd * exRate;
+                } else {
+                    const total = mxnVal + (usdVal * exRate);
+                    if (total < combinedPrice) return alert("Falta dinero");
+                    changeMxn = total - combinedPrice;
+                    changeUsd = changeMxn / exRate;
+                }
+
+                setIsSubmitting(true);
+                try {
+                    const batchId = Date.now().toString();
+                    await Promise.all(selectedTickets.map((t, i) => {
+                        const isPrimary = i === 0;
+                        const details = {
+                            mxn: isPrimary ? mxnVal : 0,
+                            usd: isPrimary ? usdVal : 0,
+                            rate: exRate,
+                            changeMxn: isPrimary ? changeMxn : 0,
+                            changeUsd: isPrimary ? changeUsd : 0,
+                            isOnlyUsd,
+                            method: 'CASH',
+                            batchPayment: true,
+                            batchId
+                        };
+                        return updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
+                    }));
+                    selectedTickets.forEach((t, i) => {
+                        const isPrimary = i === 0;
+                        const details = {
+                            mxn: isPrimary ? mxnVal : 0,
+                            usd: isPrimary ? usdVal : 0,
+                            rate: exRate,
+                            changeMxn: isPrimary ? changeMxn : 0,
+                            changeUsd: isPrimary ? changeUsd : 0,
+                            isOnlyUsd,
+                            method: 'CASH',
+                            batchPayment: true,
+                            batchId
+                        };
+                        const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
+                        PrintService.print(html, role);
+                    });
+                    setActiveId(null);
+                    setPayment({ mxn: '', usd: '' });
+                    if (onSuccess) onSuccess({ changeMxn, changeUsd, isOnlyUsd });
+                } finally { setIsSubmitting(false); }
+            });
+
             const processCardPayment = () => handleDbAction(async () => {
                 if (isSubmitting) return;
                 const t = tickets.find(x => x.id === activeId); if (!t) return;
@@ -1472,7 +1537,7 @@ Firma: __________________
                 prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
-                addExpense, addAvance, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, addCashCount, addCashDrop, addCashIn,
+                addExpense, addAvance, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, processMultiPayment, addCashCount, addCashDrop, addCashIn,
                 updateEmployee, addAdminSnack, approveAdminSnack, deleteAdminSnack, addCortesia, approveCortesia, rejectCortesia,
                 getOpeningCash,
                 db, isSubmitting
@@ -1922,7 +1987,7 @@ Firma: __________________
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, addAvance, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList, addAdminSnack, cashCounts, addCortesia } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, processMultiPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, addAvance, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList, addAdminSnack, cashCounts, addCortesia } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showAdminSnack, setShowAdminSnack] = useState(false);
@@ -1950,6 +2015,8 @@ Firma: __________________
             const [expAjeno, setExpAjeno] = useState(false);
 
             const [changeModal, setChangeModal] = useState(null);
+            const [multiMode, setMultiMode] = useState(false);
+            const [selectedIds, setSelectedIds] = useState([]);
 
             const [declaredMxn, setDeclaredMxn] = useState('');
             const [declaredUsd, setDeclaredUsd] = useState('');
@@ -2030,6 +2097,22 @@ Firma: __________________
             };
 
             const roundUsd = (mxnPrice) => Math.ceil((mxnPrice / exRate) * 4) / 4;
+
+            const toggleMultiMode = () => {
+                if (multiMode) {
+                    setMultiMode(false);
+                    setSelectedIds([]);
+                } else {
+                    setMultiMode(true);
+                    setActiveId(null);
+                    setSelectedIds([]);
+                    setPayment({ mxn: '', usd: '' });
+                }
+            };
+
+            const toggleSelectedId = (id) => {
+                setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+            };
 
             const handleCorte = async () => {
                 const { totalCard } = calculateCurrentExpectedCash();
@@ -2158,6 +2241,22 @@ Firma: __________________
                 }
             }
 
+            const multiTickets = selectedIds.map(id => tickets.find(x => x.id === id)).filter(Boolean);
+            const combinedPrice = multiTickets.reduce((sum, t) => sum + t.price, 0);
+            let multiChangeMxn = 0;
+            let multiChangeUsd = 0;
+            if (multiTickets.length > 0) {
+                if (isOnlyUsd) {
+                    const roundedUsdPrice = roundUsd(combinedPrice);
+                    multiChangeUsd = usdVal - roundedUsdPrice;
+                    multiChangeMxn = multiChangeUsd * exRate;
+                } else {
+                    const totalGiven = mxnVal + (usdVal * exRate);
+                    multiChangeMxn = totalGiven - combinedPrice;
+                    multiChangeUsd = multiChangeMxn / exRate;
+                }
+            }
+
             const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
             const boleadaPrice = extrasList.find(e => e.id === 'BOLEADA')?.price || 60;
 
@@ -2174,6 +2273,9 @@ Firma: __________________
                             <div className="px-3 py-2.5 bg-gray-50 border-b flex justify-between items-center shrink-0">
                                 <span className="font-bold text-gray-700">Tickets ({tickets.length})</span>
                                 <div className="flex items-center gap-1.5">
+                                    <button onClick={toggleMultiMode} title={multiMode ? 'Salir del modo múltiple' : 'Cobro múltiple'} className={`flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm border ${multiMode ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-700' : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-300'}`}>
+                                        <Layers className="w-4 h-4" /> Múltiple
+                                    </button>
                                     <button onClick={() => setShowSnack(true)} className="flex items-center gap-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 border border-orange-300 text-sm font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">
                                         <Coffee className="w-4 h-4" /> Snack
                                     </button>
@@ -2186,19 +2288,37 @@ Firma: __________________
                                 </div>
                             </div>
 
+                            {multiMode && (
+                                <div className="px-3 py-2 bg-purple-50 border-b border-purple-200 flex items-center justify-between shrink-0">
+                                    <span className="text-purple-700 text-xs font-bold">{selectedIds.length === 0 ? 'Selecciona tickets para cobrar juntos' : `${selectedIds.length} ticket${selectedIds.length > 1 ? 's' : ''} seleccionado${selectedIds.length > 1 ? 's' : ''}`}</span>
+                                    {selectedIds.length > 0 && <button onClick={() => setSelectedIds([])} className="text-xs text-purple-500 hover:text-purple-700 underline">Limpiar</button>}
+                                </div>
+                            )}
+
                             <div className="overflow-y-auto flex-1 p-2 space-y-2">
-                                {tickets.map(ticket => (
-                                    <div key={ticket.id} onClick={() => setActiveId(ticket.id)} className={`p-4 rounded-lg border cursor-pointer transition-all ${activeId === ticket.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:bg-gray-50'}`}>
-                                        <div className="flex justify-between font-bold text-gray-800">
-                                            <span className="truncate pr-2">#{ticket.id.slice(-4).toUpperCase()}{ticket.vehicleDesc ? <span className="uppercase"> - {ticket.vehicleDesc}</span> : ''}</span>
-                                            <div className="text-right">
-                                                <div className="whitespace-nowrap">{formatCurrency(ticket.price)} MXN</div>
-                                                <div className="text-xs text-green-600 font-normal">${roundUsd(ticket.price).toFixed(2)} USD</div>
+                                {tickets.map(ticket => {
+                                    const isSelectedMulti = selectedIds.includes(ticket.id);
+                                    const isActiveSingle = activeId === ticket.id;
+                                    return (
+                                        <div key={ticket.id} onClick={() => multiMode ? toggleSelectedId(ticket.id) : setActiveId(ticket.id)} className={`p-4 rounded-lg border cursor-pointer transition-all ${multiMode ? (isSelectedMulti ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-500' : 'border-gray-200 hover:bg-gray-50') : (isActiveSingle ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:bg-gray-50')}`}>
+                                            <div className="flex justify-between font-bold text-gray-800">
+                                                <div className="flex items-center gap-2 truncate pr-2 min-w-0">
+                                                    {multiMode && (
+                                                        <div className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${isSelectedMulti ? 'bg-purple-600 border-purple-600' : 'border-gray-400'}`}>
+                                                            {isSelectedMulti && <span className="text-white text-xs font-black">✓</span>}
+                                                        </div>
+                                                    )}
+                                                    <span className="truncate">#{ticket.id.slice(-4).toUpperCase()}{ticket.vehicleDesc ? <span className="uppercase"> - {ticket.vehicleDesc}</span> : ''}</span>
+                                                </div>
+                                                <div className="text-right flex-shrink-0">
+                                                    <div className="whitespace-nowrap">{formatCurrency(ticket.price)} MXN</div>
+                                                    <div className="text-xs text-green-600 font-normal">${roundUsd(ticket.price).toFixed(2)} USD</div>
+                                                </div>
                                             </div>
+                                            <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || 'Extras'} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size?.label || '-'}</span></div>
                                         </div>
-                                        <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || 'Extras'} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size?.label || '-'}</span></div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             {showActions && <div className="border-t bg-gray-50 shrink-0 p-2 space-y-2">
@@ -2235,7 +2355,69 @@ Firma: __________________
                             </div>}
                         </div>
                         <div className="flex-1 bg-white rounded-xl shadow border p-4 md:p-6 flex flex-col items-center h-2/3 md:h-full overflow-y-auto pb-20">
-                            {t ? (
+                            {multiMode ? (
+                                <div className="w-full max-w-md my-auto">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Layers className="w-5 h-5 text-purple-600" />
+                                        <span className="font-bold text-purple-700 text-lg">Cobro Múltiple</span>
+                                        <span className="ml-auto text-sm text-gray-400">{multiTickets.length} ticket{multiTickets.length !== 1 ? 's' : ''}</span>
+                                    </div>
+
+                                    {multiTickets.length === 0 ? (
+                                        <div className="text-gray-400 flex flex-col items-center py-12">
+                                            <Layers className="w-14 h-14 opacity-20 mb-3" />
+                                            <p className="text-center text-sm">Selecciona dos o más tickets<br/>de la lista para cobrarlos juntos</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="bg-gray-50 rounded-xl border border-gray-200 mb-4 overflow-hidden">
+                                                {multiTickets.map((mt, i) => (
+                                                    <div key={mt.id} className={`flex justify-between items-center px-4 py-2.5 text-sm ${i < multiTickets.length - 1 ? 'border-b border-gray-200' : ''}`}>
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <button onClick={() => toggleSelectedId(mt.id)} className="text-purple-400 hover:text-red-500 flex-shrink-0" title="Quitar">✕</button>
+                                                            <span className="font-bold text-gray-700 truncate">#{mt.id.slice(-4).toUpperCase()}{mt.vehicleDesc ? ` - ${mt.vehicleDesc.toUpperCase()}` : ''}</span>
+                                                        </div>
+                                                        <span className="font-bold text-gray-800 flex-shrink-0 ml-2">{formatCurrency(mt.price)}</span>
+                                                    </div>
+                                                ))}
+                                                <div className="flex justify-between items-center px-4 py-3 bg-purple-50 border-t border-purple-200">
+                                                    <span className="font-black text-purple-800">TOTAL</span>
+                                                    <div className="text-right">
+                                                        <div className="font-black text-2xl text-purple-800">{formatCurrency(combinedPrice)}</div>
+                                                        <div className="text-sm text-green-600 font-bold">${roundUsd(combinedPrice).toFixed(2)} USD</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {isBlockedFromCharging ? (
+                                                <div className="bg-red-50 border-2 border-red-500 p-4 rounded-xl text-center mb-4">
+                                                    <Lock className="w-10 h-10 text-red-500 mx-auto mb-2 opacity-50" />
+                                                    <p className="text-red-700 font-bold text-lg">Cobros Bloqueados</p>
+                                                    <p className="text-red-600 text-sm">Realiza el arqueo para habilitar la caja.</p>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                                        <div><label className="text-xs font-bold text-gray-500 mb-1 block">MXN</label><input type="number" inputMode="decimal" value={payment.mxn} onChange={e => setPayment({ ...payment, mxn: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
+                                                        <div><label className="text-xs font-bold text-gray-500 mb-1 block">USD (Rate: {exRate})</label><input type="number" inputMode="decimal" value={payment.usd} onChange={e => setPayment({ ...payment, usd: e.target.value })} placeholder="0.00" className="w-full p-3 border rounded-lg text-lg" /></div>
+                                                    </div>
+                                                    <div className="text-center font-bold mb-4 text-xl bg-gray-50 p-3 rounded-lg border">
+                                                        {isOnlyUsd ? (
+                                                            <div>Cambio: <span className={multiChangeUsd < 0 ? 'text-red-500' : 'text-green-600'}>${multiChangeUsd.toFixed(2)} USD</span></div>
+                                                        ) : (
+                                                            <div>Cambio: <span className={multiChangeMxn < 0 ? 'text-red-500' : 'text-green-600'}>{formatCurrency(multiChangeMxn)} MXN</span></div>
+                                                        )}
+                                                        {!isOnlyUsd && usdVal > 0 && multiChangeMxn > 0 && <div className="text-blue-600 text-lg mt-1">Cambio eqv. USD: ${multiChangeUsd.toFixed(2)}</div>}
+                                                    </div>
+                                                    <Button onClick={() => processMultiPayment(selectedIds, ({ changeMxn, changeUsd, isOnlyUsd }) => { setSelectedIds([]); setMultiMode(false); if (changeMxn > 0.005 || changeUsd > 0.005) setChangeModal({ changeMxn, changeUsd, isOnlyUsd }); })} disabled={isSubmitting || multiTickets.length < 2} variant="success" className="w-full shadow-lg">
+                                                        {isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR {multiTickets.length} TICKETS</>}
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            ) : t ? (
                                 <div className="w-full max-w-md my-auto">
                                     <div className="text-center mb-2">
                                         <h2 className="text-4xl font-bold text-gray-800">{formatCurrency(t.price)}</h2>
