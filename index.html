@@ -483,6 +483,57 @@ ${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount})` : ''}
 --------------------------------</div>`;
             },
 
+            getMultiReceiptHtml: (tickets, payment, snackPrice) => {
+                const isOnlyUsd = payment.isOnlyUsd;
+                const changeStr = isOnlyUsd
+                    ? `Cambio: $${(payment.changeUsd || 0).toFixed(2)} USD`
+                    : `Cambio: $${(payment.changeMxn || 0).toFixed(2)} MXN`;
+                const receivedStr = [
+                    payment.usd > 0 ? `$${payment.usd.toFixed(2)} USD` : null,
+                    payment.mxn > 0 ? `$${payment.mxn.toFixed(2)} MXN` : null
+                ].filter(Boolean).join(' / ');
+                const combinedTotal = tickets.reduce((s, t) => s + t.price, 0);
+                const dateStr = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+
+                const pad = (label, value, width = 32) => {
+                    const line = `${label} $${value}`;
+                    return line.length >= width ? line : label + ' '.repeat(width - line.length - String(value).length - 1) + `$${value}`;
+                };
+
+                const ticketBlocks = tickets.map(t => {
+                    const shortId = t.id.slice(-4).toUpperCase();
+                    const header = `#${shortId}${t.vehicleDesc ? ' - ' + t.vehicleDesc.toUpperCase() : ''}`;
+                    const lines = [];
+                    if (t.service) lines.push(pad(t.service.label, t.basePrice || 0));
+                    if (t.extras && t.extras.length > 0) t.extras.forEach(e => lines.push(pad(`+ ${e.label}`, e.price)));
+                    if (t.snackCount > 0) lines.push(pad(`+ Snacks (${t.snackCount})`, t.snackCount * (snackPrice || 30)));
+                    lines.push(`Subtotal:              $${t.price}`);
+                    return `${header}\n${lines.join('\n')}`;
+                }).join('\n--------------------------------\n');
+
+                return `<div style="white-space: pre; font-family: monospace;">
+CARWASH LAVAMEX
+WATERFILL 216 CP 32553
+CD. JUAREZ CHIH.
+RFC. CACN760904AN7
+================================
+COBRO MULTIPLE (${tickets.length} TICKETS)
+Fecha: ${dateStr}
+Metodo: EFECTIVO
+================================
+${ticketBlocks}
+================================
+TOTAL: $${combinedTotal} MXN
+Recibido: ${receivedStr}
+${changeStr}
+================================
+Gracias por su preferencia
+      .--------.
+ ____/_____|___ \\___
+O    _          - |    _,*
+ '--(_)-------(_)--' </div>`;
+            },
+
             getReceiptHtml: (ticket, payment, shortId, currentSnackPrice) => {
                 const isOnlyUsd = payment.isOnlyUsd;
                 const changeStr = isOnlyUsd
@@ -1490,22 +1541,9 @@ Firma: __________________
                         };
                         return updateDoc(doc(db, "tickets", t.id), { status: 'PAID', paidAt: serverTimestamp(), paymentDetails: details });
                     }));
-                    selectedTickets.forEach((t, i) => {
-                        const isPrimary = i === 0;
-                        const details = {
-                            mxn: isPrimary ? mxnVal : 0,
-                            usd: isPrimary ? usdVal : 0,
-                            rate: exRate,
-                            changeMxn: isPrimary ? changeMxn : 0,
-                            changeUsd: isPrimary ? changeUsd : 0,
-                            isOnlyUsd,
-                            method: 'CASH',
-                            batchPayment: true,
-                            batchId
-                        };
-                        const html = PrintService.getReceiptHtml(t, details, t.id.slice(-4).toUpperCase(), snackPrice);
-                        PrintService.print(html, role);
-                    });
+                    const multiDetails = { mxn: mxnVal, usd: usdVal, rate: exRate, changeMxn, changeUsd, isOnlyUsd, method: 'CASH' };
+                    const html = PrintService.getMultiReceiptHtml(selectedTickets, multiDetails, snackPrice);
+                    PrintService.print(html, role);
                     setActiveId(null);
                     setPayment({ mxn: '', usd: '' });
                     if (onSuccess) onSuccess({ changeMxn, changeUsd, isOnlyUsd });
