@@ -56,11 +56,11 @@
         import { createRoot } from 'react-dom/client';
         import {
             User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2,
-            LogOut, Users, Calculator, Printer, Wifi, Lock, Archive, Pencil,
+            LogOut, Users, Calculator, Printer, Lock, Pencil,
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
-            Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
+            AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
-            EyeOff, Eye, Key, ClipboardList, ShieldCheck, UserCog, Zap, Package, ChevronLeft, ChevronRight, Gift, BarChart2, Layers
+            EyeOff, Eye, Key, ClipboardList, ShieldCheck, UserCog, Package, ChevronLeft, ChevronRight, Gift, BarChart2, Layers
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -102,8 +102,6 @@
 
         const DEFAULTS = {
             PINS: {
-                GREETER: ['bWVsdnkxMDYx', 'NXJpdG83'],
-                CASHIER: 'c2VyZ2lvOTE5MQ==',
                 ADMIN: 'Y292aW5ndG9uNTIx'
             },
             EXCHANGE_RATE: 18.10,
@@ -148,6 +146,12 @@
                 style: 'currency',
                 currency: 'MXN'
             }).format(amount);
+        };
+
+        const filterRange = (ts, start, end) => {
+            if (!ts) return false;
+            const date = new Date(ts.toDate ? ts.toDate() : ts);
+            return date >= start && date <= end;
         };
 
         const getLocalDateStr = (d = new Date()) => {
@@ -3440,13 +3444,13 @@ Firma: __________________
                 });
             }, [startDate, endDate]);
 
-            const filterRange = (ts) => { if (!ts) return true; const date = new Date(ts.toDate ? ts.toDate() : ts); return date >= start && date <= end; };
+            const filterRangeLocal = (ts) => filterRange(ts, start, end);
 
             const activeNominaHistory = localHistory !== null ? localHistory : history.concat(tickets.filter(t => t.status === 'PAID'));
             const activeNominaDeductions = localDeductions !== null ? localDeductions : deductions;
 
-            const rangeHistory = activeNominaHistory.filter(t => t.status === 'PAID' && filterRange(t.paidAt || t.timestamp));
-            const rangeDeductions = activeNominaDeductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
+            const rangeHistory = activeNominaHistory.filter(t => t.status === 'PAID' && filterRangeLocal(t.paidAt || t.timestamp));
+            const rangeDeductions = activeNominaDeductions.filter(d => d.status === 'PENDING' && filterRangeLocal(d.timestamp));
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
 
             attendanceData.forEach(record => {
@@ -4192,11 +4196,9 @@ Firma: __________________
                 });
             }, [mercMode, mercDate, mercMonth, mercRangeStart, mercRangeEnd]);
 
-            const filterRange = (ts) => { if (!ts) return false; const date = new Date(ts.toDate ? ts.toDate() : ts); return date >= start && date <= end; };
-
-            const activeTickets = localData ? localData.tickets : history.concat(tickets.filter(t => t.status === 'PAID')).filter(t => filterRange(t.paidAt || t.timestamp));
-            const activeDeductions = localData ? localData.deductions : deductions.filter(d => filterRange(d.timestamp));
-            const activeAdminSnacks = localData ? localData.adminSnacks : adminSnacks.filter(a => filterRange(a.timestamp));
+            const activeTickets = localData ? localData.tickets : history.concat(tickets.filter(t => t.status === 'PAID')).filter(t => filterRange(t.paidAt || t.timestamp, start, end));
+            const activeDeductions = localData ? localData.deductions : deductions.filter(d => filterRange(d.timestamp, start, end));
+            const activeAdminSnacks = localData ? localData.adminSnacks : adminSnacks.filter(a => filterRange(a.timestamp, start, end));
 
             const pendingSnacks = adminSnacks.filter(a => a.status === 'PENDING');
 
