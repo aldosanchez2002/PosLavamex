@@ -56,11 +56,11 @@
         import { createRoot } from 'react-dom/client';
         import {
             User, DollarSign, Car, CheckCircle, FileText, Settings, Trash2,
-            LogOut, Users, Calculator, Printer, Wifi, Lock, Archive, Pencil,
+            LogOut, Users, Calculator, Printer, Lock, Pencil,
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
-            Database, PlayCircle, AlertTriangle, Upload, Loader2, Calendar, CreditCard,
+            AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
-            EyeOff, ClipboardList, ShieldCheck, UserCog, Zap, Package, ChevronLeft, ChevronRight, Gift, BarChart2, Layers
+            EyeOff, Eye, Key, ClipboardList, ShieldCheck, UserCog, Package, ChevronLeft, ChevronRight, Gift, BarChart2, Layers
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -102,8 +102,6 @@
 
         const DEFAULTS = {
             PINS: {
-                GREETER: ['bWVsdnkxMDYx', 'NXJpdG83'],
-                CASHIER: 'c2VyZ2lvOTE5MQ==',
                 ADMIN: 'Y292aW5ndG9uNTIx'
             },
             EXCHANGE_RATE: 18.10,
@@ -148,6 +146,12 @@
                 style: 'currency',
                 currency: 'MXN'
             }).format(amount);
+        };
+
+        const filterRange = (ts, start, end) => {
+            if (!ts) return false;
+            const date = new Date(ts.toDate ? ts.toDate() : ts);
+            return date >= start && date <= end;
         };
 
         const getLocalDateStr = (d = new Date()) => {
@@ -393,14 +397,9 @@
             return payroll;
         };
 
-        const validatePin = (input) => {
-            try {
-                const encoded = btoa(input.toLowerCase().trim());
-                if (DEFAULTS.PINS.GREETER.includes(encoded)) return 'GREETER';
-                if (encoded === DEFAULTS.PINS.CASHIER) return 'CASHIER';
-                if (encoded === DEFAULTS.PINS.ADMIN) return 'ADMIN';
-            } catch (e) { return null; }
-            return null;
+        const isAdminPin = (input) => {
+            try { return btoa(input.toLowerCase().trim()) === DEFAULTS.PINS.ADMIN; }
+            catch (e) { return false; }
         };
 
         const toggleSelection = (list, item, limit = null) => {
@@ -1095,6 +1094,7 @@ Firma: __________________
                 return savedRole === 'ADMIN' ? 'ADMIN' : 'GREETER';
             });
             const [employees, setEmployees] = useState([]);
+            const [posCredentials, setPosCredentials] = useState([]);
             const [tickets, setTickets] = useState([]);
             const [history, setHistory] = useState([]);
             const [deductions, setDeductions] = useState([]);
@@ -1137,12 +1137,20 @@ Firma: __________________
             }, []);
 
             useEffect(() => {
+                const unsub = onSnapshot(collection(db, "pos_credentials"), (snap) => {
+                    setPosCredentials(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                });
+                return () => unsub();
+            }, []);
+
+            useEffect(() => {
                 const loadSettings = async () => {
-                    const [pricesSnap, commissionsSnap, extrasSnap, generalSnap] = await Promise.all([
+                    const [pricesSnap, commissionsSnap, extrasSnap, generalSnap, credSnap] = await Promise.all([
                         getDoc(doc(db, "settings", "prices")),
                         getDoc(doc(db, "settings", "commissions")),
                         getDocs(collection(db, "extras")),
-                        getDoc(doc(db, "settings", "general"))
+                        getDoc(doc(db, "settings", "general")),
+                        getDocs(collection(db, "pos_credentials"))
                     ]);
 
                     if (pricesSnap.exists()) setPrices(pricesSnap.data());
@@ -1171,6 +1179,16 @@ Firma: __________________
                             exchangeRate: DEFAULTS.EXCHANGE_RATE,
                             snackPrice: DEFAULTS.SNACK_PRICE
                         });
+                    }
+
+                    if (credSnap.empty) {
+                        const batch = writeBatch(db);
+                        [
+                            { nickname: 'Melvy', password: 'bWVsdnkxMDYx', role: 'entrada', enabled: true, lastAccessed: null, createdAt: serverTimestamp() },
+                            { nickname: 'Rito', password: 'NXJpdG83', role: 'entrada', enabled: true, lastAccessed: null, createdAt: serverTimestamp() },
+                            { nickname: 'Sergio', password: 'c2VyZ2lvOTE5MQ==', role: 'caja', enabled: true, lastAccessed: null, createdAt: serverTimestamp() },
+                        ].forEach(cred => batch.set(doc(collection(db, "pos_credentials")), cred));
+                        await batch.commit();
                     }
                 };
                 loadSettings();
@@ -1212,6 +1230,41 @@ Firma: __________________
                 await setDoc(doc(db, "settings", "general"), {
                     exchangeRate: newRate, snackPrice: newSnackPrice
                 }, { merge: true });
+            });
+
+            const validateAndLogin = async (input) => {
+                try {
+                    if (isAdminPin(input)) { login('ADMIN'); return true; }
+                    const encoded = btoa(input.toLowerCase().trim());
+                    const match = posCredentials.find(c => c.enabled && c.password === encoded);
+                    if (match) {
+                        login(match.role === 'caja' ? 'CASHIER' : 'GREETER');
+                        updateDoc(doc(db, 'pos_credentials', match.id), { lastAccessed: serverTimestamp() });
+                        return true;
+                    }
+                } catch (e) { return false; }
+                return false;
+            };
+
+            const addPosCredential = (nickname, password, role) => handleDbAction(async () => {
+                await addDoc(collection(db, "pos_credentials"), {
+                    nickname, password: btoa(password.toLowerCase().trim()),
+                    role, enabled: true, lastAccessed: null, createdAt: serverTimestamp()
+                });
+            });
+
+            const updatePosCredential = (id, updates) => handleDbAction(async () => {
+                await updateDoc(doc(db, "pos_credentials", id), updates);
+            });
+
+            const deletePosCredential = (id) => handleDbAction(async () => {
+                await deleteDoc(doc(db, "pos_credentials", id));
+            });
+
+            const resetPosCredential = (id, newPassword) => handleDbAction(async () => {
+                await updateDoc(doc(db, "pos_credentials", id), {
+                    password: btoa(newPassword.toLowerCase().trim()), lastAccessed: null
+                });
             });
 
             const getOpeningCash = (targetDate) => {
@@ -1571,8 +1624,9 @@ Firma: __________________
             const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
 
             const value = {
-                role, login, logout, view, setView, employees, tickets, history, deductions, expenses, businessExpenses, cashCounts, cashDrops, cashIns, adminSnacks, cortesias,
+                role, login, logout, view, setView, employees, posCredentials, tickets, history, deductions, expenses, businessExpenses, cashCounts, cashDrops, cashIns, adminSnacks, cortesias,
                 prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
+                validateAndLogin, addPosCredential, updatePosCredential, deletePosCredential, resetPosCredential,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, addAvance, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, processMultiPayment, addCashCount, addCashDrop, addCashIn,
@@ -1730,19 +1784,25 @@ Firma: __________________
         };
 
         const LoginScreen = () => {
-            const { login } = useContext(AppContext);
+            const { validateAndLogin } = useContext(AppContext);
             const [pin, setPin] = useState('');
-            const handleLogin = () => {
-                const role = validatePin(pin);
-                if (role) login(role); else { alert('PIN Incorrecto'); setPin(''); }
+            const [loading, setLoading] = useState(false);
+            const handleLogin = async () => {
+                if (!pin.trim() || loading) return;
+                setLoading(true);
+                const ok = await validateAndLogin(pin);
+                setLoading(false);
+                if (!ok) { alert('PIN Incorrecto'); setPin(''); }
             };
             return (
                 <div className="flex h-screen bg-gray-900 justify-center items-center p-4">
                     <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center">
                         <h1 className="text-3xl font-bold mb-6 text-gray-800">LAVAMEX POS</h1>
                         <div className="flex flex-col gap-4">
-                            <input type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" className="w-full p-4 border rounded-lg text-center text-3xl tracking-widest mb-2" autoFocus />
-                            <Button onClick={handleLogin} className="w-full p-4 text-lg">ENTRAR</Button>
+                            <input type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" className="w-full p-4 border rounded-lg text-center text-3xl tracking-widest mb-2" autoFocus disabled={loading} />
+                            <Button onClick={handleLogin} className="w-full p-4 text-lg" disabled={loading}>
+                                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'ENTRAR'}
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -3384,13 +3444,13 @@ Firma: __________________
                 });
             }, [startDate, endDate]);
 
-            const filterRange = (ts) => { if (!ts) return true; const date = new Date(ts.toDate ? ts.toDate() : ts); return date >= start && date <= end; };
+            const filterRangeLocal = (ts) => filterRange(ts, start, end);
 
             const activeNominaHistory = localHistory !== null ? localHistory : history.concat(tickets.filter(t => t.status === 'PAID'));
             const activeNominaDeductions = localDeductions !== null ? localDeductions : deductions;
 
-            const rangeHistory = activeNominaHistory.filter(t => t.status === 'PAID' && filterRange(t.paidAt || t.timestamp));
-            const rangeDeductions = activeNominaDeductions.filter(d => d.status === 'PENDING' && filterRange(d.timestamp));
+            const rangeHistory = activeNominaHistory.filter(t => t.status === 'PAID' && filterRangeLocal(t.paidAt || t.timestamp));
+            const rangeDeductions = activeNominaDeductions.filter(d => d.status === 'PENDING' && filterRangeLocal(d.timestamp));
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
 
             attendanceData.forEach(record => {
@@ -3847,17 +3907,190 @@ Firma: __________________
             );
         };
 
+        const AdminConfigPosUsers = () => {
+            const { posCredentials, addPosCredential, updatePosCredential, deletePosCredential, resetPosCredential } = useContext(AppContext);
+            const [showPwds, setShowPwds] = useState({});
+            const [resetModal, setResetModal] = useState(null);
+            const [newPwd, setNewPwd] = useState('');
+            const [confirmPwd, setConfirmPwd] = useState('');
+            const [showNewPwd, setShowNewPwd] = useState(false);
+            const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+            const [addForm, setAddForm] = useState(false);
+            const [newNick, setNewNick] = useState('');
+            const [newRole, setNewRole] = useState('entrada');
+            const [addPwd, setAddPwd] = useState('');
+            const [showAddPwd, setShowAddPwd] = useState(false);
+
+            const toggleShow = (id) => setShowPwds(prev => ({ ...prev, [id]: !prev[id] }));
+            const decode = (b64) => { try { return atob(b64); } catch (e) { return '???'; } };
+            const formatLastAccess = (ts) => {
+                if (!ts) return 'Nunca';
+                const d = ts.toDate ? ts.toDate() : new Date(ts);
+                return new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
+            };
+
+            const handleAdd = () => {
+                if (!newNick.trim() || !addPwd.trim()) return alert("Completa todos los campos.");
+                addPosCredential(newNick.trim(), addPwd, newRole);
+                setNewNick(''); setAddPwd(''); setNewRole('entrada'); setAddForm(false); setShowAddPwd(false);
+            };
+
+            const handleReset = () => {
+                if (!newPwd.trim()) return alert("Ingresa una contraseña.");
+                if (newPwd !== confirmPwd) return alert("Las contraseñas no coinciden.");
+                resetPosCredential(resetModal, newPwd);
+                setResetModal(null); setNewPwd(''); setConfirmPwd(''); setShowNewPwd(false); setShowConfirmPwd(false);
+            };
+
+            const resetCred = posCredentials.find(c => c.id === resetModal);
+
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-2xl mx-auto">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 className="font-bold text-gray-800">Usuarios POS</h3>
+                            <p className="text-xs text-gray-500 mt-0.5">Gestiona los accesos al sistema de punto de venta</p>
+                        </div>
+                        <Button onClick={() => { setAddForm(v => !v); setNewNick(''); setAddPwd(''); setNewRole('entrada'); setShowAddPwd(false); }} className="text-sm px-4 py-2">
+                            <PlusCircle size={16} /> Agregar
+                        </Button>
+                    </div>
+
+                    {addForm && (
+                        <div className="mb-5 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+                            <h4 className="font-bold text-blue-800 text-sm">Nuevo Usuario POS</h4>
+                            <div className="flex gap-2">
+                                <input value={newNick} onChange={e => setNewNick(e.target.value)} placeholder="Nombre / Apodo" className="border p-2 rounded-lg flex-1 text-sm" />
+                                <select value={newRole} onChange={e => setNewRole(e.target.value)} className="border p-2 rounded-lg text-sm bg-white font-medium">
+                                    <option value="entrada">Entrada</option>
+                                    <option value="caja">Caja</option>
+                                </select>
+                            </div>
+                            <div className="relative">
+                                <input type={showAddPwd ? 'text' : 'password'} value={addPwd} onChange={e => setAddPwd(e.target.value)} placeholder="Contraseña" className="border p-2 rounded-lg w-full text-sm pr-10" />
+                                <button onClick={() => setShowAddPwd(p => !p)} className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600">
+                                    {showAddPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button onClick={() => setAddForm(false)} variant="secondary" className="flex-1 text-sm py-2">Cancelar</Button>
+                                <Button onClick={handleAdd} className="flex-1 text-sm py-2">Guardar</Button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+                                    <th className="p-3 text-left font-bold">Nombre</th>
+                                    <th className="p-3 text-left font-bold">Contraseña</th>
+                                    <th className="p-3 text-left font-bold">Rol</th>
+                                    <th className="p-3 text-left font-bold">Estado</th>
+                                    <th className="p-3 text-left font-bold">Último Acceso</th>
+                                    <th className="p-3 text-center font-bold">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {posCredentials.length === 0 && (
+                                    <tr><td colSpan={6} className="p-8 text-center text-gray-400 italic">Sin usuarios configurados</td></tr>
+                                )}
+                                {posCredentials.map(cred => (
+                                    <tr key={cred.id} className={`transition-colors hover:bg-gray-50 ${!cred.enabled ? 'opacity-50' : ''}`}>
+                                        <td className="p-3 font-semibold text-gray-800">{cred.nickname}</td>
+                                        <td className="p-3">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-mono text-gray-600 text-xs tracking-widest">
+                                                    {showPwds[cred.id] ? decode(cred.password) : '••••••••'}
+                                                </span>
+                                                <button onClick={() => toggleShow(cred.id)} className="text-gray-400 hover:text-gray-700 p-0.5 rounded">
+                                                    {showPwds[cred.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td className="p-3">
+                                            <select value={cred.role} onChange={e => updatePosCredential(cred.id, { role: e.target.value })}
+                                                className="border p-1.5 rounded-lg text-xs bg-white font-bold text-gray-700">
+                                                <option value="entrada">Entrada</option>
+                                                <option value="caja">Caja</option>
+                                            </select>
+                                        </td>
+                                        <td className="p-3">
+                                            <button onClick={() => updatePosCredential(cred.id, { enabled: !cred.enabled })}
+                                                className={`text-xs font-bold px-2.5 py-1 rounded-full transition-colors ${cred.enabled ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
+                                                {cred.enabled ? 'Activo' : 'Inactivo'}
+                                            </button>
+                                        </td>
+                                        <td className="p-3 text-xs text-gray-500 whitespace-nowrap">{formatLastAccess(cred.lastAccessed)}</td>
+                                        <td className="p-3">
+                                            <div className="flex items-center justify-center gap-3">
+                                                <button onClick={() => { setResetModal(cred.id); setNewPwd(''); setConfirmPwd(''); setShowNewPwd(false); setShowConfirmPwd(false); }}
+                                                    className="text-blue-500 hover:text-blue-700" title="Resetear contraseña">
+                                                    <Key size={16} />
+                                                </button>
+                                                <button onClick={() => { if (confirm(`¿Eliminar usuario "${cred.nickname}"?`)) deletePosCredential(cred.id); }}
+                                                    className="text-red-500 hover:text-red-700" title="Eliminar">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {resetModal && (
+                        <Modal title={`Resetear Contraseña${resetCred ? ': ' + resetCred.nickname : ''}`} icon={Key} onClose={() => setResetModal(null)}
+                            footer={
+                                <div className="flex gap-2">
+                                    <Button onClick={() => setResetModal(null)} variant="secondary" className="flex-1">Cancelar</Button>
+                                    <Button onClick={handleReset} className="flex-1">Guardar</Button>
+                                </div>
+                            }>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Nueva contraseña</label>
+                                    <div className="relative">
+                                        <input type={showNewPwd ? 'text' : 'password'} value={newPwd} onChange={e => setNewPwd(e.target.value)} className="border p-2.5 rounded-lg w-full pr-10" placeholder="Nueva contraseña" />
+                                        <button onClick={() => setShowNewPwd(p => !p)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
+                                            {showNewPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-1">Confirmar contraseña</label>
+                                    <div className="relative">
+                                        <input type={showConfirmPwd ? 'text' : 'password'} value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} className="border p-2.5 rounded-lg w-full pr-10" placeholder="Repetir contraseña" />
+                                        <button onClick={() => setShowConfirmPwd(p => !p)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
+                                            {showConfirmPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
+                </div>
+            );
+        };
+
         const AdminConfiguracion = () => {
             const [configTab, setConfigTab] = useState('EMPLEADOS');
-            const subTabs = [{ id: 'EMPLEADOS', label: 'Empleados' }, { id: 'CAMBIO', label: 'Cambio' }, { id: 'PRECIOS', label: 'Precios' }];
+            const subTabs = [
+                { id: 'EMPLEADOS', label: 'Empleados' },
+                { id: 'USUARIOS', label: 'Usuarios POS' },
+                { id: 'CAMBIO', label: 'Cambio' },
+                { id: 'PRECIOS', label: 'Precios' }
+            ];
             return (
                 <div className="space-y-4">
-                    <div className="flex gap-1 border-b border-gray-200">
+                    <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
                         {subTabs.map(t => (
                             <button key={t.id} onClick={() => setConfigTab(t.id)} className={`px-4 py-2.5 text-sm font-bold whitespace-nowrap transition-colors border-b-2 -mb-px ${configTab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{t.label}</button>
                         ))}
                     </div>
                     {configTab === 'EMPLEADOS' && <AdminConfigEmpleados />}
+                    {configTab === 'USUARIOS' && <AdminConfigPosUsers />}
                     {configTab === 'CAMBIO' && <AdminConfigCambio />}
                     {configTab === 'PRECIOS' && <AdminPrecios />}
                 </div>
@@ -3963,11 +4196,9 @@ Firma: __________________
                 });
             }, [mercMode, mercDate, mercMonth, mercRangeStart, mercRangeEnd]);
 
-            const filterRange = (ts) => { if (!ts) return false; const date = new Date(ts.toDate ? ts.toDate() : ts); return date >= start && date <= end; };
-
-            const activeTickets = localData ? localData.tickets : history.concat(tickets.filter(t => t.status === 'PAID')).filter(t => filterRange(t.paidAt || t.timestamp));
-            const activeDeductions = localData ? localData.deductions : deductions.filter(d => filterRange(d.timestamp));
-            const activeAdminSnacks = localData ? localData.adminSnacks : adminSnacks.filter(a => filterRange(a.timestamp));
+            const activeTickets = localData ? localData.tickets : history.concat(tickets.filter(t => t.status === 'PAID')).filter(t => filterRange(t.paidAt || t.timestamp, start, end));
+            const activeDeductions = localData ? localData.deductions : deductions.filter(d => filterRange(d.timestamp, start, end));
+            const activeAdminSnacks = localData ? localData.adminSnacks : adminSnacks.filter(a => filterRange(a.timestamp, start, end));
 
             const pendingSnacks = adminSnacks.filter(a => a.status === 'PENDING');
 
