@@ -410,11 +410,6 @@
         };
 
         const PrintService = {
-            normalizeText: (str) => {
-                if (!str) return '';
-                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            },
-
             print: async (content, role) => {
                 if (role === 'CASHIER' || role === 'ADMIN') {
                     const printWindow = window.open('', '_blank', 'width=400,height=600');
@@ -1932,7 +1927,7 @@ const renderSizes = () => (
                             </div>
                         )}
                         <Button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className={`w-full py-5 text-xl shadow-lg ${!canSubmit ? 'bg-gray-300' : ''}`}>
-                            {isSubmitting ? <Loader2 className="animate-spin" /> : (editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><Printer className="w-6 h-6" /> CREAR TICKET</>)}
+                            {isSubmitting ? <Loader2 className="animate-spin" /> : (editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><PlusCircle className="w-6 h-6" /> CREAR TICKET</>)}
                         </Button>
                     </div>
                 </div>
