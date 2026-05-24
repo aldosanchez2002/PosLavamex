@@ -779,11 +779,10 @@ Firma: __________________
                         doc.setFont(undefined, 'normal');
                     }
                 });
-
+                
                 const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
-                const formatDateFile = (s) => s ? s.split('-').reverse().join('_') : '';
                 const totalLabel = `$${Math.round(totalNomina).toLocaleString('en-US')}`;
-                doc.save(`Nomina_${formatDateFile(startDate)}_a_${formatDateFile(endDate)}_${totalLabel}.pdf`);
+                doc.save(`Nomina_${startDate}_${endDate}_${totalLabel}.pdf`);
             },
 
             generateCorte: (data) => {
