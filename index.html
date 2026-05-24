@@ -465,24 +465,7 @@
                 }
             },
 
-            getJobTicketHtml: (ticket, shortId) => {
-                const rawWashers = ticket.washers ? ticket.washers : (ticket.washer ? [ticket.washer] : []);
-                const cleanWashers = rawWashers.map(w => PrintService.normalizeText(w)).join(', ');
-
-                return `<div style="white-space: pre; font-family: monospace;">
---------------------------------
-TICKET: #${shortId}
-${ticket.vehicleDesc ? ticket.vehicleDesc.toUpperCase() : ''}
---------------------------------
-${cleanWashers}
-${ticket.size ? ticket.size.label : ''}
-${ticket.service ? ticket.service.label : 'Extras Only'}
-${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label}`).join('\n') : ''}
-${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount})` : ''}
---------------------------------</div>`;
-            },
-
-            getMultiReceiptHtml: (tickets, payment, snackPrice) => {
+getMultiReceiptHtml: (tickets, payment, snackPrice) => {
                 const isOnlyUsd = payment.isOnlyUsd;
                 const changeStr = isOnlyUsd
                     ? `Cambio: $${(payment.changeUsd || 0).toFixed(2)} USD`
