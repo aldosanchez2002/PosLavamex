@@ -305,8 +305,15 @@
                 }
             });
 
-            employees.forEach(emp => {
-                const empName = emp.name;
+            // Process deductions first so employees who only appear in deductions
+            // also get their commissions computed in the loop below.
+            deductions.forEach(d => {
+                if (!payroll[d.employee]) payroll[d.employee] = initPayrollItem();
+                payroll[d.employee].deductionTotal += d.amount;
+                payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
+            });
+
+            Object.keys(payroll).forEach(empName => {
                 const p = payroll[empName];
 
                 history.forEach(item => {
@@ -385,12 +392,6 @@
                         payroll[emp.name].extrasData['Boleadas'].total += boleroComm;
                     }
                 }
-            });
-
-            deductions.forEach(d => {
-                if (!payroll[d.employee]) payroll[d.employee] = initPayrollItem();
-                payroll[d.employee].deductionTotal += d.amount;
-                payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
             });
 
             Object.keys(payroll).forEach(key => { payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal; });
