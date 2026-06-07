@@ -589,7 +589,15 @@ Firma: __________________
                         const totalLegal = baseWorked + septimoDia;
 
                         const targetTotal = p.total;
-                        const bono = targetTotal - totalLegal;
+                        const rawBono = targetTotal - totalLegal;
+                        // Scale bono proportionally to days worked vs expected workdays (non-Tuesday days in period)
+                        let expectedWorkdays = 0;
+                        const periodStart = new Date(startDate + 'T00:00:00');
+                        const periodEnd = new Date(endDate + 'T00:00:00');
+                        for (let d = new Date(periodStart); d <= periodEnd; d.setDate(d.getDate() + 1)) {
+                            if (d.getDay() !== 2) expectedWorkdays++; // exclude Tuesdays (rest day)
+                        }
+                        const bono = expectedWorkdays > 0 ? rawBono * (daysWorked / expectedWorkdays) : rawBono;
 
                         let curY = 50;
                         doc.text(`Salario Diario:`, 14, curY);
