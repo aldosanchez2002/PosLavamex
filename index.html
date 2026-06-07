@@ -651,6 +651,7 @@ Firma: __________________
                         doc.text(`Deducciones:`, 14, curY);
                         doc.text(`-${formatCurrency(p.deductionTotal)}`, 70, curY);
 
+                        const supervisorNetPay = totalLegal + bono - p.deductionTotal;
                         let boxY = curY + 15;
                         doc.setDrawColor(0);
                         doc.setFillColor(255, 255, 255);
@@ -659,7 +660,7 @@ Firma: __________________
                         doc.setFont(undefined, 'bold');
                         doc.text("TOTAL A PAGAR", 165, boxY + 6, { align: 'center' });
                         doc.setFontSize(16);
-                        doc.text(formatCurrency(p.netPay), 165, boxY + 15, { align: 'center' });
+                        doc.text(formatCurrency(supervisorNetPay), 165, boxY + 15, { align: 'center' });
                         doc.setFont(undefined, 'normal');
 
                     } else {
