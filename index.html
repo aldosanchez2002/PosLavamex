@@ -585,8 +585,6 @@ Firma: __________________
                         const dailyRate = 440.87;
                         const daysWorked = p.daysWorked || 0;
                         const baseWorked = daysWorked * dailyRate;
-                        const septimoDia = 440.87;
-                        const totalLegal = baseWorked + septimoDia;
 
                         // Count expected workdays (non-Tuesdays) in the period
                         let expectedWorkdays = 0;
@@ -595,6 +593,9 @@ Firma: __________________
                         for (let d = new Date(periodStart); d <= periodEnd; d.setDate(d.getDate() + 1)) {
                             if (d.getDay() !== 2) expectedWorkdays++;
                         }
+
+                        const septimoDia = expectedWorkdays > 0 ? 440.87 * (daysWorked / expectedWorkdays) : 440.87;
+                        const totalLegal = baseWorked + septimoDia;
                         // Scale full pay proportionally; bono is what remains after minimum wage
                         const proportionalTotal = expectedWorkdays > 0 ? p.total * (daysWorked / expectedWorkdays) : p.total;
                         const bono = proportionalTotal - totalLegal;
