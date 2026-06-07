@@ -588,16 +588,16 @@ Firma: __________________
                         const septimoDia = 440.87;
                         const totalLegal = baseWorked + septimoDia;
 
-                        const targetTotal = p.total;
-                        const rawBono = targetTotal - totalLegal;
-                        // Scale bono proportionally to days worked vs expected workdays (non-Tuesday days in period)
+                        // Count expected workdays (non-Tuesdays) in the period
                         let expectedWorkdays = 0;
                         const periodStart = new Date(startDate + 'T00:00:00');
                         const periodEnd = new Date(endDate + 'T00:00:00');
                         for (let d = new Date(periodStart); d <= periodEnd; d.setDate(d.getDate() + 1)) {
-                            if (d.getDay() !== 2) expectedWorkdays++; // exclude Tuesdays (rest day)
+                            if (d.getDay() !== 2) expectedWorkdays++;
                         }
-                        const bono = expectedWorkdays > 0 ? rawBono * (daysWorked / expectedWorkdays) : rawBono;
+                        // Scale full pay proportionally; bono is what remains after minimum wage
+                        const proportionalTotal = expectedWorkdays > 0 ? p.total * (daysWorked / expectedWorkdays) : p.total;
+                        const bono = proportionalTotal - totalLegal;
 
                         let curY = 50;
                         doc.text(`Salario Diario:`, 14, curY);
@@ -651,7 +651,7 @@ Firma: __________________
                         doc.text(`Deducciones:`, 14, curY);
                         doc.text(`-${formatCurrency(p.deductionTotal)}`, 70, curY);
 
-                        const supervisorNetPay = totalLegal + bono - p.deductionTotal;
+                        const supervisorNetPay = proportionalTotal - p.deductionTotal;
                         let boxY = curY + 15;
                         doc.setDrawColor(0);
                         doc.setFillColor(255, 255, 255);
