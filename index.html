@@ -3469,6 +3469,10 @@ const renderSizes = () => (
 
             const printDetailedNomina = () => {
                 if (!previewName) return;
+                if (previewData && previewData.role === 'SUPERVISOR') {
+                    PdfService.generateNomina({ [previewName]: previewData }, startDate, endDate, rangeHistory);
+                    return;
+                }
                 const empTickets = rangeHistory.filter(t => {
                     const wList = t.washers || (t.washer ? [t.washer] : []);
                     return wList.includes(previewName);
@@ -3614,36 +3618,64 @@ const renderSizes = () => (
                                     </div>
                                 </div>
 
-                                <div>
-                                    <h4 className="font-bold text-xs uppercase text-gray-500 mb-2 border-b pb-1">Desglose de Servicios</h4>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-xs text-left">
-                                            <thead>
-                                                <tr className="bg-gray-100">
-                                                    <th className="p-1">Svc</th>
-                                                    {SIZES.map(s => <th key={s.id} className="p-1 text-center">{s.label.substring(0, 3)}</th>)}
-                                                </tr>
-                                            </thead>
+                                {previewData.role === 'SUPERVISOR' ? (
+                                    <div>
+                                        <h4 className="font-bold text-xs uppercase text-gray-500 mb-2 border-b pb-1">Desglose de Sueldo</h4>
+                                        <table className="w-full text-xs">
                                             <tbody>
-                                                {SERVICES.map(svc => {
-                                                    const rowCounts = SIZES.map(sz => previewData.serviceGrid[svc.id][sz.id] || 0);
-                                                    if (!rowCounts.some(c => c > 0)) return null;
-                                                    return (
-                                                        <tr key={svc.id} className="border-b last:border-0 hover:bg-gray-50">
-                                                            <td className="p-1 font-medium">{svc.label}</td>
-                                                            {rowCounts.map((c, i) => <td key={i} className="p-1 text-center text-gray-600">{c || '-'}</td>)}
-                                                        </tr>
-                                                    )
-                                                })}
-                                                {!SERVICES.some(svc => SIZES.some(sz => (previewData.serviceGrid[svc.id][sz.id] || 0) > 0)) && (
-                                                    <tr><td colSpan="5" className="p-2 text-center text-gray-400 italic">Sin servicios de lavado registrados</td></tr>
-                                                )}
+                                                <tr className="border-b">
+                                                    <td className="p-1 text-gray-600">Días trabajados</td>
+                                                    <td className="p-1 text-right font-medium">{previewData.daysWorked || 0} / {expectedWorkdaysNomina}</td>
+                                                </tr>
+                                                <tr className="border-b">
+                                                    <td className="p-1 text-gray-600">Salario diario</td>
+                                                    <td className="p-1 text-right font-medium">{formatCurrency(440.87)}</td>
+                                                </tr>
+                                                {Object.keys(previewData.extrasData).sort().map(k => (
+                                                    <tr key={k} className="border-b">
+                                                        <td className="p-1 text-gray-600">{k}</td>
+                                                        <td className="p-1 text-right font-medium">{formatCurrency(previewData.extrasData[k].total)}</td>
+                                                    </tr>
+                                                ))}
+                                                <tr className="border-b">
+                                                    <td className="p-1 font-bold">Total proporcional</td>
+                                                    <td className="p-1 text-right font-bold">{formatCurrency(previewData.netPay + previewData.deductionTotal)}</td>
+                                                </tr>
                                             </tbody>
                                         </table>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div>
+                                        <h4 className="font-bold text-xs uppercase text-gray-500 mb-2 border-b pb-1">Desglose de Servicios</h4>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-xs text-left">
+                                                <thead>
+                                                    <tr className="bg-gray-100">
+                                                        <th className="p-1">Svc</th>
+                                                        {SIZES.map(s => <th key={s.id} className="p-1 text-center">{s.label.substring(0, 3)}</th>)}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {SERVICES.map(svc => {
+                                                        const rowCounts = SIZES.map(sz => previewData.serviceGrid[svc.id][sz.id] || 0);
+                                                        if (!rowCounts.some(c => c > 0)) return null;
+                                                        return (
+                                                            <tr key={svc.id} className="border-b last:border-0 hover:bg-gray-50">
+                                                                <td className="p-1 font-medium">{svc.label}</td>
+                                                                {rowCounts.map((c, i) => <td key={i} className="p-1 text-center text-gray-600">{c || '-'}</td>)}
+                                                            </tr>
+                                                        )
+                                                    })}
+                                                    {!SERVICES.some(svc => SIZES.some(sz => (previewData.serviceGrid[svc.id][sz.id] || 0) > 0)) && (
+                                                        <tr><td colSpan="5" className="p-2 text-center text-gray-400 italic">Sin servicios de lavado registrados</td></tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
 
-                                {Object.keys(previewData.extrasData).length > 0 && (
+                                {previewData.role !== 'SUPERVISOR' && Object.keys(previewData.extrasData).length > 0 && (
                                     <div>
                                         <h4 className="font-bold text-xs uppercase text-blue-500 mb-2 border-b pb-1 mt-4">Comisiones Extra</h4>
                                         <table className="w-full text-xs">
