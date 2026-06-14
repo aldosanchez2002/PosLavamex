@@ -3445,6 +3445,22 @@ const renderSizes = () => (
                 });
             });
 
+            // Recompute netPay for supervisors using the same proportional formula as the PDF,
+            // so that the preview card matches the generated payslip.
+            const periodStart2 = new Date(startDate + 'T00:00:00');
+            const periodEnd2 = new Date(endDate + 'T00:00:00');
+            let expectedWorkdaysNomina = 0;
+            for (let d = new Date(periodStart2); d <= periodEnd2; d.setDate(d.getDate() + 1)) {
+                if (d.getDay() !== 2) expectedWorkdaysNomina++;
+            }
+            Object.keys(payroll).forEach(key => {
+                const p = payroll[key];
+                if (p.role === 'SUPERVISOR') {
+                    const proportionalTotal = expectedWorkdaysNomina > 0 ? p.total * ((p.daysWorked || 0) / expectedWorkdaysNomina) : p.total;
+                    p.netPay = proportionalTotal - p.deductionTotal;
+                }
+            });
+
             const totalNomina = Object.values(payroll).reduce((acc, p) => acc + p.netPay, 0);
 
             const printNomina = () => {
@@ -3561,14 +3577,21 @@ const renderSizes = () => (
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {Object.keys(payroll).map(name => (
-                            <div key={name} onClick={() => { setPreviewData(payroll[name]); setPreviewName(name); }} className="bg-white p-5 rounded-xl shadow-sm border border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-all hover:bg-blue-50/30">
+                        {Object.keys(payroll).map(name => {
+                            const p = payroll[name];
+                            const showDaysWarning = p.role === 'SUPERVISOR' && (p.daysWorked || 0) < expectedWorkdaysNomina;
+                            return (
+                            <div key={name} onClick={() => { setPreviewData(p); setPreviewName(name); }} className="bg-white p-5 rounded-xl shadow-sm border border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-all hover:bg-blue-50/30">
                                 <div className="font-bold text-xl text-gray-800 mb-1">{name}</div>
-                                <div className="text-sm font-bold text-blue-600 mb-2">Días trabajados: {payroll[name].daysWorked || 0}</div>
-                                <div className="text-3xl font-bold text-green-700">{formatCurrency(payroll[name].netPay)}</div>
-                                <div className="text-sm text-gray-500 mt-2 flex justify-between border-t pt-2"><span>Com: {formatCurrency(payroll[name].total)}</span><span className="text-red-500 font-medium">Ded: {formatCurrency(payroll[name].deductionTotal)}</span></div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-sm font-bold text-blue-600">Días trabajados: {p.daysWorked || 0}</span>
+                                    {showDaysWarning && <span className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">⚠ Revisar asistencia ({expectedWorkdaysNomina} esperados)</span>}
+                                </div>
+                                <div className="text-3xl font-bold text-green-700">{formatCurrency(p.netPay)}</div>
+                                <div className="text-sm text-gray-500 mt-2 flex justify-between border-t pt-2"><span>Com: {formatCurrency(p.total)}</span><span className="text-red-500 font-medium">Ded: {formatCurrency(p.deductionTotal)}</span></div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {previewData && (
