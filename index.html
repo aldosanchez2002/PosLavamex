@@ -362,11 +362,11 @@
                             item.extras.forEach(ex => {
                                 const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
                                 const commissionValue = dbExtra ? (dbExtra.commission || 0) : (ex.commission || 0);
-                                const share = commissionValue / washerCount;
+                                const share = Math.round((commissionValue / washerCount) * 100) / 100;
 
                                 if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
                                 p.extrasData[ex.label].count += 1;
-                                p.extrasData[ex.label].total += share;
+                                p.extrasData[ex.label].total = Math.round((p.extrasData[ex.label].total + share) * 100) / 100;
                             });
                         }
                     }
@@ -393,21 +393,21 @@
                     }
                 } else if (emp.role === 'BOLERO' && payroll[emp.name]) {
                     const commPct = parseFloat(emp.commissionPct) || 50;
-                    const boleroComm = totalBoleadaRevenue * (commPct / 100);
+                    const boleroComm = Math.round(totalBoleadaRevenue * (commPct / 100) * 100) / 100;
 
                     if (totalBoleadaCount > 0) {
                         payroll[emp.name].count += totalBoleadaCount;
-                        payroll[emp.name].total += boleroComm;
+                        payroll[emp.name].total = Math.round((payroll[emp.name].total + boleroComm) * 100) / 100;
                         if (!payroll[emp.name].extrasData['Boleadas']) {
                             payroll[emp.name].extrasData['Boleadas'] = { count: 0, total: 0 };
                         }
                         payroll[emp.name].extrasData['Boleadas'].count += totalBoleadaCount;
-                        payroll[emp.name].extrasData['Boleadas'].total += boleroComm;
+                        payroll[emp.name].extrasData['Boleadas'].total = Math.round((payroll[emp.name].extrasData['Boleadas'].total + boleroComm) * 100) / 100;
                     }
                 }
             });
 
-            Object.keys(payroll).forEach(key => { payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal; });
+            Object.keys(payroll).forEach(key => { payroll[key].netPay = Math.round((payroll[key].total - payroll[key].deductionTotal) * 100) / 100; });
             return payroll;
         };
 
@@ -3401,6 +3401,7 @@ const renderSizes = () => (
             const [localHistory, setLocalHistory] = useState(null);
             const [localDeductions, setLocalDeductions] = useState(null);
             const [isFetchingNomina, setIsFetchingNomina] = useState(false);
+            const [nominaError, setNominaError] = useState(null);
 
             const [previewData, setPreviewData] = useState(null);
             const [previewName, setPreviewName] = useState(null);
@@ -3418,6 +3419,7 @@ const renderSizes = () => (
                     return;
                 }
                 setIsFetchingNomina(true);
+                setNominaError(null);
                 Promise.all([
                     getDocs(query(collection(db, "tickets"), where("status", "==", "PAID"), where("paidAt", ">=", start), where("paidAt", "<=", end), orderBy("paidAt", "desc"))),
                     getDocs(query(collection(db, "deductions"), where("timestamp", ">=", start), where("timestamp", "<=", end), orderBy("timestamp", "desc"))),
@@ -3427,12 +3429,19 @@ const renderSizes = () => (
                     setLocalDeductions(deducsSnap.docs.map(d => { const data = d.data(); return { id: d.id, ...data, timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp || new Date()) }; }));
                     setAttendanceData(attendanceSnap.docs.map(d => d.data()));
                     setIsFetchingNomina(false);
+                }).catch(err => {
+                    console.error('Error cargando nómina:', err);
+                    setNominaError('No se pudo cargar la nómina. Verifica tu conexión e intenta de nuevo.');
+                    setIsFetchingNomina(false);
                 });
             }, [startDate, endDate]);
 
             const filterRangeLocal = (ts) => filterRange(ts, start, end);
 
             // Never fall back to cached global state — always use the Firestore-sourced data.
+            if (nominaError) {
+                return <div className="flex items-center justify-center p-12 text-red-500 font-medium">{nominaError}</div>;
+            }
             if (isFetchingNomina || localHistory === null) {
                 return <div className="flex items-center justify-center p-12 text-gray-500">Cargando nómina...</div>;
             }
