@@ -328,7 +328,7 @@
             deductions.forEach(d => {
                 if (!payroll[d.employee]) payroll[d.employee] = initPayrollItem();
                 payroll[d.employee].deductionTotal += d.amount;
-                payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
+                payroll[d.employee].deductionDetails.push({ date: getLocalDateStr(d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp)), desc: d.description, amount: d.amount });
             });
 
             Object.keys(payroll).forEach(empName => {
@@ -3613,7 +3613,7 @@ const renderSizes = () => (
                                         <div className="text-3xl font-bold text-green-700">{formatCurrency(previewData.netPay)}</div>
                                     </div>
                                     <div className="text-right text-xs">
-                                        <div className="text-gray-600 font-medium">Ingresos: {formatCurrency(previewData.total)}</div>
+                                        <div className="text-gray-600 font-medium">Ingresos: {formatCurrency(previewData.proportionalTotal ?? previewData.total)}</div>
                                         <div className="text-red-500 font-medium">Deducciones: -{formatCurrency(previewData.deductionTotal)}</div>
                                     </div>
                                 </div>
