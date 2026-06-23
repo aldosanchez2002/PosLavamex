@@ -660,7 +660,7 @@ Firma: __________________
                         doc.text(`Deducciones:`, 14, curY);
                         doc.text(`-${formatCurrency(p.deductionTotal)}`, 70, curY);
 
-                        const supervisorNetPay = proportionalTotal - p.deductionTotal;
+                        const supervisorNetPay = Math.round((proportionalTotal - p.deductionTotal) * 100) / 100;
                         let boxY = curY + 15;
                         doc.setDrawColor(0);
                         doc.setFillColor(255, 255, 255);
