@@ -249,15 +249,31 @@
 
             const start = new Date(now);
             start.setDate(now.getDate() - diffToSaturday);
+            start.setHours(0, 0, 0, 0); // anchor to midnight so time-of-day never affects the result
 
             const end = new Date(start);
             end.setDate(start.getDate() + 6);
+            end.setHours(23, 59, 59, 999);
 
             return {
                 start: getLocalDateStr(start),
                 end: getLocalDateStr(end)
             };
         };
+
+        // Counts non-Tuesday days in [startStr, endStr] inclusive.
+        // Uses noon to avoid DST boundary issues (DST shifts happen at 2am).
+        const countWorkdays = (startStr, endStr) => {
+            const end = new Date(endStr + 'T12:00:00');
+            let count = 0;
+            for (let d = new Date(startStr + 'T12:00:00'); d <= end; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 12)) {
+                if (d.getDay() !== 2) count++;
+            }
+            return count;
+        };
+
+        // Rounds a MXN amount up to the nearest USD quarter using the given exchange rate.
+        const roundUpToQuarterUsd = (mxnAmount, rate) => Math.ceil((mxnAmount / rate) * 4) / 4;
 
         const calculateTicketTotals = (serviceId, sizeId, extraList, prices, commissions, snackCount = 0, currentSnackPrice = 30) => {
             const basePrice = (serviceId && sizeId && prices[serviceId]?.[sizeId]) || 0;
@@ -273,7 +289,8 @@
             };
         };
 
-        const calculatePayroll = (employees, history, deductions, currentCommissions, currentExtras) => {
+        const calculatePayroll = (employees, periodHistory, deductions, currentCommissions, currentExtras) => {
+            const history = periodHistory; // alias — callers must pass already-filtered history
             const payroll = {};
             const initPayrollItem = () => {
                 const item = { count: 0, total: 0, serviceGrid: {}, extrasData: {}, deductionTotal: 0, deductionDetails: [], netPay: 0, daysWorked: 0, datesWorked: [], role: null, curp: null };
@@ -311,7 +328,7 @@
             deductions.forEach(d => {
                 if (!payroll[d.employee]) payroll[d.employee] = initPayrollItem();
                 payroll[d.employee].deductionTotal += d.amount;
-                payroll[d.employee].deductionDetails.push({ date: d.timestamp, desc: d.description, amount: d.amount });
+                payroll[d.employee].deductionDetails.push({ date: getLocalDateStr(d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp)), desc: d.description, amount: d.amount });
             });
 
             Object.keys(payroll).forEach(empName => {
@@ -323,23 +340,16 @@
                     if (washersList.includes(empName)) {
                         const washerCount = washersList.length;
 
+                        // Use the commission stored on the ticket at the time of service.
+                        // If it was never stored (null/0), default to 34% of the ticket price
+                        // so historical pay is stable even if DB rates change later.
                         let totalTicketCommission = item.commission || 0;
-
-                        if (!totalTicketCommission || totalTicketCommission === 0) {
-                            let base = 0;
-                            if (item.service && item.size && currentCommissions && currentCommissions[item.service.id]) {
-                                base = currentCommissions[item.service.id][item.size.id] || 0;
-                            }
-                            const extrasTotal = (item.extras || []).reduce((acc, e) => {
-                                const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === e.id) : null;
-                                const val = dbExtra ? (dbExtra.commission || 0) : (e.commission || 0);
-                                return acc + val;
-                            }, 0);
-                            totalTicketCommission = base + extrasTotal;
+                        if (totalTicketCommission === 0) {
+                            totalTicketCommission = Math.round((item.price || 0) * 0.34 * 100) / 100;
                         }
 
                         const sharePerWasher = totalTicketCommission / washerCount;
-                        p.total += sharePerWasher;
+                        p.total = Math.round((p.total + sharePerWasher) * 100) / 100;
                         p.count += 1;
 
                         if (item.service && item.size) {
@@ -352,11 +362,11 @@
                             item.extras.forEach(ex => {
                                 const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
                                 const commissionValue = dbExtra ? (dbExtra.commission || 0) : (ex.commission || 0);
-                                const share = commissionValue / washerCount;
+                                const share = Math.round((commissionValue / washerCount) * 100) / 100;
 
                                 if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
                                 p.extrasData[ex.label].count += 1;
-                                p.extrasData[ex.label].total += share;
+                                p.extrasData[ex.label].total = Math.round((p.extrasData[ex.label].total + share) * 100) / 100;
                             });
                         }
                     }
@@ -367,9 +377,11 @@
                 if (emp.role === 'SUPERVISOR' && payroll[emp.name]) {
                     const baseSalary = parseFloat(emp.baseSalary) || 0;
                     const commPct = parseFloat(emp.commissionPct) || 0;
-                    const salesComm = totalGrossSales * (commPct / 100);
+                    const salesComm = Math.round(totalGrossSales * (commPct / 100) * 100) / 100;
 
-                    const newTotal = baseSalary + salesComm;
+                    // Supervisors earn base salary + % of gross sales only.
+                    // Ticket-based commissions accumulated above are intentionally discarded.
+                    const newTotal = Math.round((baseSalary + salesComm) * 100) / 100;
 
                     payroll[emp.name].total = newTotal;
                     payroll[emp.name].extrasData = {};
@@ -381,21 +393,21 @@
                     }
                 } else if (emp.role === 'BOLERO' && payroll[emp.name]) {
                     const commPct = parseFloat(emp.commissionPct) || 50;
-                    const boleroComm = totalBoleadaRevenue * (commPct / 100);
+                    const boleroComm = Math.round(totalBoleadaRevenue * (commPct / 100) * 100) / 100;
 
                     if (totalBoleadaCount > 0) {
                         payroll[emp.name].count += totalBoleadaCount;
-                        payroll[emp.name].total += boleroComm;
+                        payroll[emp.name].total = Math.round((payroll[emp.name].total + boleroComm) * 100) / 100;
                         if (!payroll[emp.name].extrasData['Boleadas']) {
                             payroll[emp.name].extrasData['Boleadas'] = { count: 0, total: 0 };
                         }
                         payroll[emp.name].extrasData['Boleadas'].count += totalBoleadaCount;
-                        payroll[emp.name].extrasData['Boleadas'].total += boleroComm;
+                        payroll[emp.name].extrasData['Boleadas'].total = Math.round((payroll[emp.name].extrasData['Boleadas'].total + boleroComm) * 100) / 100;
                     }
                 }
             });
 
-            Object.keys(payroll).forEach(key => { payroll[key].netPay = payroll[key].total - payroll[key].deductionTotal; });
+            Object.keys(payroll).forEach(key => { payroll[key].netPay = Math.round((payroll[key].total - payroll[key].deductionTotal) * 100) / 100; });
             return payroll;
         };
 
@@ -587,18 +599,13 @@ Firma: __________________
                         const daysWorked = p.daysWorked || 0;
                         const baseWorked = daysWorked * dailyRate;
 
-                        // Count expected workdays (non-Tuesdays) in the period
-                        let expectedWorkdays = 0;
-                        const periodStart = new Date(startDate + 'T00:00:00');
-                        const periodEnd = new Date(endDate + 'T00:00:00');
-                        for (let d = new Date(periodStart); d <= periodEnd; d.setDate(d.getDate() + 1)) {
-                            if (d.getDay() !== 2) expectedWorkdays++;
-                        }
+                        const expectedWorkdays = countWorkdays(startDate, endDate);
 
                         const septimoDia = expectedWorkdays > 0 ? 440.87 * (daysWorked / expectedWorkdays) : 440.87;
                         const totalLegal = baseWorked + septimoDia;
-                        // Scale full pay proportionally; bono is what remains after minimum wage
-                        const proportionalTotal = expectedWorkdays > 0 ? p.total * (daysWorked / expectedWorkdays) : p.total;
+                        // Read pre-computed proportionalTotal from the payroll object so PDF and
+                        // preview card always show the same number.
+                        const proportionalTotal = p.proportionalTotal ?? (expectedWorkdays > 0 ? p.total * (daysWorked / expectedWorkdays) : p.total);
                         const bono = proportionalTotal - totalLegal;
 
                         let curY = 50;
@@ -653,7 +660,7 @@ Firma: __________________
                         doc.text(`Deducciones:`, 14, curY);
                         doc.text(`-${formatCurrency(p.deductionTotal)}`, 70, curY);
 
-                        const supervisorNetPay = proportionalTotal - p.deductionTotal;
+                        const supervisorNetPay = Math.round((proportionalTotal - p.deductionTotal) * 100) / 100;
                         let boxY = curY + 15;
                         doc.setDrawColor(0);
                         doc.setFillColor(255, 255, 255);
@@ -1519,7 +1526,7 @@ Firma: __________________
                 let changeUsd = 0;
 
                 if (isOnlyUsd) {
-                    const roundedUsdPrice = Math.ceil((t.price / exRate) * 4) / 4;
+                    const roundedUsdPrice = roundUpToQuarterUsd(t.price, exRate);
                     if (usdVal < roundedUsdPrice) return alert("Falta dinero");
                     changeUsd = usdVal - roundedUsdPrice;
                     changeMxn = changeUsd * exRate;
@@ -1555,7 +1562,7 @@ Firma: __________________
                 let changeUsd = 0;
 
                 if (isOnlyUsd) {
-                    const roundedUsdPrice = Math.ceil((combinedPrice / exRate) * 4) / 4;
+                    const roundedUsdPrice = roundUpToQuarterUsd(combinedPrice, exRate);
                     if (usdVal < roundedUsdPrice) return alert("Falta dinero");
                     changeUsd = usdVal - roundedUsdPrice;
                     changeMxn = changeUsd * exRate;
@@ -2178,7 +2185,7 @@ const renderSizes = () => (
                 }
             };
 
-            const roundUsd = (mxnPrice) => Math.ceil((mxnPrice / exRate) * 4) / 4;
+            const roundUsd = (mxnPrice) => roundUpToQuarterUsd(mxnPrice, exRate);
 
             const toggleMultiMode = () => {
                 if (multiMode) {
@@ -3394,6 +3401,7 @@ const renderSizes = () => (
             const [localHistory, setLocalHistory] = useState(null);
             const [localDeductions, setLocalDeductions] = useState(null);
             const [isFetchingNomina, setIsFetchingNomina] = useState(false);
+            const [nominaError, setNominaError] = useState(null);
 
             const [previewData, setPreviewData] = useState(null);
             const [previewName, setPreviewName] = useState(null);
@@ -3401,64 +3409,72 @@ const renderSizes = () => (
             const start = new Date(startDate + 'T00:00:00');
             const end = new Date(endDate + 'T23:59:59.999');
 
+            // Single effect: fetch tickets, deductions, and attendance together so
+            // payroll is never computed with partially-loaded data (fixes race condition).
             useEffect(() => {
-                const fetchAttendance = async () => {
-                    const q = query(collection(db, "attendance"), where("date", ">=", startDate), where("date", "<=", endDate));
-                    const snap = await getDocs(q);
-                    setAttendanceData(snap.docs.map(d => d.data()));
-                };
-                fetchAttendance();
-            }, [startDate, endDate, db]);
-
-            useEffect(() => {
-                const sixtyDaysAgo = new Date();
-                sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-                sixtyDaysAgo.setHours(0, 0, 0, 0);
-
-                if (startDate === getLocalDateStr() && endDate === getLocalDateStr()) { setLocalHistory(null); setLocalDeductions(null); return; }
-
+                if (startDate === getLocalDateStr() && endDate === getLocalDateStr()) {
+                    setLocalHistory(null);
+                    setLocalDeductions(null);
+                    setAttendanceData([]);
+                    return;
+                }
                 setIsFetchingNomina(true);
+                setNominaError(null);
                 Promise.all([
                     getDocs(query(collection(db, "tickets"), where("status", "==", "PAID"), where("paidAt", ">=", start), where("paidAt", "<=", end), orderBy("paidAt", "desc"))),
                     getDocs(query(collection(db, "deductions"), where("timestamp", ">=", start), where("timestamp", "<=", end), orderBy("timestamp", "desc"))),
-                ]).then(([ticketsSnap, deducsSnap]) => {
+                    getDocs(query(collection(db, "attendance"), where("date", ">=", startDate), where("date", "<=", endDate))),
+                ]).then(([ticketsSnap, deducsSnap, attendanceSnap]) => {
                     setLocalHistory(ticketsSnap.docs.map(d => ({ id: d.id, ...d.data(), timestamp: d.data().timestamp?.toDate() || new Date(), paidAt: d.data().paidAt?.toDate() || null })));
                     setLocalDeductions(deducsSnap.docs.map(d => { const data = d.data(); return { id: d.id, ...data, timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp || new Date()) }; }));
+                    setAttendanceData(attendanceSnap.docs.map(d => d.data()));
+                    setIsFetchingNomina(false);
+                }).catch(err => {
+                    console.error('Error cargando nómina:', err);
+                    setNominaError('No se pudo cargar la nómina. Verifica tu conexión e intenta de nuevo.');
                     setIsFetchingNomina(false);
                 });
             }, [startDate, endDate]);
 
             const filterRangeLocal = (ts) => filterRange(ts, start, end);
 
-            const activeNominaHistory = localHistory !== null ? localHistory : history.concat(tickets.filter(t => t.status === 'PAID'));
-            const activeNominaDeductions = localDeductions !== null ? localDeductions : deductions;
+            // Never fall back to cached global state — always use the Firestore-sourced data.
+            if (nominaError) {
+                return <div className="flex items-center justify-center p-12 text-red-500 font-medium">{nominaError}</div>;
+            }
+            if (isFetchingNomina || localHistory === null) {
+                return <div className="flex items-center justify-center p-12 text-gray-500">Cargando nómina...</div>;
+            }
 
-            const rangeHistory = activeNominaHistory.filter(t => t.status === 'PAID' && filterRangeLocal(t.paidAt || t.timestamp));
-            const rangeDeductions = activeNominaDeductions.filter(d => d.status === 'PENDING' && filterRangeLocal(d.timestamp));
+            const rangeHistory = localHistory.filter(t => t.status === 'PAID' && filterRangeLocal(t.paidAt || t.timestamp));
+            // Filter deductions by date only — status is irrelevant for period scoping.
+            // Exclude CANCELLED deductions in case any were voided.
+            const rangeDeductions = (localDeductions || []).filter(d => d.status !== 'CANCELLED' && filterRangeLocal(d.timestamp));
             const payroll = calculatePayroll(employees, rangeHistory, rangeDeductions, commissions, extrasList);
 
             attendanceData.forEach(record => {
+                // Normalize date to string (guards against any Firestore Timestamp slipping through)
+                const dateStr = typeof record.date === 'string'
+                    ? record.date
+                    : getLocalDateStr(record.date?.toDate ? record.date.toDate() : new Date(record.date));
                 Object.entries(record.records || {}).forEach(([empName, isPresent]) => {
                     if (isPresent && payroll[empName]) {
                         payroll[empName].daysWorked = (payroll[empName].daysWorked || 0) + 1;
-                        payroll[empName].datesWorked.push(record.date);
+                        payroll[empName].datesWorked.push(dateStr);
                     }
                 });
             });
 
-            // Recompute netPay for supervisors using the same proportional formula as the PDF,
-            // so that the preview card matches the generated payslip.
-            const periodStart2 = new Date(startDate + 'T00:00:00');
-            const periodEnd2 = new Date(endDate + 'T00:00:00');
-            let expectedWorkdaysNomina = 0;
-            for (let d = new Date(periodStart2); d <= periodEnd2; d.setDate(d.getDate() + 1)) {
-                if (d.getDay() !== 2) expectedWorkdaysNomina++;
-            }
+            // Compute proportional pay for supervisors and store on the object so
+            // both the preview card and the PDF read the same pre-computed value.
+            const expectedWorkdaysNomina = countWorkdays(startDate, endDate);
             Object.keys(payroll).forEach(key => {
                 const p = payroll[key];
                 if (p.role === 'SUPERVISOR') {
-                    const proportionalTotal = expectedWorkdaysNomina > 0 ? p.total * ((p.daysWorked || 0) / expectedWorkdaysNomina) : p.total;
-                    p.netPay = proportionalTotal - p.deductionTotal;
+                    p.proportionalTotal = expectedWorkdaysNomina > 0
+                        ? Math.round(p.total * ((p.daysWorked || 0) / expectedWorkdaysNomina) * 100) / 100
+                        : p.total;
+                    p.netPay = Math.round((p.proportionalTotal - p.deductionTotal) * 100) / 100;
                 }
             });
 
@@ -3481,16 +3497,8 @@ const renderSizes = () => (
                     const wList = t.washers || (t.washer ? [t.washer] : []);
                     const wCount = wList.length;
                     let totalComm = t.commission || 0;
-                    if (!totalComm || totalComm === 0) {
-                        let base = 0;
-                        if (t.service && t.size && commissions[t.service?.id]) {
-                            base = commissions[t.service.id][t.size.id] || 0;
-                        }
-                        const extrasTotal = (t.extras || []).reduce((acc, e) => {
-                            const dbEx = extrasList.find(x => x.id === e.id);
-                            return acc + (dbEx ? (dbEx.commission || 0) : (e.commission || 0));
-                        }, 0);
-                        totalComm = base + extrasTotal;
+                    if (totalComm === 0) {
+                        totalComm = Math.round((t.price || 0) * 0.34 * 100) / 100;
                     }
                     const dateObj = t.paidAt || t.timestamp;
                     return {
@@ -3614,7 +3622,7 @@ const renderSizes = () => (
                                         <div className="text-3xl font-bold text-green-700">{formatCurrency(previewData.netPay)}</div>
                                     </div>
                                     <div className="text-right text-xs">
-                                        <div className="text-gray-600 font-medium">Ingresos: {formatCurrency(previewData.total)}</div>
+                                        <div className="text-gray-600 font-medium">Ingresos: {formatCurrency(previewData.proportionalTotal ?? previewData.total)}</div>
                                         <div className="text-red-500 font-medium">Deducciones: -{formatCurrency(previewData.deductionTotal)}</div>
                                     </div>
                                 </div>
@@ -3777,7 +3785,16 @@ const renderSizes = () => (
             const [newEmpName, setNewEmpName] = useState('');
             const [editingEmp, setEditingEmp] = useState(null);
 
-            const handleAddEmployee = () => { if (newEmpName.trim()) { addEmployee(newEmpName.trim()); setNewEmpName(''); } };
+            const handleAddEmployee = () => {
+                const name = newEmpName.trim();
+                if (!name) return;
+                if (employees.some(e => e.name.toLowerCase() === name.toLowerCase())) {
+                    alert(`Ya existe un empleado con el nombre "${name}". Usa un nombre distinto para evitar conflictos en nómina.`);
+                    return;
+                }
+                addEmployee(name);
+                setNewEmpName('');
+            };
             const handleEditEmployee = (emp) => setEditingEmp({ ...emp, role: emp.role || 'WASHER', baseSalary: emp.baseSalary || 0, commissionPct: emp.commissionPct || 0, curp: emp.curp || '' });
             const saveEmployeeChanges = () => {
                 if (!editingEmp) return;
