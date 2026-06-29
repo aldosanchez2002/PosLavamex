@@ -1,0 +1,263 @@
+
+══════════════════════════════════════════════════════════════════════
+  1  REVENUE OVERVIEW
+══════════════════════════════════════════════════════════════════════
+  Period          : 2026-02-14  →  2026-06-29  (135 days)
+  Total tickets   : 4,674
+  Total revenue   : $1,422,000.00 MXN
+  Total commission: $484,222.00 MXN
+  Gross margin    : 65.9%  (after washer commissions)
+  Avg ticket value: $304.24 MXN
+  Tickets / day   : 34.6
+  Revenue / day   : $10,533.33 MXN
+  Avg monthly rev : $320,634.67 MXN
+
+▶ Monthly Revenue Trend
+Month      Tickets  Revenue          Avg Ticket
+-------  ---------  ---------------  ------------
+2026-02        581  $167,345.00 MXN  $288.03 MXN
+2026-03        979  $300,710.00 MXN  $307.16 MXN
+2026-04       1037  $324,805.00 MXN  $313.22 MXN
+2026-05       1128  $346,210.00 MXN  $306.92 MXN
+2026-06        949  $282,930.00 MXN  $298.13 MXN
+  ✘ Latest month-over-month revenue growth: -18.3%
+  → Revenue dipped last month — run a weekend flash promo or loyalty push.
+
+══════════════════════════════════════════════════════════════════════
+  2  SERVICE MIX & PROFITABILITY
+══════════════════════════════════════════════════════════════════════
+
+▶ By Service Type
+Service             Tickets  % Count    Revenue            % Rev    Avg $          Margin%
+----------------  ---------  ---------  -----------------  -------  -------------  ---------
+Lavado General         4209  90.1%      $1,227,350.00 MXN  86.3%    $291.60 MXN    65.7%
+Paquete Completo         91  1.9%       $100,110.00 MXN    7.0%     $1,100.11 MXN  65.1%
+Lavado + Cera            79  1.7%       $55,995.00 MXN     3.9%     $708.80 MXN    65.7%
+Unknown                 290  6.2%       $31,325.00 MXN     2.2%     $108.02 MXN    78.5%
+Paquete Premium           5  0.1%       $7,220.00 MXN      0.5%     $1,444.00 MXN  65.0%
+  ✔ 'Lavado General' drives the most revenue.
+  → Only 2.1% of tickets are premium/presidential. A 5% upsell shift to premium = significant revenue lift.
+
+▶ By Vehicle Size
+Size                Tickets  %      Revenue          Avg $
+----------------  ---------  -----  ---------------  -----------
+Pick-Up / SUV MD       1672  35.8%  $686,335.00 MXN  $410.49 MXN
+SUV Chica              1407  30.1%  $379,225.00 MXN  $269.53 MXN
+Auto                   1272  27.2%  $309,970.00 MXN  $243.69 MXN
+Unknown                 276  5.9%   $25,225.00 MXN   $91.39 MXN
+SUV Gde                  47  1.0%   $21,245.00 MXN   $452.02 MXN
+
+══════════════════════════════════════════════════════════════════════
+  3  EXTRAS UPSELL ANALYSIS
+══════════════════════════════════════════════════════════════════════
+  Tickets with extras : 664 / 4,674  (14.2%)
+  Total extras revenue: $97,580.00 MXN
+  Extra rev / ticket  : $20.88 MXN
+
+▶ Top Extras Sold
+Extra                    Sold  Total Rev       Avg Price
+---------------------  ------  --------------  -----------
+Boleada (Caja)            312  $18,720.00 MXN  $60.00 MXN
+Boleada                   105  $6,300.00 MXN   $60.00 MXN
+Aroma                      92  $1,840.00 MXN   $20.00 MXN
+Aspirado de Cajuela        88  $3,520.00 MXN   $40.00 MXN
+Lavado Motor               65  $26,000.00 MXN  $400.00 MXN
+Pino (Caja)                51  $1,785.00 MXN   $35.00 MXN
+Chasis                     47  $18,800.00 MXN  $400.00 MXN
+Pino                       13  $455.00 MXN     $35.00 MXN
+Limpieza por Zona          12  $2,400.00 MXN   $200.00 MXN
+Armor-All                   7  $280.00 MXN     $40.00 MXN
+Limpieza de Focos           4  $1,360.00 MXN   $340.00 MXN
+Rzr                         4  $3,040.00 MXN   $760.00 MXN
+Snacks                      3  $90.00 MXN      $30.00 MXN
+Crema                       2  $860.00 MXN     $430.00 MXN
+Pino (Aromatizante)         2  $70.00 MXN      $35.00 MXN
+Esprinter                   2  $1,600.00 MXN   $800.00 MXN
+Focos                       2  $680.00 MXN     $340.00 MXN
+Pulida de focos             2  $680.00 MXN     $340.00 MXN
+Crema en lo asientos        1  $460.00 MXN     $460.00 MXN
+Trailer                     1  $800.00 MXN     $800.00 MXN
+Razer negro                 1  $800.00 MXN     $800.00 MXN
+Lavado de caja              1  $80.00 MXN      $80.00 MXN
+Crema en los asientos       1  $400.00 MXN     $400.00 MXN
+Traila                      1  $240.00 MXN     $240.00 MXN
+Crema                       1  $340.00 MXN     $340.00 MXN
+Transit                     1  $800.00 MXN     $800.00 MXN
+Ram caja toro bronco        1  $800.00 MXN     $800.00 MXN
+Pulido de focos             1  $340.00 MXN     $340.00 MXN
+Aspirado de cajuela         1  $40.00 MXN      $40.00 MXN
+Sprinter                    1  $800.00 MXN     $800.00 MXN
+Trailers blanco             1  $800.00 MXN     $800.00 MXN
+Crema asientos              1  $400.00 MXN     $400.00 MXN
+Ram de caja                 1  $800.00 MXN     $800.00 MXN
+Caja                        1  $600.00 MXN     $600.00 MXN
+Trailer blanco              1  $600.00 MXN     $600.00 MXN
+  ✘ Upsell rate is only 14.2% — most customers leave money on the table.
+  → Laminated extras menu at the intake window + a verbal offer = 2-3× attach rate.
+  → Bundle Aspirado into COMPLETE/PREMIUM at +$30 to raise perceived value.
+
+══════════════════════════════════════════════════════════════════════
+  4  PEAK HOURS & DAY-OF-WEEK PATTERNS
+══════════════════════════════════════════════════════════════════════
+
+▶ Revenue by Hour of Day
+Hour      Tickets  Revenue          Avg $        Volume
+------  ---------  ---------------  -----------  -------------------------
+06:00           0  $0.00 MXN        $0.00 MXN
+07:00           0  $0.00 MXN        $0.00 MXN
+08:00           0  $0.00 MXN        $0.00 MXN
+09:00           0  $0.00 MXN        $0.00 MXN
+10:00           0  $0.00 MXN        $0.00 MXN
+11:00           0  $0.00 MXN        $0.00 MXN
+12:00           0  $0.00 MXN        $0.00 MXN
+13:00         184  $61,135.00 MXN   $332.26 MXN  ███████
+14:00         512  $158,970.00 MXN  $310.49 MXN  ██████████████████████
+15:00         580  $182,560.00 MXN  $314.76 MXN  █████████████████████████
+16:00         554  $177,290.00 MXN  $320.02 MXN  ███████████████████████
+17:00         568  $175,365.00 MXN  $308.74 MXN  ████████████████████████
+18:00         562  $170,500.00 MXN  $303.38 MXN  ████████████████████████
+19:00         482  $143,220.00 MXN  $297.14 MXN  ████████████████████
+20:00         429  $127,450.00 MXN  $297.09 MXN  ██████████████████
+21:00         352  $103,665.00 MXN  $294.50 MXN  ███████████████
+  ✔ Peak hour: 15:00 — ensure full staffing then.
+  → Dead hours (07:00, 08:00, 09:00, 10:00, 11:00): run hourly flash deals via WhatsApp to fill idle slots.
+
+▶ Revenue by Day of Week
+Day          Tickets  Revenue          Avg $        Volume
+---------  ---------  ---------------  -----------  --------------------
+Monday           713  $219,635.00 MXN  $308.04 MXN  █████████████
+Tuesday            0  $0.00 MXN        $0.00 MXN
+Wednesday        657  $204,305.00 MXN  $310.97 MXN  ████████████
+Thursday         651  $192,055.00 MXN  $295.02 MXN  ████████████
+Friday           796  $241,355.00 MXN  $303.21 MXN  ██████████████
+Saturday        1076  $333,555.00 MXN  $310.00 MXN  ████████████████████
+Sunday           781  $231,095.00 MXN  $295.90 MXN  ██████████████
+  ✔ Saturday is the busiest day.
+  → Tuesday is the slowest — try a midweek loyalty stamp day or discount.
+
+══════════════════════════════════════════════════════════════════════
+  5  CUSTOMER RETURN RATE (PROXY)
+══════════════════════════════════════════════════════════════════════
+  No customer IDs in Firestore — using vehicle description as a proxy.
+  Unique vehicle descriptions : 1,833
+  Seen more than once         : 603  (32.9%)
+
+▶ Top Repeat Vehicles (likely loyal customers)
+Vehicle             Visits
+----------------  --------
+F150 Blanca             52
+Ram Negra               42
+Ram Blanca              41
+F150 Gris               41
+Sierra Negra            40
+Silverado Blanca        40
+Sentra Gris             38
+Tacoma Blanca           37
+Silverado Negra         34
+Sierra Blanca           34
+  ✔ Moderate repeat rate (32.9%). Room to grow loyalty.
+  → A WhatsApp group with a monthly promo keeps regulars from drifting to competitors.
+
+══════════════════════════════════════════════════════════════════════
+  6  EMPLOYEE PERFORMANCE & EFFICIENCY
+══════════════════════════════════════════════════════════════════════
+
+▶ Washer Commission & Productivity
+Washer                               Tickets  Total Comm      Avg Comm/Ticket    Rev Served
+---------------------------------  ---------  --------------  -----------------  ---------------
+Edgar Maltos Palomino                   1004  $58,700.00 MXN  $58.47 MXN         $331,460.00 MXN
+Bryan Perez Pichardo                     890  $53,592.00 MXN  $60.22 MXN         $284,965.00 MXN
+Rogelio Gurrola Huerta                   732  $46,270.50 MXN  $63.21 MXN         $255,835.00 MXN
+Jose Julian Ruiz Rodriguez               730  $44,030.50 MXN  $60.32 MXN         $249,915.00 MXN
+Sergio Rafaael Galindo Velazquez         664  $37,943.50 MXN  $57.14 MXN         $209,970.00 MXN
+Miguel Rodríguez Castañeda               573  $33,367.50 MXN  $58.23 MXN         $192,535.00 MXN
+Francisco Andrés Martínez Baca           492  $28,450.75 MXN  $57.83 MXN         $157,330.00 MXN
+Raul Barron Reza                         368  $25,502.50 MXN  $69.30 MXN         $79,130.00 MXN
+Jesús Gustavo Mendoza Mendoza            364  $19,424.50 MXN  $53.36 MXN         $112,115.00 MXN
+Brayan Luna Ramirez                      304  $16,602.00 MXN  $54.61 MXN         $93,305.00 MXN
+Benjamin Armendariz Zarate               265  $16,347.25 MXN  $61.69 MXN         $84,065.00 MXN
+Marcos Daniel Gallegos Reyes             272  $15,333.00 MXN  $56.37 MXN         $83,570.00 MXN
+José Manuel Luna Ramirez                 267  $14,427.25 MXN  $54.03 MXN         $80,505.00 MXN
+David González Medrano                   235  $12,385.50 MXN  $52.70 MXN         $71,945.00 MXN
+Rafael Flores Mojica                     198  $10,764.50 MXN  $54.37 MXN         $62,400.00 MXN
+Agustín Uribe Aguilar                    172  $9,754.00 MXN   $56.71 MXN         $54,660.00 MXN
+Abel Gutiérrez Hernandez                 178  $9,534.00 MXN   $53.56 MXN         $53,400.00 MXN
+Angel Abraham Moreno Gutierrez            89  $4,908.50 MXN   $55.15 MXN         $28,460.00 MXN
+Rafael Machado Jimenez                    68  $4,632.50 MXN   $68.12 MXN         $22,420.00 MXN
+Leonardo Martín Galdamez Perez            77  $4,471.00 MXN   $58.06 MXN         $26,055.00 MXN
+Eduardo Iván Morales Ramos                53  $3,101.00 MXN   $58.51 MXN         $18,020.00 MXN
+Briam Aly Villalobos Montes               49  $2,954.00 MXN   $60.29 MXN         $17,195.00 MXN
+Kevin Abraham de la Cruz Torres           53  $2,595.25 MXN   $48.97 MXN         $15,360.00 MXN
+Carlos José Gómez Lopez                   50  $2,490.00 MXN   $49.80 MXN         $14,330.00 MXN
+Jordan Arciniega Mireles                  37  $2,012.50 MXN   $54.39 MXN         $11,560.00 MXN
+José Luis Prado Arellano                  33  $1,876.00 MXN   $56.85 MXN         $10,780.00 MXN
+Sergio de la Cruz Esparza Lavador          9  $1,099.00 MXN   $122.11 MXN        $3,440.00 MXN
+Faustino Díaz Espinoza                    22  $1,036.00 MXN   $47.09 MXN         $6,075.00 MXN
+  ✔ Top earner: 'Edgar Maltos Palomino' — model their workflow for team training.
+  → Big gap (98%) between top and bottom earner. Pair low-performers with top-performers for 1 week.
+
+  Active washers / supervisors: 6 / 3 = 2.0x
+
+══════════════════════════════════════════════════════════════════════
+  7  PAYMENT METHOD BREAKDOWN
+══════════════════════════════════════════════════════════════════════
+Method      Tickets  % Tickets    Revenue
+--------  ---------  -----------  -----------------
+CASH           4634  99.1%        $1,405,430.00 MXN
+CARD             22  0.5%         $9,370.00 MXN
+CORTESIA         18  0.4%         $7,200.00 MXN
+  → Only 0.5% card payments. A card reader increases avg spend ~15%.
+
+══════════════════════════════════════════════════════════════════════
+  8  SNACK REVENUE
+══════════════════════════════════════════════════════════════════════
+  Total snacks sold     : 392
+  Snack revenue         : $11,760.00 MXN
+  Tickets with snack    : 271 (5.8%)
+  Avg snack rev/ticket  : $2.52 MXN
+  → Snack attach-rate is low. Place snacks visibly at the register; offer verbally at checkout.
+
+══════════════════════════════════════════════════════════════════════
+  9  CAPACITY & GROWTH HEADROOM
+══════════════════════════════════════════════════════════════════════
+  Washer slots             : 5
+  Theoretical max / day    : 180  (20-min washes, 12h)
+  Actual avg / day         : 34.6
+  Capacity utilisation     : 19.2%
+  ✘ Only 19.2% capacity used — massive growth room with zero capex.
+  → Focus budget on MARKETING to fill existing slots before any hardware spend.
+  → Google Business Profile + photos + 5-star reviews is free and drives walk-ins.
+
+══════════════════════════════════════════════════════════════════════
+  10  STRATEGIC GROWTH ROADMAP  (90-Day Playbook)
+══════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE 1 — Weeks 1-4: Fix Revenue Leaks (Zero Cost)                │
+├─────────────────────────────────────────────────────────────────────┤
+│  □ Train cashiers on a 5-second extras upsell script.               │
+│  □ Post a laminated extras menu at the intake window.               │
+│  □ Require supervisor PIN + reason for every cortesía.              │
+│  □ Start collecting WhatsApp numbers — one field on each ticket.    │
+├─────────────────────────────────────────────────────────────────────┤
+│  PHASE 2 — Weeks 5-8: Build Loyalty (Low Cost)                     │
+├─────────────────────────────────────────────────────────────────────┤
+│  □ Print loyalty stamp cards (5th wash free or 20% off).           │
+│  □ Create a WhatsApp broadcast. Send 1 targeted promo per week.     │
+│  □ "Bring a Friend" referral: $30 off for both parties.            │
+│  □ Ask top 20 regulars for a Google review — offer a free snack.   │
+├─────────────────────────────────────────────────────────────────────┤
+│  PHASE 3 — Weeks 9-12: Optimise Pricing & Capacity                 │
+├─────────────────────────────────────────────────────────────────────┤
+│  □ Raise PICKUP + SUV_GDE prices by 10% (A/B test for 2 weeks).   │
+│  □ Create a "Lunes Especial" to fill the slowest day.              │
+│  □ If utilisation >70%: add staff or extend hours on Saturdays.    │
+│  □ Bundle 1 extra into COMPLETE & PREMIUM at +$30 uplift.         │
+└─────────────────────────────────────────────────────────────────────┘
+
+CONSERVATIVE REVENUE UPSIDE (per month):
+  +10% upsell conversion  → +$31,600.00 MXN/mo
+  +5%  loyalty visits     → +$15,800.00 MXN/mo
+  +10% price on big cars  → +$12,640.00 MXN/mo
+  ──────────────────────────────────────────
+  Realistic 90-day upside → +$60,040.00 MXN/mo
