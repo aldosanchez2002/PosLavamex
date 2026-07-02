@@ -25,10 +25,13 @@
     .phase { break-inside: avoid; }
     thead { display: table-header-group; }
     tr { break-inside: avoid; }
-    /* Sections that are large enough to warrant their own page start */
-    .section:nth-child(4),
-    .section:nth-child(7),
-    .section:nth-child(10) { break-before: page; }
+    /* Two sections per page — force break before the odd-numbered sections (3,5,7,9,11) */
+    /* .page children: 1=header, 2=S01, 3=S02, 4=S03, 5=S04, 6=S05, 7=S06, 8=S07, 9=S08, 10=S09, 11=S10, 12=S11 */
+    .page > .section:nth-child(4),
+    .page > .section:nth-child(6),
+    .page > .section:nth-child(8),
+    .page > .section:nth-child(10),
+    .page > .section:nth-child(12) { break-before: page; }
   }
 
   /* ── HEADER ── */
@@ -168,8 +171,7 @@
     <div class="insights">
       <div class="insight green"><strong>Fortaleza</strong>Ingreso constante y creciente de Feb a May. Sábado genera $333K MXN en el período — el día más fuerte.</div>
       <div class="insight orange"><strong>Riesgo</strong>Junio cayó -18.3% vs mayo. Se recomienda acción inmediata: promo flash o campaña WhatsApp.</div>
-      <div class="insight blue"><strong>Oportunidad</strong>Solo 19.2% de capacidad utilizada. Sin inversión en equipo, se puede triplicar el volumen con marketing.</div>
-      <div class="insight red"><strong>Brecha</strong>Solo 14.2% de tickets incluyen extras. Un script de upsell puede duplicar este número en 30 días.</div>
+<div class="insight red"><strong>Brecha</strong>Solo 14.2% de tickets incluyen extras. Un script de upsell puede duplicar este número en 30 días.</div>
     </div>
   </div>
 
