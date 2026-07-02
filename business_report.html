@@ -162,10 +162,10 @@
         <div class="kpi-value">34.6</div>
         <div class="kpi-sub">promedio diario</div>
       </div>
-      <div class="kpi orange">
-        <div class="kpi-label">Margen neto est.</div>
-        <div class="kpi-value">~30%</div>
-        <div class="kpi-sub">≈ $96K MXN/mes</div>
+      <div class="kpi green">
+        <div class="kpi-label">Margen neto operativo</div>
+        <div class="kpi-value">38.1%</div>
+        <div class="kpi-sub">$122K MXN/mes</div>
       </div>
     </div>
     <div class="insights">
@@ -225,7 +225,7 @@
   <!-- 4. COST STRUCTURE & MARGIN -->
   <div class="section">
     <div class="section-title"><span>04</span> · Estructura de Costos y Margen Real</div>
-    <p style="font-size:12px;color:#4a5568;margin-bottom:16px;">Período: 135 días · Ingresos base: $1,422,000 MXN</p>
+    <p style="font-size:12px;color:#4a5568;margin-bottom:16px;">Período: 135 días · Fuentes: colecciones <em>expenses</em> + <em>business_expenses</em> · Ingresos base: $1,422,000 MXN</p>
     <div class="waterfall">
       <div class="wf-row">
         <div class="wf-label">Ingresos brutos</div>
@@ -243,33 +243,45 @@
         <div class="wf-amount">$937,778</div>
       </div>
       <div class="wf-row">
-        <div class="wf-label">− Gastos operativos rastreados</div>
-        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:10.7%;background:#c05621">−10.7%</div></div>
-        <div class="wf-amount" style="color:#c05621">−$152,178</div>
+        <div class="wf-label">− Gastos recurrentes (25.2%)</div>
+        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:25.2%;background:#c05621">−25.2%</div></div>
+        <div class="wf-amount" style="color:#c05621">−$357,652</div>
       </div>
       <div class="wf-row">
-        <div class="wf-label" style="font-weight:800;color:#1a202c">= Utilidad neta estimada</div>
-        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:30%;background:#553c9a">~30%</div></div>
-        <div class="wf-amount" style="color:#553c9a;font-size:14px">~$426,600</div>
+        <div class="wf-label">− One-time: legal + finiquitos</div>
+        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:2.6%;background:#e53e3e">−2.6%</div></div>
+        <div class="wf-amount" style="color:#e53e3e">−$37,702</div>
+      </div>
+      <div class="wf-row">
+        <div class="wf-label" style="font-weight:800;color:#1a202c">= Utilidad neta operativa</div>
+        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:38.1%;background:#553c9a">38.1%</div></div>
+        <div class="wf-amount" style="color:#553c9a;font-size:14px">$542,424</div>
       </div>
     </div>
     <hr class="divider">
     <table style="margin-top:4px">
-      <thead><tr><th>Categoría de gasto rastreado</th><th class="num">Total período</th><th class="num">Mensual</th><th class="num">% Ingresos</th></tr></thead>
+      <thead><tr><th>Categoría</th><th class="num">Total período</th><th class="num">Mensual</th><th class="num">% Ingresos</th></tr></thead>
       <tbody>
-        <tr><td>Agua (pipas y servicio JMAS)</td><td class="num">$46,304</td><td class="num">$10,441</td><td class="num">3.3%</td></tr>
-        <tr><td>Labor / anticipos / IMSS / vacaciones</td><td class="num">$25,258</td><td class="num">$5,695</td><td class="num">1.8%</td></tr>
-        <tr><td>ArmorAll (incluido en todos los lavados)</td><td class="num">$21,387</td><td class="num">$4,822</td><td class="num">1.5%</td></tr>
-        <tr><td>Mantenimiento y equipo</td><td class="num">$13,420</td><td class="num">$3,026</td><td class="num">0.9%</td></tr>
-        <tr><td>Electricidad CFE</td><td class="num">$10,509</td><td class="num">$2,370</td><td class="num">0.7%</td></tr>
-        <tr><td>Basura / residuos</td><td class="num">$7,234</td><td class="num">$1,631</td><td class="num">0.5%</td></tr>
-        <tr><td>Jabón / suministros de limpieza</td><td class="num">$3,176</td><td class="num">$716</td><td class="num">0.2%</td></tr>
-        <tr><td>Teléfono / internet</td><td class="num">$2,246</td><td class="num">$506</td><td class="num">0.2%</td></tr>
-        <tr><td>Otros (bolero, oficina, gasolina)</td><td class="num">$2,748</td><td class="num">$620</td><td class="num">0.2%</td></tr>
-        <tr style="background:#f7fafc;font-weight:700"><td>TOTAL RASTREADO</td><td class="num">$152,178</td><td class="num">$34,313</td><td class="num">10.7%</td></tr>
+        <tr><td>Agua (pipas / JMAS)</td><td class="num">$97,893</td><td class="num">$22,073</td><td class="num">6.9%</td></tr>
+        <tr><td>Labor / IMSS / nómina / anticipos</td><td class="num">$61,229</td><td class="num">$13,806</td><td class="num">4.3%</td></tr>
+        <tr><td>Mantenimiento y equipo</td><td class="num">$31,010</td><td class="num">$6,992</td><td class="num">2.2%</td></tr>
+        <tr><td>Snacks / Sam's (suministro empleados)</td><td class="num">$23,381</td><td class="num">$5,272</td><td class="num">1.6%</td></tr>
+        <tr><td>ArmorAll</td><td class="num">$21,387</td><td class="num">$4,822</td><td class="num">1.5%</td></tr>
+        <tr><td>Impuestos / SAT / contador</td><td class="num">$19,692</td><td class="num">$4,440</td><td class="num">1.4%</td></tr>
+        <tr><td>Equipo / herramientas (tiendas EUA)</td><td class="num">$19,274</td><td class="num">$4,346</td><td class="num">1.4%</td></tr>
+        <tr><td>Vehículo / reparaciones</td><td class="num">$13,708</td><td class="num">$3,091</td><td class="num">1.0%</td></tr>
+        <tr><td>Personal / familia (lavadas)</td><td class="num">$13,600</td><td class="num">$3,067</td><td class="num">1.0%</td></tr>
+        <tr><td>Jabón / suministros de limpieza</td><td class="num">$13,285</td><td class="num">$2,995</td><td class="num">0.9%</td></tr>
+        <tr><td>Electricidad CFE</td><td class="num">$13,255</td><td class="num">$2,989</td><td class="num">0.9%</td></tr>
+        <tr><td>Basura</td><td class="num">$9,645</td><td class="num">$2,175</td><td class="num">0.7%</td></tr>
+        <tr><td>Otros (oficina, bolero, cámaras, etc.)</td><td class="num">$14,700</td><td class="num">$3,314</td><td class="num">1.0%</td></tr>
+        <tr style="background:#fff5f5"><td>⚠ Legal (demanda — one-time)</td><td class="num">$25,000</td><td class="num">—</td><td class="num">1.8%</td></tr>
+        <tr style="background:#fff5f5"><td>⚠ Finiquitos / renuncias (one-time)</td><td class="num">$12,702</td><td class="num">—</td><td class="num">0.9%</td></tr>
+        <tr style="background:#f7fafc;font-weight:700"><td>TOTAL GASTOS</td><td class="num">$395,354</td><td class="num">$89,145</td><td class="num">27.8%</td></tr>
+        <tr style="background:#f0fff4;font-weight:700"><td>UTILIDAD NETA OPERATIVA</td><td class="num">$542,424</td><td class="num">$122,307</td><td class="num" style="color:#276749">38.1%</td></tr>
       </tbody>
     </table>
-    <div class="highlight" style="margin-top:14px">⚠ ~$79,778 MXN/mes en costos NO aparecen en Firestore — principalmente renta del local. Registrar todos los gastos en el sistema para tener visibilidad real del margen.</div>
+    <div class="highlight" style="margin-top:14px">ℹ Margen recurrente normalizado (sin legal ni finiquitos): <strong>40.8%</strong> · $130,808/mes. Los dos gastos one-time no se repetirán en períodos normales.</div>
   </div>
 
   <!-- 5. SNACK PROGRAM -->
@@ -286,26 +298,26 @@
         <div class="kpi-value">$11,910</div>
         <div class="kpi-sub">de comisiones de empleados</div>
       </div>
+      <div class="kpi red">
+        <div class="kpi-label">Costo real (Sam's completo)</div>
+        <div class="kpi-value">$23,381</div>
+        <div class="kpi-sub">todas las compras Sam's</div>
+      </div>
+      <div class="kpi orange">
+        <div class="kpi-label">Gasto neto en snacks</div>
+        <div class="kpi-value">$11,471</div>
+        <div class="kpi-sub">costo − deducción = subsidio</div>
+      </div>
       <div class="kpi">
-        <div class="kpi-label">Costo de compra</div>
-        <div class="kpi-value">$2,854</div>
-        <div class="kpi-sub">Sam's Club + Cocas</div>
-      </div>
-      <div class="kpi purple">
-        <div class="kpi-label">Recuperación neta</div>
-        <div class="kpi-value">$9,056</div>
-        <div class="kpi-sub">76% margen</div>
-      </div>
-      <div class="kpi purple">
-        <div class="kpi-label">Proyección anual neta</div>
-        <div class="kpi-value">$24,504</div>
-        <div class="kpi-sub">MXN / año</div>
+        <div class="kpi-label">Mensual subsidio</div>
+        <div class="kpi-value">$2,585</div>
+        <div class="kpi-sub">MXN / mes de bolsillo</div>
       </div>
     </div>
     <div class="insights">
-      <div class="insight green"><strong>Cómo funciona</strong>Los empleados compran snacks y el monto se deduce de su comisión. Tú compras en Sam's y recuperas 76 centavos de utilidad por cada peso gastado.</div>
-      <div class="insight blue"><strong>Impacto en comisiones</strong>De $484,222 en comisiones brutas, $11,910 regresan vía snacks. Pago neto en efectivo: $472,312 (−2.46%).</div>
-      <div class="insight orange"><strong>Atribución faltante</strong>Los 397 snacks aparecen sin nombre de lavador en el sistema. Vincular el snack al empleado para control exacto de deducciones.</div>
+      <div class="insight orange"><strong>Realidad del programa</strong>El costo total en Sam's ($23,381) supera la deducción recuperada de empleados ($11,910). La diferencia ($11,471) es consumo no deducido — snacks libres para empleados o consumo del negocio.</div>
+      <div class="insight blue"><strong>Impacto en comisiones</strong>De $484,222 en comisiones brutas, $11,910 regresan vía deducción de snacks. Pago neto en efectivo: $472,312.</div>
+      <div class="insight red"><strong>Oportunidad</strong>Formalizar el sistema de deducción: vincular cada snack al empleado en el POS. Actualmente los 397 snacks registrados aparecen sin nombre de lavador — sin control real de quién consume qué.</div>
     </div>
   </div>
 
