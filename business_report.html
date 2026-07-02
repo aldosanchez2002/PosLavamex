@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Lavamex — Business Report 2026</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #1a202c; font-size: 13px; }
+  .page { max-width: 1060px; margin: 0 auto; padding: 32px 20px 60px; }
+
+  /* ── HEADER ── */
+  .report-header { background: #1a365d; color: white; border-radius: 14px; padding: 32px 36px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .report-header h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+  .report-header .sub { font-size: 12px; color: #90cdf4; margin-top: 4px; }
+  .report-header .period { text-align: right; font-size: 11px; color: #90cdf4; line-height: 1.7; }
+  .report-header .period strong { display: block; font-size: 16px; color: white; }
+
+  /* ── SECTION ── */
+  .section { background: white; border-radius: 12px; padding: 24px 28px; margin-bottom: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #4a5568; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 18px; }
+  .section-title span { color: #2b6cb0; }
+
+  /* ── KPI GRID ── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .kpi { background: #f7fafc; border-radius: 10px; padding: 16px 18px; border-top: 3px solid #2b6cb0; }
+  .kpi.green  { border-top-color: #276749; }
+  .kpi.orange { border-top-color: #c05621; }
+  .kpi.red    { border-top-color: #c53030; }
+  .kpi.purple { border-top-color: #553c9a; }
+  .kpi-label { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .kpi-value { font-size: 22px; font-weight: 800; color: #1a202c; line-height: 1; }
+  .kpi-sub   { font-size: 10px; color: #a0aec0; margin-top: 4px; }
+
+  /* ── TABLES ── */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #edf2f7; color: #4a5568; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; text-align: left; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f0f4f8; color: #2d3748; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafafa; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar-cell { width: 120px; }
+  .bar { height: 8px; border-radius: 4px; background: #2b6cb0; display: inline-block; }
+  .bar.green  { background: #276749; }
+  .bar.orange { background: #c05621; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+  .badge-green  { background: #c6f6d5; color: #22543d; }
+  .badge-red    { background: #fed7d7; color: #742a2a; }
+  .badge-orange { background: #feebc8; color: #7b341e; }
+  .badge-blue   { background: #bee3f8; color: #2a4365; }
+
+  /* ── TWO COLUMNS ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 680px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* ── MARGIN WATERFALL ── */
+  .waterfall { display: flex; flex-direction: column; gap: 6px; }
+  .wf-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .wf-label { width: 220px; color: #4a5568; flex-shrink: 0; }
+  .wf-bar-wrap { flex: 1; background: #edf2f7; border-radius: 4px; height: 22px; position: relative; overflow: hidden; }
+  .wf-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 10px; font-weight: 700; color: white; white-space: nowrap; }
+  .wf-amount { width: 120px; text-align: right; font-weight: 700; color: #1a202c; font-size: 12px; }
+
+  /* ── INSIGHT BOXES ── */
+  .insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; }
+  .insight { padding: 12px 14px; border-radius: 8px; font-size: 12px; line-height: 1.5; }
+  .insight strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .insight.blue   { background: #ebf8ff; border-left: 3px solid #2b6cb0; color: #2c5282; }
+  .insight.blue strong   { color: #2b6cb0; }
+  .insight.green  { background: #f0fff4; border-left: 3px solid #276749; color: #22543d; }
+  .insight.green strong  { color: #276749; }
+  .insight.orange { background: #fffaf0; border-left: 3px solid #c05621; color: #7b341e; }
+  .insight.orange strong { color: #c05621; }
+  .insight.red    { background: #fff5f5; border-left: 3px solid #c53030; color: #742a2a; }
+  .insight.red strong    { color: #c53030; }
+
+  /* ── LOYALTY ── */
+  .loyalty-cycle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .loyalty-milestone { background: #f7fafc; border-radius: 10px; padding: 14px 16px; text-align: center; border-top: 3px solid #553c9a; }
+  .loyalty-milestone .trigger { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; }
+  .loyalty-milestone .reward  { font-size: 15px; font-weight: 800; color: #1a202c; margin: 6px 0 2px; }
+  .loyalty-milestone .cost    { font-size: 11px; color: #c53030; font-weight: 600; }
+
+  /* ── ROADMAP ── */
+  .roadmap { display: flex; flex-direction: column; gap: 0; }
+  .phase { border-left: 3px solid #2b6cb0; padding: 0 0 20px 18px; position: relative; }
+  .phase:last-child { padding-bottom: 0; }
+  .phase::before { content: ''; width: 11px; height: 11px; background: #2b6cb0; border-radius: 50%; position: absolute; left: -7px; top: 3px; }
+  .phase-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #2b6cb0; margin-bottom: 6px; }
+  .phase ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .phase li { font-size: 12px; color: #2d3748; padding-left: 14px; position: relative; line-height: 1.5; }
+  .phase li::before { content: '□'; position: absolute; left: 0; color: #a0aec0; font-size: 10px; top: 2px; }
+
+  .footer { text-align: center; font-size: 10px; color: #a0aec0; margin-top: 28px; }
+  .divider { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+  .highlight { background: #fffbeb; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #d69e2e; font-size: 12px; color: #744210; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="report-header">
+    <div>
+      <div class="sub">Reporte de Negocio · Confidencial</div>
+      <h1>Lavamex Car Wash</h1>
+      <div class="sub">Ciudad Juárez, Chihuahua · Análisis estratégico</div>
+    </div>
+    <div class="period">
+      Período analizado<br>
+      <strong>Feb 14 – Jun 29, 2026</strong>
+      135 días · 4.5 meses
+    </div>
+  </div>
+
+  <!-- 1. EXECUTIVE SUMMARY -->
+  <div class="section">
+    <div class="section-title"><span>01</span> · Resumen Ejecutivo</div>
+    <div class="kpi-grid">
+      <div class="kpi green">
+        <div class="kpi-label">Ingresos totales</div>
+        <div class="kpi-value">$1.42M</div>
+        <div class="kpi-sub">MXN · 135 días</div>
+      </div>
+      <div class="kpi green">
+        <div class="kpi-label">Promedio mensual</div>
+        <div class="kpi-value">$320K</div>
+        <div class="kpi-sub">MXN / mes</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Ticket promedio</div>
+        <div class="kpi-value">$304</div>
+        <div class="kpi-sub">MXN por servicio</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Autos por día</div>
+        <div class="kpi-value">34.6</div>
+        <div class="kpi-sub">promedio diario</div>
+      </div>
+      <div class="kpi orange">
+        <div class="kpi-label">Margen neto est.</div>
+        <div class="kpi-value">~30%</div>
+        <div class="kpi-sub">≈ $96K MXN/mes</div>
+      </div>
+      <div class="kpi red">
+        <div class="kpi-label">Utilización capacidad</div>
+        <div class="kpi-value">19.2%</div>
+        <div class="kpi-sub">de 180 autos/día posibles</div>
+      </div>
+    </div>
+    <div class="insights">
+      <div class="insight green"><strong>Fortaleza</strong>Ingreso constante y creciente de Feb a May. Sábado genera $333K MXN en el período — el día más fuerte.</div>
+      <div class="insight orange"><strong>Riesgo</strong>Junio cayó -18.3% vs mayo. Se recomienda acción inmediata: promo flash o campaña WhatsApp.</div>
+      <div class="insight blue"><strong>Oportunidad</strong>Solo 19.2% de capacidad utilizada. Sin inversión en equipo, se puede triplicar el volumen con marketing.</div>
+      <div class="insight red"><strong>Brecha</strong>Solo 14.2% de tickets incluyen extras. Un script de upsell puede duplicar este número en 30 días.</div>
+    </div>
+  </div>
+
+  <!-- 2. REVENUE TREND -->
+  <div class="section">
+    <div class="section-title"><span>02</span> · Tendencia de Ingresos</div>
+    <table>
+      <thead><tr><th>Mes</th><th class="num">Tickets</th><th class="num">Ingresos MXN</th><th class="num">Ticket prom.</th><th class="num">Var. MoM</th><th>Volumen</th></tr></thead>
+      <tbody>
+        <tr><td>Febrero 2026</td><td class="num">581</td><td class="num">$167,345</td><td class="num">$288</td><td class="num">—</td><td><span class="bar" style="width:50%"></span></td></tr>
+        <tr><td>Marzo 2026</td><td class="num">979</td><td class="num">$300,710</td><td class="num">$307</td><td class="num" style="color:#276749">+79.7%</td><td><span class="bar green" style="width:90%"></span></td></tr>
+        <tr><td>Abril 2026</td><td class="num">1,037</td><td class="num">$324,805</td><td class="num">$313</td><td class="num" style="color:#276749">+8.0%</td><td><span class="bar green" style="width:97%"></span></td></tr>
+        <tr><td>Mayo 2026</td><td class="num">1,128</td><td class="num">$346,210</td><td class="num">$307</td><td class="num" style="color:#276749">+6.6%</td><td><span class="bar green" style="width:100%"></span></td></tr>
+        <tr><td>Junio 2026</td><td class="num">949</td><td class="num">$282,930</td><td class="num">$298</td><td class="num" style="color:#c53030">−18.3%</td><td><span class="bar orange" style="width:84%"></span></td></tr>
+      </tbody>
+    </table>
+    <div class="highlight">⚠ La caída de junio rompe 3 meses consecutivos de crecimiento. Causa probable: temporada escolar / calor extremo en Juárez. Considerar promo de verano para recuperar momentum.</div>
+  </div>
+
+  <!-- 3. SERVICE MIX -->
+  <div class="section">
+    <div class="section-title"><span>03</span> · Mezcla de Servicios</div>
+    <div class="two-col">
+      <div>
+        <table>
+          <thead><tr><th>Servicio</th><th class="num">Tickets</th><th class="num">% Conteo</th><th class="num">Ingresos</th></tr></thead>
+          <tbody>
+            <tr><td>Lavado General</td><td class="num">4,209</td><td class="num">90.1%</td><td class="num">$1,227,350</td></tr>
+            <tr><td>Paquete Completo</td><td class="num">91</td><td class="num">1.9%</td><td class="num">$100,110</td></tr>
+            <tr><td>Lavado + Cera</td><td class="num">79</td><td class="num">1.7%</td><td class="num">$55,995</td></tr>
+            <tr><td>Paquete Premium</td><td class="num">5</td><td class="num">0.1%</td><td class="num">$7,220</td></tr>
+          </tbody>
+        </table>
+        <div class="insight orange" style="margin-top:12px"><strong>Oportunidad clave</strong>Solo 3.7% de tickets son paquetes premium/completo. Un 5% de conversión adicional = +$31,600/mes.</div>
+      </div>
+      <div>
+        <table>
+          <thead><tr><th>Tamaño de vehículo</th><th class="num">Tickets</th><th class="num">Ticket prom.</th><th class="num">% Ingresos</th></tr></thead>
+          <tbody>
+            <tr><td>Pick-Up / SUV MD</td><td class="num">1,672</td><td class="num">$410</td><td class="num">48.3%</td></tr>
+            <tr><td>SUV Chica</td><td class="num">1,407</td><td class="num">$270</td><td class="num">26.7%</td></tr>
+            <tr><td>Auto</td><td class="num">1,272</td><td class="num">$244</td><td class="num">21.8%</td></tr>
+            <tr><td>SUV Grande</td><td class="num">47</td><td class="num">$452</td><td class="num">1.5%</td></tr>
+          </tbody>
+        </table>
+        <div class="insight blue" style="margin-top:12px"><strong>Pick-Up domina</strong>35.8% del volumen pero genera $410 ticket promedio — el segmento más rentable. Priorizar en marketing.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. COST STRUCTURE & MARGIN -->
+  <div class="section">
+    <div class="section-title"><span>04</span> · Estructura de Costos y Margen Real</div>
+    <p style="font-size:12px;color:#4a5568;margin-bottom:16px;">Período: 135 días · Ingresos base: $1,422,000 MXN</p>
+    <div class="waterfall">
+      <div class="wf-row">
+        <div class="wf-label">Ingresos brutos</div>
+        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:100%;background:#2b6cb0">100%</div></div>
+        <div class="wf-amount">$1,422,000</div>
+      </div>
+      <div class="wf-row">
+        <div class="wf-label">− Comisiones lavadores (34.1%)</div>
+        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:34%;background:#c53030">−34.1%</div></div>
+        <div class="wf-amount" style="color:#c53030">−$484,222</div>
+      </div>
+      <div class="wf-row">
+        <div class="wf-label">= Margen bruto tras comisiones</div>
+        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:65.9%;background:#276749">65.9%</div></div>
+        <div class="wf-amount">$937,778</div>
+      </div>
+      <div class="wf-row">
+        <div class="wf-label">− Gastos operativos rastreados</div>
+        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:10.7%;background:#c05621">−10.7%</div></div>
+        <div class="wf-amount" style="color:#c05621">−$152,178</div>
+      </div>
+      <div class="wf-row">
+        <div class="wf-label">− Gastos no rastreados (renta, etc.)</div>
+        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:25.2%;background:#e53e3e">~−25.2%</div></div>
+        <div class="wf-amount" style="color:#e53e3e">~−$358,000</div>
+      </div>
+      <div class="wf-row">
+        <div class="wf-label" style="font-weight:800;color:#1a202c">= Utilidad neta estimada</div>
+        <div class="wf-bar-wrap"><div class="wf-bar-fill" style="width:30%;background:#553c9a">~30%</div></div>
+        <div class="wf-amount" style="color:#553c9a;font-size:14px">~$426,600</div>
+      </div>
+    </div>
+    <hr class="divider">
+    <table style="margin-top:4px">
+      <thead><tr><th>Categoría de gasto rastreado</th><th class="num">Total período</th><th class="num">Mensual</th><th class="num">% Ingresos</th></tr></thead>
+      <tbody>
+        <tr><td>Agua (pipas y servicio JMAS)</td><td class="num">$46,304</td><td class="num">$10,441</td><td class="num">3.3%</td></tr>
+        <tr><td>Labor / anticipos / IMSS / vacaciones</td><td class="num">$25,258</td><td class="num">$5,695</td><td class="num">1.8%</td></tr>
+        <tr><td>ArmorAll (incluido en todos los lavados)</td><td class="num">$21,387</td><td class="num">$4,822</td><td class="num">1.5%</td></tr>
+        <tr><td>Mantenimiento y equipo</td><td class="num">$13,420</td><td class="num">$3,026</td><td class="num">0.9%</td></tr>
+        <tr><td>Electricidad CFE</td><td class="num">$10,509</td><td class="num">$2,370</td><td class="num">0.7%</td></tr>
+        <tr><td>Basura / residuos</td><td class="num">$7,234</td><td class="num">$1,631</td><td class="num">0.5%</td></tr>
+        <tr><td>Jabón / suministros de limpieza</td><td class="num">$3,176</td><td class="num">$716</td><td class="num">0.2%</td></tr>
+        <tr><td>Teléfono / internet</td><td class="num">$2,246</td><td class="num">$506</td><td class="num">0.2%</td></tr>
+        <tr><td>Otros (bolero, oficina, gasolina)</td><td class="num">$2,748</td><td class="num">$620</td><td class="num">0.2%</td></tr>
+        <tr style="background:#f7fafc;font-weight:700"><td>TOTAL RASTREADO</td><td class="num">$152,178</td><td class="num">$34,313</td><td class="num">10.7%</td></tr>
+      </tbody>
+    </table>
+    <div class="highlight" style="margin-top:14px">⚠ ~$79,778 MXN/mes en costos NO aparecen en Firestore — principalmente renta del local. Registrar todos los gastos en el sistema para tener visibilidad real del margen.</div>
+  </div>
+
+  <!-- 5. SNACK PROGRAM -->
+  <div class="section">
+    <div class="section-title"><span>05</span> · Programa de Snacks — Deducción de Empleados</div>
+    <div class="kpi-grid">
+      <div class="kpi green">
+        <div class="kpi-label">Snacks vendidos</div>
+        <div class="kpi-value">397</div>
+        <div class="kpi-sub">a $30 MXN c/u</div>
+      </div>
+      <div class="kpi green">
+        <div class="kpi-label">Ingresos deducidos</div>
+        <div class="kpi-value">$11,910</div>
+        <div class="kpi-sub">de comisiones de empleados</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Costo de compra</div>
+        <div class="kpi-value">$2,854</div>
+        <div class="kpi-sub">Sam's Club + Cocas</div>
+      </div>
+      <div class="kpi purple">
+        <div class="kpi-label">Recuperación neta</div>
+        <div class="kpi-value">$9,056</div>
+        <div class="kpi-sub">76% margen</div>
+      </div>
+      <div class="kpi purple">
+        <div class="kpi-label">Proyección anual neta</div>
+        <div class="kpi-value">$24,504</div>
+        <div class="kpi-sub">MXN / año</div>
+      </div>
+    </div>
+    <div class="insights">
+      <div class="insight green"><strong>Cómo funciona</strong>Los empleados compran snacks y el monto se deduce de su comisión. Tú compras en Sam's y recuperas 76 centavos de utilidad por cada peso gastado.</div>
+      <div class="insight blue"><strong>Impacto en comisiones</strong>De $484,222 en comisiones brutas, $11,910 regresan vía snacks. Pago neto en efectivo: $472,312 (−2.46%).</div>
+      <div class="insight orange"><strong>Atribución faltante</strong>Los 397 snacks aparecen sin nombre de lavador en el sistema. Vincular el snack al empleado para control exacto de deducciones.</div>
+    </div>
+  </div>
+
+  <!-- 6. UPSELL & EXTRAS -->
+  <div class="section">
+    <div class="section-title"><span>06</span> · Extras y Upsell</div>
+    <div class="kpi-grid">
+      <div class="kpi red">
+        <div class="kpi-label">Tasa de upsell</div>
+        <div class="kpi-value">14.2%</div>
+        <div class="kpi-sub">de tickets tienen extras</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Ingresos por extras</div>
+        <div class="kpi-value">$97,580</div>
+        <div class="kpi-sub">total período</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Extra por ticket</div>
+        <div class="kpi-value">$20.88</div>
+        <div class="kpi-sub">promedio global</div>
+      </div>
+      <div class="kpi green">
+        <div class="kpi-label">Si upsell llega a 30%</div>
+        <div class="kpi-value">+$31K</div>
+        <div class="kpi-sub">MXN / mes adicional</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Extra</th><th class="num">Vendidos</th><th class="num">Precio</th><th class="num">Ingresos</th><th>Nota</th></tr></thead>
+      <tbody>
+        <tr><td>Boleada (Caja + Regular)</td><td class="num">417</td><td class="num">$60</td><td class="num">$25,020</td><td><span class="badge badge-green">Top seller</span></td></tr>
+        <tr><td>Lavado de Motor</td><td class="num">65</td><td class="num">$400</td><td class="num">$26,000</td><td><span class="badge badge-green">Mayor ingreso</span></td></tr>
+        <tr><td>Chasis</td><td class="num">47</td><td class="num">$400</td><td class="num">$18,800</td><td><span class="badge badge-blue">Alto valor</span></td></tr>
+        <tr><td>Aspirado de Cajuela</td><td class="num">89</td><td class="num">$40</td><td class="num">$3,560</td><td><span class="badge badge-blue">Frecuente</span></td></tr>
+        <tr><td>Aroma</td><td class="num">92</td><td class="num">$20</td><td class="num">$1,840</td><td><span class="badge badge-orange">Costo mínimo</span></td></tr>
+        <tr><td>Pino (Caja + Regular)</td><td class="num">66</td><td class="num">$35</td><td class="num">$2,310</td><td></td></tr>
+        <tr><td>Limpieza por Zona</td><td class="num">12</td><td class="num">$200</td><td class="num">$2,400</td><td></td></tr>
+        <tr><td>Limpieza de Focos</td><td class="num">6</td><td class="num">$340</td><td class="num">$2,040</td><td><span class="badge badge-blue">Alto margen</span></td></tr>
+        <tr><td>Armor-All (extra)</td><td class="num">7</td><td class="num">$40</td><td class="num">$280</td><td><span class="badge badge-red">Ya incluido</span></td></tr>
+        <tr><td>Snacks (empleados)</td><td class="num">397</td><td class="num">$30</td><td class="num">$11,910</td><td><span class="badge badge-green">76% margen</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 7. OPERATIONS -->
+  <div class="section">
+    <div class="section-title"><span>07</span> · Operaciones y Patrones</div>
+    <div class="two-col">
+      <div>
+        <p style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Ingresos por día de semana</p>
+        <table>
+          <thead><tr><th>Día</th><th class="num">Tickets</th><th class="num">Ingresos</th><th>Vol.</th></tr></thead>
+          <tbody>
+            <tr><td>Sábado</td><td class="num">1,076</td><td class="num">$333,555</td><td><span class="bar green" style="width:100%"></span></td></tr>
+            <tr><td>Viernes</td><td class="num">796</td><td class="num">$241,355</td><td><span class="bar" style="width:72%"></span></td></tr>
+            <tr><td>Domingo</td><td class="num">781</td><td class="num">$231,095</td><td><span class="bar" style="width:69%"></span></td></tr>
+            <tr><td>Lunes</td><td class="num">713</td><td class="num">$219,635</td><td><span class="bar" style="width:66%"></span></td></tr>
+            <tr><td>Miércoles</td><td class="num">657</td><td class="num">$204,305</td><td><span class="bar" style="width:61%"></span></td></tr>
+            <tr><td>Jueves</td><td class="num">651</td><td class="num">$192,055</td><td><span class="bar" style="width:58%"></span></td></tr>
+            <tr><td style="color:#c53030">Martes (cerrado)</td><td class="num" style="color:#c53030">0</td><td class="num" style="color:#c53030">$0</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <p style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Pico horario (hora local Juárez)</p>
+        <table>
+          <thead><tr><th>Hora</th><th class="num">Tickets</th><th class="num">Ingreso</th><th>Vol.</th></tr></thead>
+          <tbody>
+            <tr><td>15:00</td><td class="num">580</td><td class="num">$182,560</td><td><span class="bar green" style="width:100%"></span></td></tr>
+            <tr><td>17:00</td><td class="num">568</td><td class="num">$175,365</td><td><span class="bar" style="width:98%"></span></td></tr>
+            <tr><td>18:00</td><td class="num">562</td><td class="num">$170,500</td><td><span class="bar" style="width:97%"></span></td></tr>
+            <tr><td>16:00</td><td class="num">554</td><td class="num">$177,290</td><td><span class="bar" style="width:96%"></span></td></tr>
+            <tr><td>14:00</td><td class="num">512</td><td class="num">$158,970</td><td><span class="bar" style="width:88%"></span></td></tr>
+            <tr><td>19:00</td><td class="num">482</td><td class="num">$143,220</td><td><span class="bar" style="width:83%"></span></td></tr>
+            <tr><td>20:00</td><td class="num">429</td><td class="num">$127,450</td><td><span class="bar" style="width:74%"></span></td></tr>
+          </tbody>
+        </table>
+        <div class="insight orange" style="margin-top:10px"><strong>Dato importante</strong>Los timestamps en UTC muestran actividad solo de 13:00–21:00 UTC = 07:00–15:00 hora Juárez. Verificar configuración de zona horaria en el POS.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. CUSTOMER BASE -->
+  <div class="section">
+    <div class="section-title"><span>08</span> · Base de Clientes</div>
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-label">Vehículos únicos</div>
+        <div class="kpi-value">1,833</div>
+        <div class="kpi-sub">identificados por descripción</div>
+      </div>
+      <div class="kpi orange">
+        <div class="kpi-label">Tasa de retorno</div>
+        <div class="kpi-value">32.9%</div>
+        <div class="kpi-sub">603 visitan más de una vez</div>
+      </div>
+      <div class="kpi red">
+        <div class="kpi-label">Clientes únicos 1 vez</div>
+        <div class="kpi-value">67.1%</div>
+        <div class="kpi-sub">1,230 no han regresado</div>
+      </div>
+      <div class="kpi green">
+        <div class="kpi-label">Forma de pago</div>
+        <div class="kpi-value">99.1%</div>
+        <div class="kpi-sub">efectivo</div>
+      </div>
+    </div>
+    <p style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Top 10 clientes más frecuentes (proxy por vehículo)</p>
+    <table>
+      <thead><tr><th>Vehículo</th><th class="num">Visitas</th><th class="num">Ingreso estimado</th><th>Frecuencia</th></tr></thead>
+      <tbody>
+        <tr><td>F150 Blanca</td><td class="num">52</td><td class="num">~$15,820</td><td><span class="badge badge-green">3.7x / mes</span></td></tr>
+        <tr><td>Ram Negra</td><td class="num">42</td><td class="num">~$12,778</td><td><span class="badge badge-green">3x / mes</span></td></tr>
+        <tr><td>Ram Blanca</td><td class="num">41</td><td class="num">~$12,474</td><td><span class="badge badge-green">3x / mes</span></td></tr>
+        <tr><td>F150 Gris</td><td class="num">41</td><td class="num">~$12,474</td><td><span class="badge badge-green">3x / mes</span></td></tr>
+        <tr><td>Sierra Negra</td><td class="num">40</td><td class="num">~$12,170</td><td><span class="badge badge-green">2.9x / mes</span></td></tr>
+        <tr><td>Silverado Blanca</td><td class="num">40</td><td class="num">~$12,170</td><td><span class="badge badge-green">2.9x / mes</span></td></tr>
+        <tr><td>Sentra Gris</td><td class="num">38</td><td class="num">~$11,561</td><td><span class="badge badge-blue">2.7x / mes</span></td></tr>
+        <tr><td>Tacoma Blanca</td><td class="num">37</td><td class="num">~$11,257</td><td><span class="badge badge-blue">2.7x / mes</span></td></tr>
+        <tr><td>Silverado Negra</td><td class="num">34</td><td class="num">~$10,344</td><td><span class="badge badge-blue">2.4x / mes</span></td></tr>
+        <tr><td>Sierra Blanca</td><td class="num">34</td><td class="num">~$10,344</td><td><span class="badge badge-blue">2.4x / mes</span></td></tr>
+      </tbody>
+    </table>
+    <div class="highlight" style="margin-top:12px">Sin IDs de cliente en Firestore — la tasa de retorno se mide por descripción de vehículo (proxy). Implementar número de membresía para métricas exactas.</div>
+  </div>
+
+  <!-- 9. LOYALTY CARD -->
+  <div class="section">
+    <div class="section-title"><span>09</span> · Análisis: Programa de Lealtad</div>
+    <div class="loyalty-cycle">
+      <div class="loyalty-milestone">
+        <div class="trigger">Después de 4 lavadas</div>
+        <div class="reward">Boleada Gratis</div>
+        <div class="cost">Costo real: ~$18 MXN</div>
+      </div>
+      <div class="loyalty-milestone">
+        <div class="trigger">Después de 10 lavadas</div>
+        <div class="reward">General Gratis</div>
+        <div class="cost">Costo real: ~$50 MXN</div>
+      </div>
+      <div class="loyalty-milestone">
+        <div class="trigger">Después de 20 lavadas</div>
+        <div class="reward">Completo Gratis</div>
+        <div class="cost">Costo real: ~$66 MXN</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Concepto</th><th class="num">Por ciclo de 20 lavadas</th><th class="num">Mensual (est.)</th></tr></thead>
+      <tbody>
+        <tr><td>Ingresos generados (20 × $304)</td><td class="num">$6,080</td><td class="num">—</td></tr>
+        <tr><td>Costo total de recompensas (al 30% margen)</td><td class="num" style="color:#c53030">−$134</td><td class="num" style="color:#c53030">—</td></tr>
+        <tr><td>Costo como % de ingresos del ciclo</td><td class="num" style="color:#c05621">2.2%</td><td class="num">—</td></tr>
+        <tr style="font-weight:700;background:#f7fafc"><td>El margen sigue en ~29% con el programa activo</td><td class="num" style="color:#276749">✓ Sostenible</td><td class="num"></td></tr>
+      </tbody>
+    </table>
+    <div class="insights" style="margin-top:14px">
+      <div class="insight green"><strong>Para quién paga</strong>Clientes en zona 6–15 visitas que podrían irse con la competencia. El programa los jalona a las 20 visitas.</div>
+      <div class="insight blue"><strong>Top clientes</strong>F150 Blanca (52 visitas) y Ram Negra (42) ya son leales. Para ellos el programa es costo puro — considerar tier VIP diferente.</div>
+      <div class="insight orange"><strong>Requiere</strong>Sistema digital para rastrear visitas por membresía. Tarjeta de papel es riesgosa (falsificable, no da datos).</div>
+    </div>
+  </div>
+
+  <!-- 10. EMPLOYEE PERFORMANCE -->
+  <div class="section">
+    <div class="section-title"><span>10</span> · Desempeño de Empleados</div>
+    <table>
+      <thead><tr><th>Lavador</th><th class="num">Tickets</th><th class="num">Comisión total</th><th class="num">Comisión/ticket</th><th class="num">Ingresos servidos</th></tr></thead>
+      <tbody>
+        <tr><td>Edgar Maltos Palomino</td><td class="num">1,004</td><td class="num">$58,700</td><td class="num">$58.47</td><td class="num">$331,460</td></tr>
+        <tr><td>Bryan Perez Pichardo</td><td class="num">890</td><td class="num">$53,592</td><td class="num">$60.22</td><td class="num">$284,965</td></tr>
+        <tr><td>Rogelio Gurrola Huerta</td><td class="num">732</td><td class="num">$46,271</td><td class="num">$63.21</td><td class="num">$255,835</td></tr>
+        <tr><td>Jose Julian Ruiz Rodriguez</td><td class="num">730</td><td class="num">$44,031</td><td class="num">$60.32</td><td class="num">$249,915</td></tr>
+        <tr><td>Sergio Galindo Velazquez</td><td class="num">664</td><td class="num">$37,944</td><td class="num">$57.14</td><td class="num">$209,970</td></tr>
+        <tr><td>Miguel Rodríguez Castañeda</td><td class="num">573</td><td class="num">$33,368</td><td class="num">$58.23</td><td class="num">$192,535</td></tr>
+        <tr><td>Francisco Martínez Baca</td><td class="num">492</td><td class="num">$28,451</td><td class="num">$57.83</td><td class="num">$157,330</td></tr>
+        <tr><td>Raul Barron Reza</td><td class="num">368</td><td class="num">$25,503</td><td class="num">$69.30</td><td class="num">$79,130</td></tr>
+        <tr style="color:#a0aec0;font-size:11px"><td colspan="5" style="text-align:center;padding:8px">+ 20 lavadores adicionales con menor volumen</td></tr>
+      </tbody>
+    </table>
+    <div class="insight blue" style="margin-top:12px"><strong>Brecha de desempeño</strong>El top lavador (Edgar, 1,004 tickets) procesa 98% más tickets que el bottom performer. Parear empleados altos con bajos en entrenamiento puede subir el promedio del equipo significativamente.</div>
+  </div>
+
+  <!-- 11. STRATEGIC ROADMAP -->
+  <div class="section">
+    <div class="section-title"><span>11</span> · Hoja de Ruta Estratégica — 90 Días</div>
+    <div class="roadmap">
+      <div class="phase">
+        <div class="phase-label">Fase 1 · Semanas 1–4 · Costo cero</div>
+        <ul>
+          <li>Entrenar a cajeros con guión de ventas (ver flowchart adjunto) — objetivo: subir upsell de 14% a 25%</li>
+          <li>Activar pregunta de snack en cada ticket — recuperar $2,665 MXN/mes neto</li>
+          <li>Registrar renta y costos fijos en Firestore para tener margen real visible</li>
+          <li>Vincular snack al lavador en el POS para control de deducciones</li>
+          <li>Pedir reseña Google a top 20 clientes más frecuentes — ofrecer snack gratis</li>
+        </ul>
+      </div>
+      <div class="phase">
+        <div class="phase-label">Fase 2 · Semanas 5–8 · Bajo costo</div>
+        <ul>
+          <li>Lanzar tarjeta de lealtad digital con ID de membresía (Boleada a 4 visitas, General a 10, Completo a 20)</li>
+          <li>Crear broadcast de WhatsApp — 1 promo semanal, especialmente para recuperar junio</li>
+          <li>Programa "trae un amigo": $30 de descuento para ambos</li>
+          <li>Analizar contratar 1 empleado part-time para abrir martes — recuperar ~15% ingresos semanales</li>
+        </ul>
+      </div>
+      <div class="phase">
+        <div class="phase-label">Fase 3 · Semanas 9–12 · Optimización</div>
+        <ul>
+          <li>Aumentar precios en enero — ajustar % de comisión para mantener margen del 30%</li>
+          <li>Subir precio de Pick-Up / SUV Grande 10% (mayor trabajo, justificado)</li>
+          <li>Agregar lector de tarjeta — clientes que pagan con tarjeta gastan ~15% más</li>
+          <li>Meta de capacidad: pasar de 34.6 a 50 autos/día (+44%) sin inversión en equipo</li>
+        </ul>
+      </div>
+    </div>
+    <hr class="divider">
+    <p style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Potencial de ingreso adicional mensual (conservador)</p>
+    <table>
+      <thead><tr><th>Iniciativa</th><th class="num">Impacto estimado / mes</th></tr></thead>
+      <tbody>
+        <tr><td>+10% tasa de upsell (extras)</td><td class="num" style="color:#276749">+$31,600</td></tr>
+        <tr><td>+5% visitas por lealtad</td><td class="num" style="color:#276749">+$15,800</td></tr>
+        <tr><td>+10% precio en Pick-Up / SUV Grande</td><td class="num" style="color:#276749">+$12,640</td></tr>
+        <tr><td>Abrir martes (est.)</td><td class="num" style="color:#276749">+$46,000</td></tr>
+        <tr><td>Snack attach rate a 15% de tickets</td><td class="num" style="color:#276749">+$1,800</td></tr>
+        <tr style="font-weight:800;background:#f0fff4"><td>Upside total estimado (90 días)</td><td class="num" style="color:#276749;font-size:14px">+$107,840 / mes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    Lavamex Business Report · Generado Jul 2026 · Datos: Firestore Feb 14–Jun 29, 2026 · 4,674 tickets analizados
+  </div>
+
+</div>
+</body>
+</html>
