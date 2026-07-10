@@ -130,7 +130,102 @@
                 { id: 'ASPIRADO_CAJUELA', label: 'Aspirado de Cajuela', price: 40, commission: 14 },
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
                 { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
+                { id: 'RZR_CHICO', label: 'Razer Chico', price: 640, commission: 224 },
+                { id: 'RZR_GRANDE', label: 'Razer Grande', price: 800, commission: 280 },
             ]
+        };
+
+        // Categorías de gastos para el reporte de negocio (analytics.html las agrupa por id)
+        const EXPENSE_CATEGORIES = [
+            { id: 'PIPAS', label: 'Pipas de agua' },
+            { id: 'JMAS', label: 'JMAS (Agua)' },
+            { id: 'IMSS', label: 'IMSS' },
+            { id: 'SAMS', label: "Sam's / Insumos" },
+            { id: 'ARMORALL', label: 'ArmorAll' },
+            { id: 'SAT', label: 'Impuestos / SAT' },
+            { id: 'CONTADOR', label: 'Contador' },
+            { id: 'VEHICULO', label: 'Vehículo / Reparaciones' },
+            { id: 'CORTESIA', label: 'Lavadas Cortesía' },
+            { id: 'JABON', label: 'Jabón / Químicos' },
+            { id: 'CFE', label: 'Electricidad CFE' },
+            { id: 'BASURA', label: 'Basura' },
+            { id: 'AVANCES', label: 'Avances (anticipos nómina)' },
+            { id: 'VACACIONES', label: 'Vacaciones' },
+            { id: 'OTROS', label: 'Otros' },
+            { id: 'CHOQUE', label: 'Choque Pagado', extraordinary: true },
+            { id: 'DEMANDA', label: 'Demanda / Legal', extraordinary: true },
+            { id: 'MULTA', label: 'Multa', extraordinary: true },
+            { id: 'FINIQUITO', label: 'Finiquitos / Renuncias', extraordinary: true },
+        ];
+
+        // "Varios" es solo para cargos genuinamente fuera de catálogo. Si el texto nombra un
+        // extra que ya tiene botón (con o sin errores de dedo), se corrige automáticamente al
+        // extra del catálogo: un Varios lleva comisión fija del 35%, que no coincide con la
+        // comisión real del extra y distorsiona nómina y reportes.
+        const normVariosText = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+        const levenshtein = (a, b) => {
+            if (a === b) return 0;
+            const m = a.length, n = b.length;
+            if (!m) return n;
+            if (!n) return m;
+            let prev = Array.from({ length: n + 1 }, (_, i) => i);
+            for (let i = 1; i <= m; i++) {
+                const cur = [i];
+                for (let j = 1; j <= n; j++) {
+                    cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                }
+                prev = cur;
+            }
+            return prev[n];
+        };
+        // Palabras de <=4 letras exigen coincidencia exacta ("cera" ≠ "cerca"); 5-7 letras
+        // toleran 1 error de dedo; 8+ toleran 2.
+        const fuzzyWordMatch = (word, keyword) => {
+            if (word === keyword) return true;
+            if (keyword.length <= 4) return false;
+            return levenshtein(word, keyword) <= (keyword.length >= 8 ? 2 : 1);
+        };
+
+        const EXTRA_KEYWORDS = [
+            ['BOLEADA', ['boleada', 'boleadas']],
+            ['PINO', ['pino', 'pinos']],
+            ['SNACKS', ['snack', 'snacks']],
+            ['MOTOR', ['motor']],
+            ['CHASIS', ['chasis', 'chassis']],
+            ['ARMORALL', ['armorall', 'armor']],
+            ['LIMP_FOCOS', ['focos', 'foco']],
+            ['ASPIRADO_CAJUELA', ['cajuela']],
+            ['LIMP_ZONA', ['zona']],
+            ['AROMA', ['aroma', 'aromas']],
+        ];
+        const RZR_KEYWORDS = ['rzr', 'razer', 'razr', 'raser', 'racer'];
+
+        // Devuelve el id del extra del catálogo que nombra el texto (null = cargo genuino).
+        // Para Razer decide chico/grande por la palabra escrita o por el precio capturado.
+        const matchCatalogExtra = (text, price) => {
+            const n = normVariosText(text);
+            if (!n) return null;
+            const words = n.split(' ');
+            const has = (kw) => words.some(w => fuzzyWordMatch(w, kw));
+            // "moto(s)" está a 1 letra de "motor" pero es otra cosa: no auto-corregir
+            const isMoto = words.some(w => w === 'moto' || w === 'motos' || w === 'motocicleta');
+            if (RZR_KEYWORDS.some(has)) {
+                if (has('grande') || has('grandes') || words.includes('gde')) return 'RZR_GRANDE';
+                if (has('chico') || has('chica')) return 'RZR_CHICO';
+                return (typeof price === 'number' && !isNaN(price) && Math.abs(price - 800) < Math.abs(price - 640)) ? 'RZR_GRANDE' : 'RZR_CHICO';
+            }
+            for (const [id, kws] of EXTRA_KEYWORDS) {
+                if (id === 'MOTOR' && isMoto) continue;
+                if (kws.some(has)) return id;
+            }
+            return null;
+        };
+        // Servicios no se pueden auto-corregir (necesitan tamaño): se avisa.
+        const matchServiceName = (text) => {
+            const n = normVariosText(text);
+            if (/\bcera\b/.test(n)) return SERVICES.find(s => s.id === 'WAX');
+            return SERVICES.find(s => n.includes(normVariosText(s.label)));
         };
 
         const handleDbAction = async (actionFn) => {
@@ -1425,9 +1520,9 @@ Firma: __________________
                 employee: employee, amount: parseFloat(amount), description: description, status: 'PENDING', timestamp: serverTimestamp()
             }));
 
-            const addExpense = (desc, amount, gastoAjeno = false) => handleDbAction(async () => {
+            const addExpense = (desc, amount, gastoAjeno = false, category = 'OTROS') => handleDbAction(async () => {
                 await addDoc(collection(db, "expenses"), {
-                    description: desc, amount: parseFloat(amount), status: 'PENDING', createdBy: role, gastoAjeno: gastoAjeno, timestamp: serverTimestamp()
+                    description: desc, amount: parseFloat(amount), status: 'PENDING', createdBy: role, gastoAjeno: gastoAjeno, category: category, timestamp: serverTimestamp()
                 });
                 alert("Gasto registrado, pendiente de aprobación.");
             });
@@ -1438,15 +1533,16 @@ Firma: __________________
                 const expenseRef = doc(collection(db, "expenses"));
                 const ts = serverTimestamp();
                 batch.set(deductionRef, { employee, amount: parseFloat(amount), description: 'Avance', status: 'PENDING', timestamp: ts });
-                batch.set(expenseRef, { description: `Avance - ${employee}`, amount: parseFloat(amount), status: 'PENDING', createdBy: role, timestamp: ts });
+                batch.set(expenseRef, { description: `Avance - ${employee}`, amount: parseFloat(amount), status: 'PENDING', createdBy: role, category: 'AVANCES', timestamp: ts });
                 await batch.commit();
                 alert(`Avance de ${formatCurrency(parseFloat(amount))} registrado para ${employee}. Pendiente de aprobación del admin.`);
             });
 
-            const addBusinessExpense = (desc, amount) => handleDbAction(async () => {
+            const addBusinessExpense = (desc, amount, category = 'OTROS') => handleDbAction(async () => {
                 await addDoc(collection(db, "business_expenses"), {
                     description: desc,
                     amount: parseFloat(amount),
+                    category: category,
                     timestamp: serverTimestamp(),
                     createdBy: role
                 });
@@ -1844,7 +1940,31 @@ Firma: __________________
             const toggleExtra = (item) => setExtras(prev => toggleSelection(prev, item));
             const addExtra = (item) => setExtras(prev => [...prev, item]);
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
-            const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: price * 0.35 }]); setVDesc(''); setVPrice(''); };
+            const addVarios = () => {
+                const price = parseFloat(vPrice);
+                if (!vDesc || !price || price <= 0) return alert("Error.");
+                const svc = matchServiceName(vDesc);
+                if (svc) {
+                    return alert(`⛔ "${vDesc}" es un servicio.\n\nSelecciona el Tamaño y el Servicio con los botones — no lo escribas en Varios.`);
+                }
+                // Si el texto nombra un extra del catálogo, se agrega el extra real (precio y
+                // comisión del catálogo) en lugar de un cargo manual.
+                const matchId = matchCatalogExtra(vDesc, price);
+                if (matchId === 'PINO') { setPinoCount(p => p + 1); setVDesc(''); setVPrice(''); return; }
+                if (matchId === 'SNACKS') { setSnackCount(s => s + 1); setVDesc(''); setVPrice(''); return; }
+                if (matchId) {
+                    const catalogExtra = extrasList.find(e => e.id === matchId);
+                    if (catalogExtra) {
+                        setExtras(prev => [...prev, catalogExtra]);
+                        setVDesc('');
+                        setVPrice('');
+                        return;
+                    }
+                }
+                setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: price * 0.35 }]);
+                setVDesc('');
+                setVPrice('');
+            };
             const canSubmit = ((size && service) || extras.length > 0 || snackCount > 0 || pinoCount > 0);
             const handleSubmit = () => {
                 if (!canSubmit) return;
@@ -2102,6 +2222,7 @@ const renderSizes = () => (
             const [expDesc, setExpDesc] = useState('');
             const [expAmt, setExpAmt] = useState('');
             const [expAjeno, setExpAjeno] = useState(false);
+            const [expCat, setExpCat] = useState('OTROS');
 
             const [changeModal, setChangeModal] = useState(null);
             const [multiMode, setMultiMode] = useState(false);
@@ -2139,7 +2260,7 @@ const renderSizes = () => (
                 setShowAttendance(false);
             };
 
-            const handleAddExpense = () => { if (!expDesc || !expAmt) return; addExpense(expDesc, expAmt, expAjeno); setExpDesc(''); setExpAmt(''); setExpAjeno(false); setShowExpense(false); };
+            const handleAddExpense = () => { if (!expDesc || !expAmt) return; addExpense(expDesc, expAmt, expAjeno, expCat); setExpDesc(''); setExpAmt(''); setExpAjeno(false); setExpCat('OTROS'); setShowExpense(false); };
 
             const handleAddSnack = () => {
                 if (snackEmp) {
@@ -2735,6 +2856,12 @@ const renderSizes = () => (
                                 <div className="space-y-3">
                                     <div><label className="block text-sm font-bold text-gray-600 mb-1">Concepto</label><input value={expDesc} onChange={e => setExpDesc(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Jabón" /></div>
                                     <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" /></div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Categoría</label>
+                                        <select value={expCat} onChange={e => setExpCat(e.target.value)} className="w-full border p-3 rounded-lg bg-white">
+                                            {EXPENSE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.extraordinary ? `⚠ ${c.label} (Extraordinario)` : c.label}</option>)}
+                                        </select>
+                                    </div>
                                     <label className="flex items-center gap-3 p-3 rounded-lg border border-purple-200 bg-purple-50 cursor-pointer select-none">
                                         <input type="checkbox" checked={expAjeno} onChange={e => setExpAjeno(e.target.checked)} className="w-4 h-4 accent-purple-600" />
                                         <div>
@@ -4607,13 +4734,17 @@ const renderSizes = () => (
             const { addBusinessExpense } = useContext(AppContext);
             const [desc, setDesc] = useState('');
             const [amt, setAmt] = useState('');
-            const handleSubmit = () => { if (!desc || !amt) return; addBusinessExpense(desc, amt); setDesc(''); setAmt(''); };
+            const [cat, setCat] = useState('OTROS');
+            const handleSubmit = () => { if (!desc || !amt) return; addBusinessExpense(desc, amt, cat); setDesc(''); setAmt(''); setCat('OTROS'); };
             return (
                 <div className="bg-purple-50 border-purple-200 border p-4 rounded-xl shadow-sm">
                     <h3 className="font-bold text-purple-800 mb-2 flex items-center gap-2"><Briefcase size={18} /> Registrar Gasto Administrativo</h3>
                     <p className="text-sm text-purple-600 mb-3 font-medium">Gastos pagados externamente (SAM's, IMSS, etc). No afectan el corte diario.</p>
                     <div className="flex gap-2 flex-col md:flex-row">
                         <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción del gasto" className="border p-3 rounded-lg flex-1 shadow-sm" />
+                        <select value={cat} onChange={e => setCat(e.target.value)} className="border p-3 rounded-lg bg-white shadow-sm w-full md:w-56">
+                            {EXPENSE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.extraordinary ? `⚠ ${c.label} (Extraordinario)` : c.label}</option>)}
+                        </select>
                         <input type="number" value={amt} onChange={e => setAmt(e.target.value)} placeholder="Monto ($)" className="border p-3 rounded-lg w-full md:w-36 shadow-sm" />
                         <Button onClick={handleSubmit} variant="primary" className="bg-purple-600 hover:bg-purple-700 shadow-md">Guardar</Button>
                     </div>
@@ -4627,18 +4758,22 @@ const renderSizes = () => (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
                     <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><Briefcase size={16} /> Historial de Gastos Administrativos</h4>
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-gray-500 border-b"><tr><th className="p-3">Fecha</th><th className="p-3">Descripción</th><th className="p-3 text-right">Monto</th><th className="p-3 text-right">Registrado Por</th></tr></thead>
+                        <thead className="bg-gray-50 text-gray-500 border-b"><tr><th className="p-3">Fecha</th><th className="p-3">Descripción</th><th className="p-3">Categoría</th><th className="p-3 text-right">Monto</th><th className="p-3 text-right">Registrado Por</th></tr></thead>
                         <tbody>
                             {businessExpenses.length === 0
-                                ? <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay gastos registrados.</td></tr>
-                                : businessExpenses.map(e => (
-                                    <tr key={e.id} className="border-b hover:bg-gray-50 last:border-b-0">
-                                        <td className="p-3 text-gray-600"><div>{e.timestamp.toLocaleDateString()}</div><div className="text-xs">{e.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></td>
-                                        <td className="p-3 font-medium text-gray-800">{e.description}</td>
-                                        <td className="p-3 text-right font-bold text-purple-700">{formatCurrency(e.amount)}</td>
-                                        <td className="p-3 text-right text-xs text-gray-400 uppercase">{e.createdBy}</td>
-                                    </tr>
-                                ))
+                                ? <tr><td colSpan="5" className="p-4 text-center text-gray-400">No hay gastos registrados.</td></tr>
+                                : businessExpenses.map(e => {
+                                    const cat = EXPENSE_CATEGORIES.find(c => c.id === e.category);
+                                    return (
+                                        <tr key={e.id} className="border-b hover:bg-gray-50 last:border-b-0">
+                                            <td className="p-3 text-gray-600"><div>{e.timestamp.toLocaleDateString()}</div><div className="text-xs">{e.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></td>
+                                            <td className="p-3 font-medium text-gray-800">{e.description}</td>
+                                            <td className="p-3"><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${cat?.extraordinary ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>{cat ? cat.label : 'Sin categoría'}</span></td>
+                                            <td className="p-3 text-right font-bold text-purple-700">{formatCurrency(e.amount)}</td>
+                                            <td className="p-3 text-right text-xs text-gray-400 uppercase">{e.createdBy}</td>
+                                        </tr>
+                                    );
+                                })
                             }
                         </tbody>
                     </table>

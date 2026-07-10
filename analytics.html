@@ -55,8 +55,128 @@
 
         // --- Helpers ---
         const formatCurrency = (val) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val);
+        const formatInt = (val) => new Intl.NumberFormat('es-MX').format(Math.round(val));
         const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ef4444'];
         const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+        // Categorías de gastos — debe coincidir con EXPENSE_CATEGORIES en index.html
+        const EXPENSE_CATEGORIES = [
+            { id: 'PIPAS', label: 'Pipas de agua' },
+            { id: 'JMAS', label: 'JMAS (Agua)' },
+            { id: 'IMSS', label: 'IMSS' },
+            { id: 'SAMS', label: "Sam's / Insumos" },
+            { id: 'ARMORALL', label: 'ArmorAll' },
+            { id: 'SAT', label: 'Impuestos / SAT' },
+            { id: 'CONTADOR', label: 'Contador' },
+            { id: 'VEHICULO', label: 'Vehículo / Reparaciones' },
+            { id: 'CORTESIA', label: 'Lavadas Cortesía' },
+            { id: 'JABON', label: 'Jabón / Químicos' },
+            { id: 'CFE', label: 'Electricidad CFE' },
+            { id: 'BASURA', label: 'Basura' },
+            { id: 'AVANCES', label: 'Avances (anticipos nómina)' },
+            { id: 'VACACIONES', label: 'Vacaciones' },
+            { id: 'OTROS', label: 'Otros' },
+            { id: 'CHOQUE', label: 'Choque Pagado', extraordinary: true },
+            { id: 'DEMANDA', label: 'Demanda / Legal', extraordinary: true },
+            { id: 'MULTA', label: 'Multa', extraordinary: true },
+            { id: 'FINIQUITO', label: 'Finiquitos / Renuncias', extraordinary: true },
+        ];
+        const CAT_BY_ID = Object.fromEntries(EXPENSE_CATEGORIES.map(c => [c.id, c]));
+
+        // Para gastos históricos sin categoría: clasificación por palabra clave en la descripción.
+        // El orden importa (MULTA antes que JMAS para que "multa jmas" caiga en extraordinarios).
+        const KEYWORD_RULES = [
+            ['PIPAS', /pipa/i],
+            ['MULTA', /multa/i],
+            ['JMAS', /jmas/i],
+            ['IMSS', /imss/i],
+            ['SAMS', /sam'?s|costco/i],
+            ['ARMORALL', /armor\s*-?\s*all/i],
+            ['SAT', /\bsat\b|impuesto/i],
+            ['CONTADOR', /contador|contabil/i],
+            ['VEHICULO', /veh[ií]culo|camioneta|taller|reparaci|llanta|mec[aá]nic/i],
+            ['CORTESIA', /cortes[ií]a/i],
+            ['JABON', /jab[oó]n|shampoo|qu[ií]mico/i],
+            ['CFE', /\bcfe\b|el[eé]ctric|\bluz\b/i],
+            ['BASURA', /basura/i],
+            ['AVANCES', /avance|anticipo/i],
+            ['VACACIONES', /vacacion/i],
+            ['FINIQUITO', /finiquito|renuncia|liquidaci/i],
+            ['DEMANDA', /demanda|abogado|legal/i],
+            ['CHOQUE', /choque|colisi/i],
+        ];
+        const categorizeExpense = (e) => {
+            if (e.category && CAT_BY_ID[e.category]) return e.category;
+            const desc = e.description || e.note || e.concept || '';
+            for (const [id, rx] of KEYWORD_RULES) if (rx.test(desc)) return id;
+            return 'OTROS';
+        };
+
+        // Ids equivalentes de extras rápidos de caja → extra canónico
+        const EXTRA_CANON = { QA_PINO: 'PINO', QA_BOLEADA: 'BOLEADA' };
+        const EXTRA_LABELS = {
+            PINO: 'Pino', BOLEADA: 'Boleada', MOTOR: 'Lavado Motor', CHASIS: 'Chasis',
+            AROMA: 'Aroma', ARMORALL: 'Armor-All', LIMP_FOCOS: 'Limpieza de Focos',
+            ASPIRADO_CAJUELA: 'Aspirado de Cajuela', LIMP_ZONA: 'Limpieza por Zona', SNACKS: 'Snacks',
+            RZR_CHICO: 'Razer Chico', RZR_GRANDE: 'Razer Grande'
+        };
+        const KNOWN_EXTRA_IDS = new Set(['MOTOR', 'CHASIS', 'AROMA', 'ARMORALL', 'LIMP_FOCOS', 'ASPIRADO_CAJUELA', 'BOLEADA', 'LIMP_ZONA', 'PINO', 'SNACKS', 'RZR_CHICO', 'RZR_GRANDE']);
+
+        // Los extras capturados a mano en "Varios" llevan id VARIOS-<timestamp> y el texto
+        // que escribió el usuario como label. Se doblan al extra canónico por nombre.
+        const normText = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        const levenshtein = (a, b) => {
+            if (a === b) return 0;
+            const m = a.length, n = b.length;
+            if (!m) return n;
+            if (!n) return m;
+            let prev = Array.from({ length: n + 1 }, (_, i) => i);
+            for (let i = 1; i <= m; i++) {
+                const cur = [i];
+                for (let j = 1; j <= n; j++) {
+                    cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                }
+                prev = cur;
+            }
+            return prev[n];
+        };
+        // Palabras de <=4 letras exigen coincidencia exacta; 5-7 toleran 1 error de dedo; 8+ toleran 2.
+        const fuzzyWordMatch = (word, keyword) => {
+            if (word === keyword) return true;
+            if (keyword.length <= 4) return false;
+            return levenshtein(word, keyword) <= (keyword.length >= 8 ? 2 : 1);
+        };
+        const EXTRA_KEYWORDS = [
+            ['BOLEADA', ['boleada', 'boleadas']],
+            ['PINO', ['pino', 'pinos']],
+            ['SNACKS', ['snack', 'snacks']],
+            ['MOTOR', ['motor']],
+            ['CHASIS', ['chasis', 'chassis']],
+            ['ARMORALL', ['armorall', 'armor']],
+            ['LIMP_FOCOS', ['focos', 'foco']],
+            ['ASPIRADO_CAJUELA', ['cajuela']],
+            ['LIMP_ZONA', ['zona']],
+            ['AROMA', ['aroma', 'aromas']],
+        ];
+        const RZR_KEYWORDS = ['rzr', 'razer', 'razr', 'raser', 'racer'];
+        const matchExtraAlias = (label, price) => {
+            const n = normText(label);
+            if (!n) return null;
+            const words = n.split(' ');
+            const has = (kw) => words.some(w => fuzzyWordMatch(w, kw));
+            // "moto(s)" está a 1 letra de "motor" pero es otra cosa: no auto-corregir
+            const isMoto = words.some(w => w === 'moto' || w === 'motos' || w === 'motocicleta');
+            if (RZR_KEYWORDS.some(has)) {
+                if (has('grande') || has('grandes') || words.includes('gde')) return 'RZR_GRANDE';
+                if (has('chico') || has('chica')) return 'RZR_CHICO';
+                return (typeof price === 'number' && !isNaN(price) && Math.abs(price - 800) < Math.abs(price - 640)) ? 'RZR_GRANDE' : 'RZR_CHICO';
+            }
+            for (const [id, kws] of EXTRA_KEYWORDS) {
+                if (id === 'MOTOR' && isMoto) continue;
+                if (kws.some(has)) return id;
+            }
+            return null;
+        };
 
         const CustomDateRangePicker = ({ startDate, endDate, setStartDate, setEndDate }) => {
             const [isOpen, setIsOpen] = useState(false);
@@ -215,6 +335,7 @@
             const [cashCounts, setCashCounts] = useState([]);
             const [employees, setEmployees] = useState([]);
             const [attendance, setAttendance] = useState([]);
+            const [deductions, setDeductions] = useState([]);
             const [loading, setLoading] = useState(true);
 
             // Filter State
@@ -235,8 +356,9 @@
                         const cashCountsPromise = getDocs(query(collection(db, "cash_counts"), orderBy("timestamp", "desc")));
                         const empPromise = getDocs(query(collection(db, "employees")));
                         const attendancePromise = getDocs(collection(db, "attendance"));
+                        const deductionsPromise = getDocs(query(collection(db, "deductions"), orderBy("timestamp", "desc")));
 
-                        const [tSnap, eSnap, beSnap, ccSnap, empSnap, attSnap] = await Promise.all([ticketsPromise, expensesPromise, bizExpPromise, cashCountsPromise, empPromise, attendancePromise]);
+                        const [tSnap, eSnap, beSnap, ccSnap, empSnap, attSnap, dedSnap] = await Promise.all([ticketsPromise, expensesPromise, bizExpPromise, cashCountsPromise, empPromise, attendancePromise, deductionsPromise]);
 
                         setTickets(tSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })).filter(t => t.status === 'PAID' || t.status === 'ARCHIVED'));
                         setExpenses(eSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })).filter(e => e.status === 'APPROVED'));
@@ -244,6 +366,7 @@
                         setCashCounts(ccSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })));
                         setEmployees(empSnap.docs.map(d => ({ id: d.id, ...d.data() })));
                         setAttendance(attSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        setDeductions(dedSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })).filter(d => d.status !== 'REJECTED'));
 
                     } catch (err) {
                         console.error(err);
@@ -300,6 +423,7 @@
                 const fExpenses = expenses.filter(filterDate);
                 const fBizExpenses = bizExpenses.filter(filterDate);
                 const fCashCounts = cashCounts.filter(filterDate);
+                const fDeductions = deductions.filter(filterDate);
 
                 // --- 1. Financials ---
                 const totalRevenue = fTickets.reduce((acc, t) => acc + (t.price || 0), 0);
@@ -362,38 +486,152 @@
                 const avgTicket = totalRevenue / (fTickets.length || 1);
                 const avgTicketsPerDay = fTickets.length > 0 ? fTickets.length / daysInRange : 0;
 
-                const armorRegex = /armor\s*-?all/i;
                 const allExpensesForPeriod = [...fExpenses.filter(e => !e.gastoAjeno), ...fBizExpenses];
 
-                const armorAllExpenses = allExpensesForPeriod.filter(e => {
-                    const desc = e.description || e.note || e.concept || '';
-                    return armorRegex.test(desc);
+                // --- Estructura de gastos por categoría (usa e.category o clasificación por palabra clave) ---
+                const catAgg = {};
+                allExpensesForPeriod.forEach(e => {
+                    const catId = categorizeExpense(e);
+                    const cat = catAgg[catId] || (catAgg[catId] = {
+                        id: catId, label: CAT_BY_ID[catId].label,
+                        extraordinary: !!CAT_BY_ID[catId].extraordinary, count: 0, amount: 0
+                    });
+                    cat.count += 1;
+                    cat.amount += (parseFloat(e.amount) || 0);
                 });
+                const expenseCategories = Object.values(catAgg).filter(c => !c.extraordinary).sort((a, b) => b.amount - a.amount);
+                const extraordinaryCategories = Object.values(catAgg).filter(c => c.extraordinary).sort((a, b) => b.amount - a.amount);
+                const extraordinaryTotal = extraordinaryCategories.reduce((acc, c) => acc + c.amount, 0);
+                const operatingExpenses = totalOpExpenses - extraordinaryTotal;
+                const operatingExpensesPct = totalRevenue > 0 ? (operatingExpenses / totalRevenue) * 100 : 0;
+                const extraordinaryPct = totalRevenue > 0 ? (extraordinaryTotal / totalRevenue) * 100 : 0;
 
-                const totalArmorAllCost = armorAllExpenses.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
+                const totalArmorAllCost = catAgg['ARMORALL']?.amount || 0;
                 const armorAllPerWash = fTickets.length > 0 ? totalArmorAllCost / fTickets.length : 0;
 
                 const topGastos = allExpensesForPeriod
                     .sort((a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0))
                     .slice(0, 10);
 
+                const avgDailyRevenue = totalRevenue / daysInRange;
+                const avgMonthlyRevenue = avgDailyRevenue * 30.44;
+
                 // --- 2. Trends (Monthly) ---
                 const monthlyStats = {};
                 const getMonthObj = (date) => {
                     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                    if (!monthlyStats[key]) monthlyStats[key] = { name: key, revenue: 0, expenses: 0, profit: 0, labor: 0 };
+                    if (!monthlyStats[key]) monthlyStats[key] = { name: key, revenue: 0, expenses: 0, profit: 0, labor: 0, tickets: 0 };
                     return monthlyStats[key];
                 }
 
-                fTickets.forEach(t => { const m = getMonthObj(t.date); m.revenue += (t.price || 0); m.labor += (t.commission || 0); });
+                fTickets.forEach(t => { const m = getMonthObj(t.date); m.revenue += (t.price || 0); m.labor += (t.commission || 0); m.tickets += 1; });
                 fExpenses.filter(e => !e.gastoAjeno).forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
                 fBizExpenses.forEach(e => { const m = getMonthObj(e.date); m.expenses += (e.amount || 0); });
 
                 Object.values(monthlyStats).forEach(m => {
                     m.profit = m.revenue - m.expenses - m.labor;
                     m.profitMargin = m.revenue > 0 ? (m.profit / m.revenue) * 100 : 0;
+                    m.avgTicket = m.tickets > 0 ? m.revenue / m.tickets : 0;
+                    const [y, mo] = m.name.split('-');
+                    m.label = `${MONTHS[parseInt(mo) - 1]} ${y}`;
                 });
                 const chartFinancials = Object.values(monthlyStats).sort((a, b) => a.name.localeCompare(b.name));
+
+                // --- Mezcla de Servicios ---
+                const serviceAgg = {};
+                fTickets.forEach(t => {
+                    const id = t.service?.id || 'SIN_SERVICIO';
+                    const label = t.service?.label || 'Solo extras / Caja';
+                    const s = serviceAgg[id] || (serviceAgg[id] = { id, label, tickets: 0, revenue: 0 });
+                    s.tickets += 1;
+                    s.revenue += (t.price || 0);
+                });
+                const serviceMix = Object.values(serviceAgg).map(s => ({
+                    ...s,
+                    pctTickets: fTickets.length ? (s.tickets / fTickets.length) * 100 : 0,
+                    pctRevenue: totalRevenue > 0 ? (s.revenue / totalRevenue) * 100 : 0
+                })).sort((a, b) => b.tickets - a.tickets);
+
+                // --- Tamaño de Vehículo ---
+                const sizeAgg = {};
+                fTickets.forEach(t => {
+                    if (!t.size?.id) return;
+                    const s = sizeAgg[t.size.id] || (sizeAgg[t.size.id] = { id: t.size.id, label: t.size.label || t.size.id, tickets: 0, revenue: 0 });
+                    s.tickets += 1;
+                    s.revenue += (t.price || 0);
+                });
+                const sizedTickets = Object.values(sizeAgg).reduce((acc, s) => acc + s.tickets, 0);
+                const sizeMix = Object.values(sizeAgg).map(s => ({
+                    ...s,
+                    avgTicket: s.tickets ? s.revenue / s.tickets : 0,
+                    pctTickets: sizedTickets ? (s.tickets / sizedTickets) * 100 : 0,
+                    pctRevenue: totalRevenue > 0 ? (s.revenue / totalRevenue) * 100 : 0
+                })).sort((a, b) => b.revenue - a.revenue);
+
+                // --- Descripciones de vehículo más frecuentes ---
+                const descAgg = {};
+                fTickets.forEach(t => {
+                    const raw = (t.vehicleDesc || '').trim().replace(/\s+/g, ' ');
+                    if (!raw) return;
+                    const key = raw.toLowerCase();
+                    const d = descAgg[key] || (descAgg[key] = { label: raw, tickets: 0 });
+                    d.tickets += 1;
+                });
+                const topVehicles = Object.values(descAgg).sort((a, b) => b.tickets - a.tickets).slice(0, 10);
+
+                // --- Extras y Upsell ---
+                const extraAgg = {};
+                const manualAgg = {};
+                let ticketsWithExtras = 0;
+                let extrasRevenue = 0;
+                fTickets.forEach(t => {
+                    const exs = Array.isArray(t.extras) ? t.extras : [];
+                    if (exs.length > 0) ticketsWithExtras += 1;
+                    exs.forEach(e => {
+                        let id = EXTRA_CANON[e.id] || e.id || 'OTRO';
+                        let manual = false;
+                        // Capturas manuales ("Varios") o ids desconocidos: doblar al extra canónico por nombre
+                        if (!KNOWN_EXTRA_IDS.has(id)) {
+                            manual = true;
+                            const aliasId = matchExtraAlias(e.label, e.price);
+                            id = aliasId || ('MANUAL:' + normText(e.label));
+                            const mKey = normText(e.label);
+                            const m = manualAgg[mKey] || (manualAgg[mKey] = { label: (e.label || '').trim() || '(sin texto)', matchedId: aliasId, count: 0, revenue: 0 });
+                            m.count += 1;
+                            m.revenue += (e.price || 0);
+                        }
+                        const x = extraAgg[id] || (extraAgg[id] = { id, label: EXTRA_LABELS[id] || e.label || id, count: 0, revenue: 0, manualCount: 0 });
+                        x.count += 1;
+                        x.revenue += (e.price || 0);
+                        if (manual) x.manualCount += 1;
+                        extrasRevenue += (e.price || 0);
+                    });
+                });
+                const extrasMix = Object.values(extraAgg).map(x => ({
+                    ...x,
+                    avgPrice: x.count ? x.revenue / x.count : 0
+                })).sort((a, b) => b.revenue - a.revenue);
+                const manualExtras = Object.values(manualAgg).sort((a, b) => b.revenue - a.revenue);
+                const manualExtrasTotal = manualExtras.reduce((acc, m) => acc + m.revenue, 0);
+                const upsellRate = fTickets.length ? (ticketsWithExtras / fTickets.length) * 100 : 0;
+                const extraPerTicket = fTickets.length ? extrasRevenue / fTickets.length : 0;
+
+                // --- Programa de Snacks (clientes vs. lavadores; misma lógica que el Corte) ---
+                const snacks = { customerCount: 0, customerMoney: 0, internalCount: 0, internalMoney: 0 };
+                fTickets.forEach(t => {
+                    if (t.snackCount > 0) {
+                        snacks.customerCount += t.snackCount;
+                        const extrasTotal = (t.extras || []).reduce((a, b) => a + (b.price || 0), 0);
+                        snacks.customerMoney += Math.max(0, (t.price || 0) - (t.basePrice || 0) - extrasTotal);
+                    }
+                });
+                fDeductions.forEach(d => {
+                    const desc = (d.description || '').toLowerCase().trim();
+                    if (desc === 'snack' || desc === 'snacks') {
+                        snacks.internalCount += 1;
+                        snacks.internalMoney += (d.amount || 0);
+                    }
+                });
 
                 // --- Daily Trends ---
                 const dailyStats = {};
@@ -432,13 +670,19 @@
                 fTickets.forEach(t => {
                     const washers = t.washers || (t.washer ? [t.washer] : []);
                     const commShare = (t.commission || 0) / Math.max(washers.length, 1);
+                    const revShare = (t.price || 0) / Math.max(washers.length, 1);
                     washers.forEach(w => {
-                        if (!empStats[w]) empStats[w] = { name: w, tickets: 0, commission: 0 };
+                        if (!empStats[w]) empStats[w] = { name: w, tickets: 0, commission: 0, revenueServed: 0 };
                         empStats[w].tickets += 1;
                         empStats[w].commission += commShare;
+                        empStats[w].revenueServed += revShare;
                     });
                 });
                 const chartEmpRevenue = Object.values(empStats).sort((a, b) => b.commission - a.commission).slice(0, 10);
+                const employeePerformance = Object.values(empStats).map(e => ({
+                    ...e,
+                    commPerTicket: e.tickets ? e.commission / e.tickets : 0
+                })).sort((a, b) => b.tickets - a.tickets);
 
                 // --- 5. Peak Hours ---
                 const fmtHour = (h) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
@@ -446,17 +690,26 @@
                     const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Ciudad_Juarez', hour: 'numeric', hour12: false }).format(date), 10);
                     return isNaN(h) || h === 24 ? 0 : h;
                 };
-                const hourlyBuckets = Array.from({ length: 24 }, (_, h) => ({ hour: fmtHour(h), tickets: 0 }));
-                fTickets.forEach(t => { hourlyBuckets[getJuarezHour(t.date)].tickets += 1; });
+                const hourlyBuckets = Array.from({ length: 24 }, (_, h) => ({ hour: fmtHour(h), tickets: 0, revenue: 0 }));
+                fTickets.forEach(t => {
+                    const b = hourlyBuckets[getJuarezHour(t.date)];
+                    b.tickets += 1;
+                    b.revenue += (t.price || 0);
+                });
                 const chartHourly = hourlyBuckets.slice(6, 19);
 
                 // --- 6. Day-of-Week Pattern ---
                 const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                 const dowBuckets = Array.from({ length: 7 }, (_, i) => ({ day: dayNames[i], tickets: 0, revenue: 0 }));
+                const dowDates = Array.from({ length: 7 }, () => new Set());
                 fTickets.forEach(t => {
                     const d = t.date.getDay();
                     dowBuckets[d].tickets += 1;
                     dowBuckets[d].revenue += (t.price || 0);
+                    dowDates[d].add(t.date.toDateString());
+                });
+                dowBuckets.forEach((b, i) => {
+                    b.avgTickets = dowDates[i].size > 0 ? b.tickets / dowDates[i].size : 0;
                 });
                 const chartDOW = dowBuckets;
 
@@ -496,17 +749,24 @@
 
                 return {
                     totalRevenue, totalExpenses, netProfit, profitMarginPct, avgTicket, ticketCount: fTickets.length,
-                    avgTicketsPerDay,
+                    avgTicketsPerDay, daysInRange, avgDailyRevenue, avgMonthlyRevenue,
                     laborCommission, laborSalary, supervisorSalesCommTotal, boleroCommTotal, totalLabor,
                     laborCommPct, laborSalaryPct, laborSupCommPct, laborBoleroCommPct, totalLaborPct,
                     totalOpExpenses, totalOpExpensesPct,
+                    operatingExpenses, operatingExpensesPct, extraordinaryTotal, extraordinaryPct,
+                    expenseCategories, extraordinaryCategories,
+                    serviceMix, sizeMix, topVehicles,
+                    extrasMix, upsellRate, extrasRevenue, extraPerTicket, ticketsWithExtras,
+                    manualExtras, manualExtrasTotal,
+                    snacks,
+                    employeePerformance,
                     armorAllPerWash, totalArmorAllCost, salariedCount,
                     chartFinancials, chartExpenses, chartEmpRevenue,
                     chartRevenueVsStaff, chartCommPerDay,
                     chartHourly, chartDOW, chartDailyTrends, topGastos
                 };
 
-            }, [tickets, expenses, bizExpenses, cashCounts, employees, attendance, dateFilterType, selectedMonth, selectedYear, startDate, endDate]);
+            }, [tickets, expenses, bizExpenses, cashCounts, employees, attendance, deductions, dateFilterType, selectedMonth, selectedYear, startDate, endDate]);
 
             if (!isAuthenticated) {
                 return (
@@ -634,11 +894,11 @@
                     {/* SECTION 1: FINANCIAL HEALTH */}
                     <div>
                         <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2"><PiggyBank size={20} /> Estatus Financiero</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
                             <KPICard
                                 title="Ingreso Bruto"
                                 value={formatCurrency(processed.totalRevenue)}
-                                subtext={`${processed.ticketCount} vehículos`}
+                                subtext={`${formatInt(processed.ticketCount)} vehículos en ${processed.daysInRange} días`}
                                 icon={DollarSign}
                                 color="blue"
                             />
@@ -651,13 +911,20 @@
                             />
                             <KPICard
                                 title="Gastos Operativos"
-                                value={formatCurrency(processed.totalOpExpenses)}
-                                subtext={`${processed.totalOpExpensesPct.toFixed(1)}% de Ingreso`}
+                                value={formatCurrency(processed.operatingExpenses)}
+                                subtext={`${processed.operatingExpensesPct.toFixed(1)}% de Ingreso`}
                                 icon={ArrowDownRight}
                                 color="red"
                             />
                             <KPICard
-                                title="Utilidad Neta"
+                                title="Gastos Extraordinarios"
+                                value={formatCurrency(processed.extraordinaryTotal)}
+                                subtext={`${processed.extraordinaryPct.toFixed(1)}% de Ingreso`}
+                                icon={ShieldAlert}
+                                color="pink"
+                            />
+                            <KPICard
+                                title="Utilidad Neta Operativa"
                                 value={formatCurrency(processed.netProfit)}
                                 subtext={`${processed.profitMarginPct.toFixed(1)}% de Ingreso`}
                                 icon={Wallet}
@@ -665,8 +932,8 @@
                             />
                         </div>
 
-                        {/* SECONDARY METRICS: ARMOR ALL & TICKET AVG */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        {/* SECONDARY METRICS: AVERAGES & ARMOR ALL */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
                             <KPICard
                                 title="Ticket Promedio"
                                 value={formatCurrency(processed.avgTicket)}
@@ -675,11 +942,25 @@
                                 color="purple"
                             />
                             <KPICard
-                                title="Promedio Autos/Día"
+                                title="Autos por Día"
                                 value={processed.avgTicketsPerDay.toFixed(1)}
-                                subtext="Vehículos diarios"
+                                subtext="Promedio diario"
                                 icon={Car}
                                 color="cyan"
+                            />
+                            <KPICard
+                                title="Promedio Diario"
+                                value={formatCurrency(processed.avgDailyRevenue)}
+                                subtext="Ingreso por día"
+                                icon={Calendar}
+                                color="blue"
+                            />
+                            <KPICard
+                                title="Promedio Mensual"
+                                value={formatCurrency(processed.avgMonthlyRevenue)}
+                                subtext="Proyección a 30.4 días"
+                                icon={Calendar}
+                                color="indigo"
                             />
                             <KPICard
                                 title="ArmorAll / Lavado"
@@ -765,6 +1046,35 @@
                                         </ResponsiveContainer>
                                     </div>
                                 </div>
+
+                                {/* MONTHLY TREND TABLE */}
+                                <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto mb-6">
+                                    <h3 className="font-bold text-slate-700 mb-4">Tendencia de Ingresos por Mes</h3>
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-slate-50 text-slate-500 border-b">
+                                            <tr>
+                                                <th className="p-3">Mes</th>
+                                                <th className="p-3 text-right">Tickets</th>
+                                                <th className="p-3 text-right">Ticket Prom.</th>
+                                                <th className="p-3 text-right">Ingresos</th>
+                                                <th className="p-3 text-right">Utilidad</th>
+                                                <th className="p-3 text-right">Margen</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {processed.chartFinancials.map(m => (
+                                                <tr key={m.name} className="border-b last:border-0 hover:bg-slate-50">
+                                                    <td className="p-3 font-medium text-slate-800">{m.label}</td>
+                                                    <td className="p-3 text-right text-slate-600">{formatInt(m.tickets)}</td>
+                                                    <td className="p-3 text-right text-slate-600">{formatCurrency(m.avgTicket)}</td>
+                                                    <td className="p-3 text-right font-bold text-slate-800">{formatCurrency(m.revenue)}</td>
+                                                    <td className={`p-3 text-right font-bold ${m.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(m.profit)}</td>
+                                                    <td className="p-3 text-right text-slate-600">{m.profitMargin.toFixed(1)}%</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         )}
 
@@ -817,6 +1127,291 @@
                                 </div>
                             </div>
                         </div>
+
+                        {/* EXPENSE STRUCTURE BY CATEGORY */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto">
+                                <h3 className="font-bold text-slate-700 mb-1">Desglose de Gastos del Período</h3>
+                                <p className="text-xs text-slate-400 mb-4">Agrupado por categoría. Gastos sin categoría se clasifican por palabra clave en la descripción.</p>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 border-b">
+                                        <tr>
+                                            <th className="p-3">Concepto</th>
+                                            <th className="p-3 text-right">Monto</th>
+                                            <th className="p-3 text-right">#</th>
+                                            <th className="p-3 text-right">% de Ingresos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {processed.expenseCategories.length === 0 ? (
+                                            <tr><td colSpan="4" className="p-4 text-center text-slate-400">No hay gastos en este periodo.</td></tr>
+                                        ) : processed.expenseCategories.map(c => (
+                                            <tr key={c.id} className="border-b last:border-0 hover:bg-slate-50">
+                                                <td className="p-3 font-medium text-slate-800">{c.label}</td>
+                                                <td className="p-3 text-right font-bold text-red-600">{formatCurrency(c.amount)}</td>
+                                                <td className="p-3 text-right text-slate-500">{c.count}</td>
+                                                <td className="p-3 text-right text-slate-600">{processed.totalRevenue > 0 ? ((c.amount / processed.totalRevenue) * 100).toFixed(2) : '0.00'}%</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    {processed.expenseCategories.length > 0 && (
+                                        <tfoot>
+                                            <tr className="bg-slate-50 font-bold text-slate-800">
+                                                <td className="p-3">TOTAL GASTOS</td>
+                                                <td className="p-3 text-right text-red-700">{formatCurrency(processed.operatingExpenses)}</td>
+                                                <td className="p-3 text-right">{processed.expenseCategories.reduce((a, c) => a + c.count, 0)}</td>
+                                                <td className="p-3 text-right">{processed.operatingExpensesPct.toFixed(2)}%</td>
+                                            </tr>
+                                        </tfoot>
+                                    )}
+                                </table>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto">
+                                <h3 className="font-bold text-slate-700 mb-1 flex items-center gap-2"><ShieldAlert size={18} className="text-pink-500" /> Gastos Extraordinarios</h3>
+                                <p className="text-xs text-slate-400 mb-4">Eventos no recurrentes: choques, demandas, multas, finiquitos.</p>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 border-b">
+                                        <tr>
+                                            <th className="p-3">Concepto</th>
+                                            <th className="p-3 text-right">Monto</th>
+                                            <th className="p-3 text-right">#</th>
+                                            <th className="p-3 text-right">% de Ingresos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {processed.extraordinaryCategories.length === 0 ? (
+                                            <tr><td colSpan="4" className="p-4 text-center text-slate-400">Sin gastos extraordinarios en este periodo. 🎉</td></tr>
+                                        ) : processed.extraordinaryCategories.map(c => (
+                                            <tr key={c.id} className="border-b last:border-0 hover:bg-slate-50">
+                                                <td className="p-3 font-medium text-slate-800">{c.label}</td>
+                                                <td className="p-3 text-right font-bold text-pink-600">{formatCurrency(c.amount)}</td>
+                                                <td className="p-3 text-right text-slate-500">{c.count}</td>
+                                                <td className="p-3 text-right text-slate-600">{processed.totalRevenue > 0 ? ((c.amount / processed.totalRevenue) * 100).toFixed(2) : '0.00'}%</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    {processed.extraordinaryCategories.length > 0 && (
+                                        <tfoot>
+                                            <tr className="bg-slate-50 font-bold text-slate-800">
+                                                <td className="p-3">TOTAL EXTRAORDINARIOS</td>
+                                                <td className="p-3 text-right text-pink-700">{formatCurrency(processed.extraordinaryTotal)}</td>
+                                                <td className="p-3 text-right">{processed.extraordinaryCategories.reduce((a, c) => a + c.count, 0)}</td>
+                                                <td className="p-3 text-right">{processed.extraordinaryPct.toFixed(2)}%</td>
+                                            </tr>
+                                        </tfoot>
+                                    )}
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECTION: SERVICE MIX & VEHICLES */}
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Car size={20} /> Mezcla de Servicios y Vehículos</h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto">
+                                <h3 className="font-bold text-slate-700 mb-4">Mezcla de Servicios</h3>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 border-b">
+                                        <tr>
+                                            <th className="p-3">Servicio</th>
+                                            <th className="p-3 text-right">Tickets</th>
+                                            <th className="p-3 text-right">%</th>
+                                            <th className="p-3 text-right">Ingresos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {processed.serviceMix.map(s => (
+                                            <tr key={s.id} className="border-b last:border-0 hover:bg-slate-50">
+                                                <td className="p-3 font-medium text-slate-800">{s.label}</td>
+                                                <td className="p-3 text-right text-slate-600">{formatInt(s.tickets)}</td>
+                                                <td className="p-3 text-right text-slate-600">{s.pctTickets.toFixed(1)}%</td>
+                                                <td className="p-3 text-right font-bold text-slate-800">{formatCurrency(s.revenue)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto">
+                                <h3 className="font-bold text-slate-700 mb-4">Tamaño de Vehículo</h3>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 border-b">
+                                        <tr>
+                                            <th className="p-3">Tamaño</th>
+                                            <th className="p-3 text-right">Tickets</th>
+                                            <th className="p-3 text-right">Ticket Prom.</th>
+                                            <th className="p-3 text-right">% Ingresos</th>
+                                            <th className="p-3 text-right">% Tickets</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {processed.sizeMix.map(s => (
+                                            <tr key={s.id} className="border-b last:border-0 hover:bg-slate-50">
+                                                <td className="p-3 font-medium text-slate-800">{s.label}</td>
+                                                <td className="p-3 text-right text-slate-600">{formatInt(s.tickets)}</td>
+                                                <td className="p-3 text-right text-slate-600">{formatCurrency(s.avgTicket)}</td>
+                                                <td className="p-3 text-right font-bold text-slate-800">{s.pctRevenue.toFixed(1)}%</td>
+                                                <td className="p-3 text-right text-slate-600">{s.pctTickets.toFixed(1)}%</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto">
+                                <h3 className="font-bold text-slate-700 mb-4">Vehículos Más Frecuentes</h3>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 border-b">
+                                        <tr>
+                                            <th className="p-3">Vehículo</th>
+                                            <th className="p-3 text-right">Tickets</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {processed.topVehicles.length === 0 ? (
+                                            <tr><td colSpan="2" className="p-4 text-center text-slate-400">Sin descripciones registradas.</td></tr>
+                                        ) : processed.topVehicles.map((v, i) => (
+                                            <tr key={i} className="border-b last:border-0 hover:bg-slate-50">
+                                                <td className="p-3 font-medium text-slate-800 capitalize">{v.label}</td>
+                                                <td className="p-3 text-right font-bold text-slate-700">{formatInt(v.tickets)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECTION: EXTRAS, UPSELL & SNACKS */}
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Percent size={20} /> Extras, Upsell y Snacks</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <KPICard
+                                title="Tasa de Upsell"
+                                value={`${processed.upsellRate.toFixed(1)}%`}
+                                subtext={`${formatInt(processed.ticketsWithExtras)} tickets con extras`}
+                                icon={Percent}
+                                color="green"
+                            />
+                            <KPICard
+                                title="Ingresos por Extras"
+                                value={formatCurrency(processed.extrasRevenue)}
+                                subtext="Total del período"
+                                icon={DollarSign}
+                                color="blue"
+                            />
+                            <KPICard
+                                title="Extra por Ticket"
+                                value={formatCurrency(processed.extraPerTicket)}
+                                subtext="Promedio global"
+                                icon={TrendingUp}
+                                color="purple"
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto lg:col-span-2">
+                                <h3 className="font-bold text-slate-700 mb-4">Ventas por Extra</h3>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 border-b">
+                                        <tr>
+                                            <th className="p-3">Extra</th>
+                                            <th className="p-3 text-right">Vendidos</th>
+                                            <th className="p-3 text-right">Precio Prom.</th>
+                                            <th className="p-3 text-right">Ingresos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {processed.extrasMix.length === 0 ? (
+                                            <tr><td colSpan="4" className="p-4 text-center text-slate-400">Sin extras vendidos en este periodo.</td></tr>
+                                        ) : processed.extrasMix.map(x => (
+                                            <tr key={x.id} className="border-b last:border-0 hover:bg-slate-50">
+                                                <td className="p-3 font-medium text-slate-800">
+                                                    {x.label}
+                                                    {x.manualCount > 0 && <span className="ml-2 inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700" title="Incluye capturas manuales del campo Varios">{x.manualCount} manual</span>}
+                                                </td>
+                                                <td className="p-3 text-right text-slate-600">{formatInt(x.count)}</td>
+                                                <td className="p-3 text-right text-slate-600">{formatCurrency(x.avgPrice)}</td>
+                                                <td className="p-3 text-right font-bold text-slate-800">{formatCurrency(x.revenue)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto">
+                                <h3 className="font-bold text-slate-700 mb-1">Programa de Snacks</h3>
+                                <p className="text-xs text-slate-400 mb-4">Ventas a clientes vs. deducción de lavadores.</p>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 border-b">
+                                        <tr>
+                                            <th className="p-3"></th>
+                                            <th className="p-3 text-right">Unidades</th>
+                                            <th className="p-3 text-right">Ingresos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr className="border-b hover:bg-slate-50">
+                                            <td className="p-3 font-medium text-slate-800">Snacks a Clientes</td>
+                                            <td className="p-3 text-right text-slate-600">{formatInt(processed.snacks.customerCount)}</td>
+                                            <td className="p-3 text-right font-bold text-slate-800">{formatCurrency(processed.snacks.customerMoney)}</td>
+                                        </tr>
+                                        <tr className="border-b hover:bg-slate-50">
+                                            <td className="p-3 font-medium text-slate-800">Snacks a Lavadores</td>
+                                            <td className="p-3 text-right text-slate-600">{formatInt(processed.snacks.internalCount)}</td>
+                                            <td className="p-3 text-right font-bold text-slate-800">{formatCurrency(processed.snacks.internalMoney)}</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr className="bg-slate-50 font-bold text-slate-800">
+                                            <td className="p-3">TOTAL</td>
+                                            <td className="p-3 text-right">{formatInt(processed.snacks.customerCount + processed.snacks.internalCount)}</td>
+                                            <td className="p-3 text-right">{formatCurrency(processed.snacks.customerMoney + processed.snacks.internalMoney)}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* MANUAL "VARIOS" AUDIT */}
+                        {processed.manualExtras.length > 0 && (
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto mt-6">
+                                <h3 className="font-bold text-slate-700 mb-1 flex items-center gap-2"><ShieldAlert size={18} className="text-amber-500" /> Capturas Manuales en "Varios"</h3>
+                                <p className="text-xs text-slate-400 mb-4">Texto escrito a mano en el campo "Varios (Costo Extra)" de Nueva Orden. Cuando coincide con un extra existente, ya se combinó en la tabla de arriba — pero indica que el personal está escribiendo en lugar de usar el botón (y la comisión se calcula al 35% en vez de la comisión real del extra).</p>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 border-b">
+                                        <tr>
+                                            <th className="p-3">Texto capturado</th>
+                                            <th className="p-3">Coincide con</th>
+                                            <th className="p-3 text-right">Veces</th>
+                                            <th className="p-3 text-right">Ingresos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {processed.manualExtras.map((m, i) => (
+                                            <tr key={i} className="border-b last:border-0 hover:bg-slate-50">
+                                                <td className="p-3 font-medium text-slate-800">"{m.label}"</td>
+                                                <td className="p-3">{m.matchedId
+                                                    ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">{EXTRA_LABELS[m.matchedId] || m.matchedId} — usar el botón</span>
+                                                    : <span className="text-slate-400 text-xs">Cargo genuino</span>}
+                                                </td>
+                                                <td className="p-3 text-right text-slate-600">{formatInt(m.count)}</td>
+                                                <td className="p-3 text-right font-bold text-slate-800">{formatCurrency(m.revenue)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr className="bg-slate-50 font-bold text-slate-800">
+                                            <td className="p-3">TOTAL MANUAL</td>
+                                            <td className="p-3"></td>
+                                            <td className="p-3 text-right">{formatInt(processed.manualExtras.reduce((a, m) => a + m.count, 0))}</td>
+                                            <td className="p-3 text-right">{formatCurrency(processed.manualExtrasTotal)}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        )}
                     </div>
 
                     {/* NEW SECTION: DAILY TRENDS */}
@@ -876,7 +1471,7 @@
 
                     {/* SECTION 3: SCHEDULING */}
                     <div>
-                        <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Clock size={20} /> Patrones de Horario</h2>
+                        <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Clock size={20} /> Día y Hora</h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
                                 <h3 className="font-bold text-slate-700 mb-4">Autos por Hora del Día</h3>
@@ -887,6 +1482,18 @@
                                         <YAxis allowDecimals={false} />
                                         <Tooltip />
                                         <Bar dataKey="tickets" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Autos" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
+                                <h3 className="font-bold text-slate-700 mb-4">Ingresos por Hora del Día</h3>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={processed.chartHourly}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="hour" style={{ fontSize: '11px' }} />
+                                        <YAxis tickFormatter={(val) => `$${val / 1000}k`} style={{ fontSize: '10px' }} />
+                                        <Tooltip formatter={(val) => formatCurrency(val)} />
+                                        <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} name="Ingresos" />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
@@ -902,12 +1509,80 @@
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
+                                <h3 className="font-bold text-slate-700 mb-4">Ingresos por Día de la Semana</h3>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={processed.chartDOW}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="day" style={{ fontSize: '12px' }} />
+                                        <YAxis tickFormatter={(val) => `$${val / 1000}k`} style={{ fontSize: '10px' }} />
+                                        <Tooltip formatter={(val) => formatCurrency(val)} />
+                                        <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} name="Ingresos" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {/* DAY OF WEEK TABLE */}
+                        <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto mt-6">
+                            <h3 className="font-bold text-slate-700 mb-4">Resumen por Día de la Semana</h3>
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 text-slate-500 border-b">
+                                    <tr>
+                                        <th className="p-3">Día</th>
+                                        <th className="p-3 text-right">Tickets</th>
+                                        <th className="p-3 text-right">Tickets/Día</th>
+                                        <th className="p-3 text-right">Ingresos</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[...processed.chartDOW].sort((a, b) => b.revenue - a.revenue).map(d => (
+                                        <tr key={d.day} className="border-b last:border-0 hover:bg-slate-50">
+                                            <td className="p-3 font-medium text-slate-800">{d.day}</td>
+                                            <td className="p-3 text-right text-slate-600">{formatInt(d.tickets)}</td>
+                                            <td className="p-3 text-right text-slate-600">{d.avgTickets > 0 ? d.avgTickets.toFixed(1) : '—'}</td>
+                                            <td className="p-3 text-right font-bold text-slate-800">{d.revenue > 0 ? formatCurrency(d.revenue) : 'Cerrado'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
                     {/* SECTION 4: STAFF */}
                     <div>
                         <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Users size={20} /> Desempeño del Personal</h2>
+
+                        {/* EMPLOYEE PERFORMANCE TABLE */}
+                        <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto mb-6">
+                            <h3 className="font-bold text-slate-700 mb-1">Desempeño de Lavadores</h3>
+                            <p className="text-xs text-slate-400 mb-4">Tickets y comisión repartidos en partes iguales cuando un ticket tiene varios lavadores. "Ingresos Servidos" es la parte proporcional de la venta atendida.</p>
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 text-slate-500 border-b">
+                                    <tr>
+                                        <th className="p-3">Lavador</th>
+                                        <th className="p-3 text-right">Tickets</th>
+                                        <th className="p-3 text-right">Comisión Total</th>
+                                        <th className="p-3 text-right">Comisión / Ticket</th>
+                                        <th className="p-3 text-right">Ingresos Servidos</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {processed.employeePerformance.length === 0 ? (
+                                        <tr><td colSpan="5" className="p-4 text-center text-slate-400">Sin tickets con lavadores asignados.</td></tr>
+                                    ) : processed.employeePerformance.map(e => (
+                                        <tr key={e.name} className="border-b last:border-0 hover:bg-slate-50">
+                                            <td className="p-3 font-medium text-slate-800">{e.name}</td>
+                                            <td className="p-3 text-right text-slate-600">{formatInt(e.tickets)}</td>
+                                            <td className="p-3 text-right font-bold text-slate-800">{formatCurrency(e.commission)}</td>
+                                            <td className="p-3 text-right text-slate-600">{formatCurrency(e.commPerTicket)}</td>
+                                            <td className="p-3 text-right font-bold text-blue-700">{formatCurrency(e.revenueServed)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                             <div className="bg-white p-6 rounded-xl shadow-sm border h-96">
                                 <h3 className="font-bold text-slate-700 mb-4">Comisión Total por Empleado</h3>
