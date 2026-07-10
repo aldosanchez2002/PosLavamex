@@ -133,6 +133,29 @@
             ]
         };
 
+        // Categorías de gastos para el reporte de negocio (analytics.html las agrupa por id)
+        const EXPENSE_CATEGORIES = [
+            { id: 'PIPAS', label: 'Pipas de agua' },
+            { id: 'JMAS', label: 'JMAS (Agua)' },
+            { id: 'IMSS', label: 'IMSS' },
+            { id: 'SAMS', label: "Sam's / Insumos" },
+            { id: 'ARMORALL', label: 'ArmorAll' },
+            { id: 'SAT', label: 'Impuestos / SAT' },
+            { id: 'CONTADOR', label: 'Contador' },
+            { id: 'VEHICULO', label: 'Vehículo / Reparaciones' },
+            { id: 'CORTESIA', label: 'Lavadas Cortesía' },
+            { id: 'JABON', label: 'Jabón / Químicos' },
+            { id: 'CFE', label: 'Electricidad CFE' },
+            { id: 'BASURA', label: 'Basura' },
+            { id: 'AVANCES', label: 'Avances (anticipos nómina)' },
+            { id: 'VACACIONES', label: 'Vacaciones' },
+            { id: 'OTROS', label: 'Otros' },
+            { id: 'CHOQUE', label: 'Choque Pagado', extraordinary: true },
+            { id: 'DEMANDA', label: 'Demanda / Legal', extraordinary: true },
+            { id: 'MULTA', label: 'Multa', extraordinary: true },
+            { id: 'FINIQUITO', label: 'Finiquitos / Renuncias', extraordinary: true },
+        ];
+
         const handleDbAction = async (actionFn) => {
             try {
                 await actionFn();
@@ -1425,9 +1448,9 @@ Firma: __________________
                 employee: employee, amount: parseFloat(amount), description: description, status: 'PENDING', timestamp: serverTimestamp()
             }));
 
-            const addExpense = (desc, amount, gastoAjeno = false) => handleDbAction(async () => {
+            const addExpense = (desc, amount, gastoAjeno = false, category = 'OTROS') => handleDbAction(async () => {
                 await addDoc(collection(db, "expenses"), {
-                    description: desc, amount: parseFloat(amount), status: 'PENDING', createdBy: role, gastoAjeno: gastoAjeno, timestamp: serverTimestamp()
+                    description: desc, amount: parseFloat(amount), status: 'PENDING', createdBy: role, gastoAjeno: gastoAjeno, category: category, timestamp: serverTimestamp()
                 });
                 alert("Gasto registrado, pendiente de aprobación.");
             });
@@ -1438,15 +1461,16 @@ Firma: __________________
                 const expenseRef = doc(collection(db, "expenses"));
                 const ts = serverTimestamp();
                 batch.set(deductionRef, { employee, amount: parseFloat(amount), description: 'Avance', status: 'PENDING', timestamp: ts });
-                batch.set(expenseRef, { description: `Avance - ${employee}`, amount: parseFloat(amount), status: 'PENDING', createdBy: role, timestamp: ts });
+                batch.set(expenseRef, { description: `Avance - ${employee}`, amount: parseFloat(amount), status: 'PENDING', createdBy: role, category: 'AVANCES', timestamp: ts });
                 await batch.commit();
                 alert(`Avance de ${formatCurrency(parseFloat(amount))} registrado para ${employee}. Pendiente de aprobación del admin.`);
             });
 
-            const addBusinessExpense = (desc, amount) => handleDbAction(async () => {
+            const addBusinessExpense = (desc, amount, category = 'OTROS') => handleDbAction(async () => {
                 await addDoc(collection(db, "business_expenses"), {
                     description: desc,
                     amount: parseFloat(amount),
+                    category: category,
                     timestamp: serverTimestamp(),
                     createdBy: role
                 });
@@ -2102,6 +2126,7 @@ const renderSizes = () => (
             const [expDesc, setExpDesc] = useState('');
             const [expAmt, setExpAmt] = useState('');
             const [expAjeno, setExpAjeno] = useState(false);
+            const [expCat, setExpCat] = useState('OTROS');
 
             const [changeModal, setChangeModal] = useState(null);
             const [multiMode, setMultiMode] = useState(false);
@@ -2139,7 +2164,7 @@ const renderSizes = () => (
                 setShowAttendance(false);
             };
 
-            const handleAddExpense = () => { if (!expDesc || !expAmt) return; addExpense(expDesc, expAmt, expAjeno); setExpDesc(''); setExpAmt(''); setExpAjeno(false); setShowExpense(false); };
+            const handleAddExpense = () => { if (!expDesc || !expAmt) return; addExpense(expDesc, expAmt, expAjeno, expCat); setExpDesc(''); setExpAmt(''); setExpAjeno(false); setExpCat('OTROS'); setShowExpense(false); };
 
             const handleAddSnack = () => {
                 if (snackEmp) {
@@ -2735,6 +2760,12 @@ const renderSizes = () => (
                                 <div className="space-y-3">
                                     <div><label className="block text-sm font-bold text-gray-600 mb-1">Concepto</label><input value={expDesc} onChange={e => setExpDesc(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Jabón" /></div>
                                     <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" /></div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Categoría</label>
+                                        <select value={expCat} onChange={e => setExpCat(e.target.value)} className="w-full border p-3 rounded-lg bg-white">
+                                            {EXPENSE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.extraordinary ? `⚠ ${c.label} (Extraordinario)` : c.label}</option>)}
+                                        </select>
+                                    </div>
                                     <label className="flex items-center gap-3 p-3 rounded-lg border border-purple-200 bg-purple-50 cursor-pointer select-none">
                                         <input type="checkbox" checked={expAjeno} onChange={e => setExpAjeno(e.target.checked)} className="w-4 h-4 accent-purple-600" />
                                         <div>
@@ -4607,13 +4638,17 @@ const renderSizes = () => (
             const { addBusinessExpense } = useContext(AppContext);
             const [desc, setDesc] = useState('');
             const [amt, setAmt] = useState('');
-            const handleSubmit = () => { if (!desc || !amt) return; addBusinessExpense(desc, amt); setDesc(''); setAmt(''); };
+            const [cat, setCat] = useState('OTROS');
+            const handleSubmit = () => { if (!desc || !amt) return; addBusinessExpense(desc, amt, cat); setDesc(''); setAmt(''); setCat('OTROS'); };
             return (
                 <div className="bg-purple-50 border-purple-200 border p-4 rounded-xl shadow-sm">
                     <h3 className="font-bold text-purple-800 mb-2 flex items-center gap-2"><Briefcase size={18} /> Registrar Gasto Administrativo</h3>
                     <p className="text-sm text-purple-600 mb-3 font-medium">Gastos pagados externamente (SAM's, IMSS, etc). No afectan el corte diario.</p>
                     <div className="flex gap-2 flex-col md:flex-row">
                         <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción del gasto" className="border p-3 rounded-lg flex-1 shadow-sm" />
+                        <select value={cat} onChange={e => setCat(e.target.value)} className="border p-3 rounded-lg bg-white shadow-sm w-full md:w-56">
+                            {EXPENSE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.extraordinary ? `⚠ ${c.label} (Extraordinario)` : c.label}</option>)}
+                        </select>
                         <input type="number" value={amt} onChange={e => setAmt(e.target.value)} placeholder="Monto ($)" className="border p-3 rounded-lg w-full md:w-36 shadow-sm" />
                         <Button onClick={handleSubmit} variant="primary" className="bg-purple-600 hover:bg-purple-700 shadow-md">Guardar</Button>
                     </div>
@@ -4627,18 +4662,22 @@ const renderSizes = () => (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
                     <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><Briefcase size={16} /> Historial de Gastos Administrativos</h4>
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-gray-500 border-b"><tr><th className="p-3">Fecha</th><th className="p-3">Descripción</th><th className="p-3 text-right">Monto</th><th className="p-3 text-right">Registrado Por</th></tr></thead>
+                        <thead className="bg-gray-50 text-gray-500 border-b"><tr><th className="p-3">Fecha</th><th className="p-3">Descripción</th><th className="p-3">Categoría</th><th className="p-3 text-right">Monto</th><th className="p-3 text-right">Registrado Por</th></tr></thead>
                         <tbody>
                             {businessExpenses.length === 0
-                                ? <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay gastos registrados.</td></tr>
-                                : businessExpenses.map(e => (
-                                    <tr key={e.id} className="border-b hover:bg-gray-50 last:border-b-0">
-                                        <td className="p-3 text-gray-600"><div>{e.timestamp.toLocaleDateString()}</div><div className="text-xs">{e.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></td>
-                                        <td className="p-3 font-medium text-gray-800">{e.description}</td>
-                                        <td className="p-3 text-right font-bold text-purple-700">{formatCurrency(e.amount)}</td>
-                                        <td className="p-3 text-right text-xs text-gray-400 uppercase">{e.createdBy}</td>
-                                    </tr>
-                                ))
+                                ? <tr><td colSpan="5" className="p-4 text-center text-gray-400">No hay gastos registrados.</td></tr>
+                                : businessExpenses.map(e => {
+                                    const cat = EXPENSE_CATEGORIES.find(c => c.id === e.category);
+                                    return (
+                                        <tr key={e.id} className="border-b hover:bg-gray-50 last:border-b-0">
+                                            <td className="p-3 text-gray-600"><div>{e.timestamp.toLocaleDateString()}</div><div className="text-xs">{e.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></td>
+                                            <td className="p-3 font-medium text-gray-800">{e.description}</td>
+                                            <td className="p-3"><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${cat?.extraordinary ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>{cat ? cat.label : 'Sin categoría'}</span></td>
+                                            <td className="p-3 text-right font-bold text-purple-700">{formatCurrency(e.amount)}</td>
+                                            <td className="p-3 text-right text-xs text-gray-400 uppercase">{e.createdBy}</td>
+                                        </tr>
+                                    );
+                                })
                             }
                         </tbody>
                     </table>
