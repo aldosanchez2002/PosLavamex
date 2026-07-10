@@ -130,6 +130,8 @@
                 { id: 'ASPIRADO_CAJUELA', label: 'Aspirado de Cajuela', price: 40, commission: 14 },
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
                 { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
+                { id: 'RZR_CHICO', label: 'Razer Chico', price: 640, commission: 224 },
+                { id: 'RZR_GRANDE', label: 'Razer Grande', price: 800, commission: 280 },
             ]
         };
 
@@ -157,30 +159,73 @@
         ];
 
         // "Varios" es solo para cargos genuinamente fuera de catálogo. Si el texto nombra un
-        // servicio o un extra que ya tiene botón, se bloquea: el precio y la comisión de un
-        // Varios (35% fijo) no coinciden con los del catálogo y distorsionan nómina y reportes.
+        // extra que ya tiene botón (con o sin errores de dedo), se corrige automáticamente al
+        // extra del catálogo: un Varios lleva comisión fija del 35%, que no coincide con la
+        // comisión real del extra y distorsiona nómina y reportes.
         const normVariosText = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-        const VARIOS_EXTRA_RULES = [
-            ['Boleada', /\bboleadas?\b/],
-            ['Pinos', /\bpinos?\b/],
-            ['Snacks', /\bsnacks?\b/],
-            ['Lavado Motor', /\bmotor\b/],
-            ['Chasis', /\bchass?is\b/],
-            ['Armor-All', /\barmor\s*all\b/],
-            ['Limpieza de Focos', /\bfocos?\b/],
-            ['Aspirado de Cajuela', /\bcajuela\b/],
-            ['Limpieza por Zona', /limpieza (por|de) zona/],
-            ['Aroma', /\baromas?\b/],
-            ['Lavado + Cera', /\bcera\b/],
+
+        const levenshtein = (a, b) => {
+            if (a === b) return 0;
+            const m = a.length, n = b.length;
+            if (!m) return n;
+            if (!n) return m;
+            let prev = Array.from({ length: n + 1 }, (_, i) => i);
+            for (let i = 1; i <= m; i++) {
+                const cur = [i];
+                for (let j = 1; j <= n; j++) {
+                    cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                }
+                prev = cur;
+            }
+            return prev[n];
+        };
+        // Palabras de <=4 letras exigen coincidencia exacta ("cera" ≠ "cerca"); 5-7 letras
+        // toleran 1 error de dedo; 8+ toleran 2.
+        const fuzzyWordMatch = (word, keyword) => {
+            if (word === keyword) return true;
+            if (keyword.length <= 4) return false;
+            return levenshtein(word, keyword) <= (keyword.length >= 8 ? 2 : 1);
+        };
+
+        const EXTRA_KEYWORDS = [
+            ['BOLEADA', ['boleada', 'boleadas']],
+            ['PINO', ['pino', 'pinos']],
+            ['SNACKS', ['snack', 'snacks']],
+            ['MOTOR', ['motor']],
+            ['CHASIS', ['chasis', 'chassis']],
+            ['ARMORALL', ['armorall', 'armor']],
+            ['LIMP_FOCOS', ['focos', 'foco']],
+            ['ASPIRADO_CAJUELA', ['cajuela']],
+            ['LIMP_ZONA', ['zona']],
+            ['AROMA', ['aroma', 'aromas']],
         ];
-        const findVariosConflict = (text) => {
+        const RZR_KEYWORDS = ['rzr', 'razer', 'razr', 'raser', 'racer'];
+
+        // Devuelve el id del extra del catálogo que nombra el texto (null = cargo genuino).
+        // Para Razer decide chico/grande por la palabra escrita o por el precio capturado.
+        const matchCatalogExtra = (text, price) => {
             const n = normVariosText(text);
-            const svc = SERVICES.find(s => n.includes(normVariosText(s.label)));
-            if (svc) return { type: 'SERVICE', label: svc.label };
-            for (const [label, rx] of VARIOS_EXTRA_RULES) {
-                if (rx.test(n)) return { type: 'EXTRA', label };
+            if (!n) return null;
+            const words = n.split(' ');
+            const has = (kw) => words.some(w => fuzzyWordMatch(w, kw));
+            // "moto(s)" está a 1 letra de "motor" pero es otra cosa: no auto-corregir
+            const isMoto = words.some(w => w === 'moto' || w === 'motos' || w === 'motocicleta');
+            if (RZR_KEYWORDS.some(has)) {
+                if (has('grande') || has('grandes') || words.includes('gde')) return 'RZR_GRANDE';
+                if (has('chico') || has('chica')) return 'RZR_CHICO';
+                return (typeof price === 'number' && !isNaN(price) && Math.abs(price - 800) < Math.abs(price - 640)) ? 'RZR_GRANDE' : 'RZR_CHICO';
+            }
+            for (const [id, kws] of EXTRA_KEYWORDS) {
+                if (id === 'MOTOR' && isMoto) continue;
+                if (kws.some(has)) return id;
             }
             return null;
+        };
+        // Servicios no se pueden auto-corregir (necesitan tamaño): se avisa.
+        const matchServiceName = (text) => {
+            const n = normVariosText(text);
+            if (/\bcera\b/.test(n)) return SERVICES.find(s => s.id === 'WAX');
+            return SERVICES.find(s => n.includes(normVariosText(s.label)));
         };
 
         const handleDbAction = async (actionFn) => {
@@ -1898,12 +1943,23 @@ Firma: __________________
             const addVarios = () => {
                 const price = parseFloat(vPrice);
                 if (!vDesc || !price || price <= 0) return alert("Error.");
-                const conflict = findVariosConflict(vDesc);
-                if (conflict) {
-                    if (conflict.type === 'SERVICE') {
-                        return alert(`⛔ "${vDesc}" es un servicio.\n\nSelecciona el Tamaño y el Servicio con los botones — no lo escribas en Varios.`);
+                const svc = matchServiceName(vDesc);
+                if (svc) {
+                    return alert(`⛔ "${vDesc}" es un servicio.\n\nSelecciona el Tamaño y el Servicio con los botones — no lo escribas en Varios.`);
+                }
+                // Si el texto nombra un extra del catálogo, se agrega el extra real (precio y
+                // comisión del catálogo) en lugar de un cargo manual.
+                const matchId = matchCatalogExtra(vDesc, price);
+                if (matchId === 'PINO') { setPinoCount(p => p + 1); setVDesc(''); setVPrice(''); return; }
+                if (matchId === 'SNACKS') { setSnackCount(s => s + 1); setVDesc(''); setVPrice(''); return; }
+                if (matchId) {
+                    const catalogExtra = extrasList.find(e => e.id === matchId);
+                    if (catalogExtra) {
+                        setExtras(prev => [...prev, catalogExtra]);
+                        setVDesc('');
+                        setVPrice('');
+                        return;
                     }
-                    return alert(`⛔ "${vDesc}" ya tiene botón.\n\nUsa el botón "${conflict.label}" en Extras para que el precio y la comisión sean correctos.`);
                 }
                 setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: price * 0.35 }]);
                 setVDesc('');

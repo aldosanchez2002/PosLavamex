@@ -117,27 +117,64 @@
         const EXTRA_LABELS = {
             PINO: 'Pino', BOLEADA: 'Boleada', MOTOR: 'Lavado Motor', CHASIS: 'Chasis',
             AROMA: 'Aroma', ARMORALL: 'Armor-All', LIMP_FOCOS: 'Limpieza de Focos',
-            ASPIRADO_CAJUELA: 'Aspirado de Cajuela', LIMP_ZONA: 'Limpieza por Zona', SNACKS: 'Snacks'
+            ASPIRADO_CAJUELA: 'Aspirado de Cajuela', LIMP_ZONA: 'Limpieza por Zona', SNACKS: 'Snacks',
+            RZR_CHICO: 'Razer Chico', RZR_GRANDE: 'Razer Grande'
         };
-        const KNOWN_EXTRA_IDS = new Set(['MOTOR', 'CHASIS', 'AROMA', 'ARMORALL', 'LIMP_FOCOS', 'ASPIRADO_CAJUELA', 'BOLEADA', 'LIMP_ZONA', 'PINO', 'SNACKS']);
+        const KNOWN_EXTRA_IDS = new Set(['MOTOR', 'CHASIS', 'AROMA', 'ARMORALL', 'LIMP_FOCOS', 'ASPIRADO_CAJUELA', 'BOLEADA', 'LIMP_ZONA', 'PINO', 'SNACKS', 'RZR_CHICO', 'RZR_GRANDE']);
 
         // Los extras capturados a mano en "Varios" llevan id VARIOS-<timestamp> y el texto
         // que escribió el usuario como label. Se doblan al extra canónico por nombre.
         const normText = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-        const EXTRA_ALIAS_RULES = [
-            ['BOLEADA', /\bboleadas?\b/],
-            ['PINO', /\bpinos?\b/],
-            ['MOTOR', /\bmotor\b/],
-            ['CHASIS', /\bchass?is\b/],
-            ['ARMORALL', /\barmor\s*all\b/],
-            ['LIMP_FOCOS', /\bfocos?\b/],
-            ['ASPIRADO_CAJUELA', /\bcajuela\b/],
-            ['LIMP_ZONA', /limpieza (por|de) zona/],
-            ['AROMA', /\baromas?\b/],
+        const levenshtein = (a, b) => {
+            if (a === b) return 0;
+            const m = a.length, n = b.length;
+            if (!m) return n;
+            if (!n) return m;
+            let prev = Array.from({ length: n + 1 }, (_, i) => i);
+            for (let i = 1; i <= m; i++) {
+                const cur = [i];
+                for (let j = 1; j <= n; j++) {
+                    cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                }
+                prev = cur;
+            }
+            return prev[n];
+        };
+        // Palabras de <=4 letras exigen coincidencia exacta; 5-7 toleran 1 error de dedo; 8+ toleran 2.
+        const fuzzyWordMatch = (word, keyword) => {
+            if (word === keyword) return true;
+            if (keyword.length <= 4) return false;
+            return levenshtein(word, keyword) <= (keyword.length >= 8 ? 2 : 1);
+        };
+        const EXTRA_KEYWORDS = [
+            ['BOLEADA', ['boleada', 'boleadas']],
+            ['PINO', ['pino', 'pinos']],
+            ['SNACKS', ['snack', 'snacks']],
+            ['MOTOR', ['motor']],
+            ['CHASIS', ['chasis', 'chassis']],
+            ['ARMORALL', ['armorall', 'armor']],
+            ['LIMP_FOCOS', ['focos', 'foco']],
+            ['ASPIRADO_CAJUELA', ['cajuela']],
+            ['LIMP_ZONA', ['zona']],
+            ['AROMA', ['aroma', 'aromas']],
         ];
-        const matchExtraAlias = (label) => {
+        const RZR_KEYWORDS = ['rzr', 'razer', 'razr', 'raser', 'racer'];
+        const matchExtraAlias = (label, price) => {
             const n = normText(label);
-            for (const [id, rx] of EXTRA_ALIAS_RULES) if (rx.test(n)) return id;
+            if (!n) return null;
+            const words = n.split(' ');
+            const has = (kw) => words.some(w => fuzzyWordMatch(w, kw));
+            // "moto(s)" está a 1 letra de "motor" pero es otra cosa: no auto-corregir
+            const isMoto = words.some(w => w === 'moto' || w === 'motos' || w === 'motocicleta');
+            if (RZR_KEYWORDS.some(has)) {
+                if (has('grande') || has('grandes') || words.includes('gde')) return 'RZR_GRANDE';
+                if (has('chico') || has('chica')) return 'RZR_CHICO';
+                return (typeof price === 'number' && !isNaN(price) && Math.abs(price - 800) < Math.abs(price - 640)) ? 'RZR_GRANDE' : 'RZR_CHICO';
+            }
+            for (const [id, kws] of EXTRA_KEYWORDS) {
+                if (id === 'MOTOR' && isMoto) continue;
+                if (kws.some(has)) return id;
+            }
             return null;
         };
 
@@ -556,7 +593,7 @@
                         // Capturas manuales ("Varios") o ids desconocidos: doblar al extra canónico por nombre
                         if (!KNOWN_EXTRA_IDS.has(id)) {
                             manual = true;
-                            const aliasId = matchExtraAlias(e.label);
+                            const aliasId = matchExtraAlias(e.label, e.price);
                             id = aliasId || ('MANUAL:' + normText(e.label));
                             const mKey = normText(e.label);
                             const m = manualAgg[mKey] || (manualAgg[mKey] = { label: (e.label || '').trim() || '(sin texto)', matchedId: aliasId, count: 0, revenue: 0 });
