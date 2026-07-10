@@ -156,6 +156,33 @@
             { id: 'FINIQUITO', label: 'Finiquitos / Renuncias', extraordinary: true },
         ];
 
+        // "Varios" es solo para cargos genuinamente fuera de catálogo. Si el texto nombra un
+        // servicio o un extra que ya tiene botón, se bloquea: el precio y la comisión de un
+        // Varios (35% fijo) no coinciden con los del catálogo y distorsionan nómina y reportes.
+        const normVariosText = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        const VARIOS_EXTRA_RULES = [
+            ['Boleada', /\bboleadas?\b/],
+            ['Pinos', /\bpinos?\b/],
+            ['Snacks', /\bsnacks?\b/],
+            ['Lavado Motor', /\bmotor\b/],
+            ['Chasis', /\bchass?is\b/],
+            ['Armor-All', /\barmor\s*all\b/],
+            ['Limpieza de Focos', /\bfocos?\b/],
+            ['Aspirado de Cajuela', /\bcajuela\b/],
+            ['Limpieza por Zona', /limpieza (por|de) zona/],
+            ['Aroma', /\baromas?\b/],
+            ['Lavado + Cera', /\bcera\b/],
+        ];
+        const findVariosConflict = (text) => {
+            const n = normVariosText(text);
+            const svc = SERVICES.find(s => n.includes(normVariosText(s.label)));
+            if (svc) return { type: 'SERVICE', label: svc.label };
+            for (const [label, rx] of VARIOS_EXTRA_RULES) {
+                if (rx.test(n)) return { type: 'EXTRA', label };
+            }
+            return null;
+        };
+
         const handleDbAction = async (actionFn) => {
             try {
                 await actionFn();
@@ -1868,7 +1895,20 @@ Firma: __________________
             const toggleExtra = (item) => setExtras(prev => toggleSelection(prev, item));
             const addExtra = (item) => setExtras(prev => [...prev, item]);
             const removeExtra = (item) => setExtras(prev => { const idx = prev.findIndex(x => x.id === item.id); if (idx === -1) return prev; const newArr = [...prev]; newArr.splice(idx, 1); return newArr; });
-            const addVarios = () => { const price = parseFloat(vPrice); if (!vDesc || !price || price <= 0) return alert("Error."); setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: price * 0.35 }]); setVDesc(''); setVPrice(''); };
+            const addVarios = () => {
+                const price = parseFloat(vPrice);
+                if (!vDesc || !price || price <= 0) return alert("Error.");
+                const conflict = findVariosConflict(vDesc);
+                if (conflict) {
+                    if (conflict.type === 'SERVICE') {
+                        return alert(`⛔ "${vDesc}" es un servicio.\n\nSelecciona el Tamaño y el Servicio con los botones — no lo escribas en Varios.`);
+                    }
+                    return alert(`⛔ "${vDesc}" ya tiene botón.\n\nUsa el botón "${conflict.label}" en Extras para que el precio y la comisión sean correctos.`);
+                }
+                setExtras(prev => [...prev, { id: `VARIOS-${Date.now()}`, label: vDesc, price, commission: price * 0.35 }]);
+                setVDesc('');
+                setVPrice('');
+            };
             const canSubmit = ((size && service) || extras.length > 0 || snackCount > 0 || pinoCount > 0);
             const handleSubmit = () => {
                 if (!canSubmit) return;

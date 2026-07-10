@@ -114,7 +114,32 @@
 
         // Ids equivalentes de extras rápidos de caja → extra canónico
         const EXTRA_CANON = { QA_PINO: 'PINO', QA_BOLEADA: 'BOLEADA' };
-        const EXTRA_LABELS = { PINO: 'Pino', BOLEADA: 'Boleada' };
+        const EXTRA_LABELS = {
+            PINO: 'Pino', BOLEADA: 'Boleada', MOTOR: 'Lavado Motor', CHASIS: 'Chasis',
+            AROMA: 'Aroma', ARMORALL: 'Armor-All', LIMP_FOCOS: 'Limpieza de Focos',
+            ASPIRADO_CAJUELA: 'Aspirado de Cajuela', LIMP_ZONA: 'Limpieza por Zona', SNACKS: 'Snacks'
+        };
+        const KNOWN_EXTRA_IDS = new Set(['MOTOR', 'CHASIS', 'AROMA', 'ARMORALL', 'LIMP_FOCOS', 'ASPIRADO_CAJUELA', 'BOLEADA', 'LIMP_ZONA', 'PINO', 'SNACKS']);
+
+        // Los extras capturados a mano en "Varios" llevan id VARIOS-<timestamp> y el texto
+        // que escribió el usuario como label. Se doblan al extra canónico por nombre.
+        const normText = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        const EXTRA_ALIAS_RULES = [
+            ['BOLEADA', /\bboleadas?\b/],
+            ['PINO', /\bpinos?\b/],
+            ['MOTOR', /\bmotor\b/],
+            ['CHASIS', /\bchass?is\b/],
+            ['ARMORALL', /\barmor\s*all\b/],
+            ['LIMP_FOCOS', /\bfocos?\b/],
+            ['ASPIRADO_CAJUELA', /\bcajuela\b/],
+            ['LIMP_ZONA', /limpieza (por|de) zona/],
+            ['AROMA', /\baromas?\b/],
+        ];
+        const matchExtraAlias = (label) => {
+            const n = normText(label);
+            for (const [id, rx] of EXTRA_ALIAS_RULES) if (rx.test(n)) return id;
+            return null;
+        };
 
         const CustomDateRangePicker = ({ startDate, endDate, setStartDate, setEndDate }) => {
             const [isOpen, setIsOpen] = useState(false);
@@ -519,16 +544,29 @@
 
                 // --- Extras y Upsell ---
                 const extraAgg = {};
+                const manualAgg = {};
                 let ticketsWithExtras = 0;
                 let extrasRevenue = 0;
                 fTickets.forEach(t => {
                     const exs = Array.isArray(t.extras) ? t.extras : [];
                     if (exs.length > 0) ticketsWithExtras += 1;
                     exs.forEach(e => {
-                        const id = EXTRA_CANON[e.id] || e.id || 'OTRO';
-                        const x = extraAgg[id] || (extraAgg[id] = { id, label: EXTRA_LABELS[id] || e.label || id, count: 0, revenue: 0 });
+                        let id = EXTRA_CANON[e.id] || e.id || 'OTRO';
+                        let manual = false;
+                        // Capturas manuales ("Varios") o ids desconocidos: doblar al extra canónico por nombre
+                        if (!KNOWN_EXTRA_IDS.has(id)) {
+                            manual = true;
+                            const aliasId = matchExtraAlias(e.label);
+                            id = aliasId || ('MANUAL:' + normText(e.label));
+                            const mKey = normText(e.label);
+                            const m = manualAgg[mKey] || (manualAgg[mKey] = { label: (e.label || '').trim() || '(sin texto)', matchedId: aliasId, count: 0, revenue: 0 });
+                            m.count += 1;
+                            m.revenue += (e.price || 0);
+                        }
+                        const x = extraAgg[id] || (extraAgg[id] = { id, label: EXTRA_LABELS[id] || e.label || id, count: 0, revenue: 0, manualCount: 0 });
                         x.count += 1;
                         x.revenue += (e.price || 0);
+                        if (manual) x.manualCount += 1;
                         extrasRevenue += (e.price || 0);
                     });
                 });
@@ -536,6 +574,8 @@
                     ...x,
                     avgPrice: x.count ? x.revenue / x.count : 0
                 })).sort((a, b) => b.revenue - a.revenue);
+                const manualExtras = Object.values(manualAgg).sort((a, b) => b.revenue - a.revenue);
+                const manualExtrasTotal = manualExtras.reduce((acc, m) => acc + m.revenue, 0);
                 const upsellRate = fTickets.length ? (ticketsWithExtras / fTickets.length) * 100 : 0;
                 const extraPerTicket = fTickets.length ? extrasRevenue / fTickets.length : 0;
 
@@ -680,6 +720,7 @@
                     expenseCategories, extraordinaryCategories,
                     serviceMix, sizeMix, topVehicles,
                     extrasMix, upsellRate, extrasRevenue, extraPerTicket, ticketsWithExtras,
+                    manualExtras, manualExtrasTotal,
                     snacks,
                     employeePerformance,
                     armorAllPerWash, totalArmorAllCost, salariedCount,
@@ -1249,7 +1290,10 @@
                                             <tr><td colSpan="4" className="p-4 text-center text-slate-400">Sin extras vendidos en este periodo.</td></tr>
                                         ) : processed.extrasMix.map(x => (
                                             <tr key={x.id} className="border-b last:border-0 hover:bg-slate-50">
-                                                <td className="p-3 font-medium text-slate-800">{x.label}</td>
+                                                <td className="p-3 font-medium text-slate-800">
+                                                    {x.label}
+                                                    {x.manualCount > 0 && <span className="ml-2 inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700" title="Incluye capturas manuales del campo Varios">{x.manualCount} manual</span>}
+                                                </td>
                                                 <td className="p-3 text-right text-slate-600">{formatInt(x.count)}</td>
                                                 <td className="p-3 text-right text-slate-600">{formatCurrency(x.avgPrice)}</td>
                                                 <td className="p-3 text-right font-bold text-slate-800">{formatCurrency(x.revenue)}</td>
@@ -1292,6 +1336,45 @@
                                 </table>
                             </div>
                         </div>
+
+                        {/* MANUAL "VARIOS" AUDIT */}
+                        {processed.manualExtras.length > 0 && (
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto mt-6">
+                                <h3 className="font-bold text-slate-700 mb-1 flex items-center gap-2"><ShieldAlert size={18} className="text-amber-500" /> Capturas Manuales en "Varios"</h3>
+                                <p className="text-xs text-slate-400 mb-4">Texto escrito a mano en el campo "Varios (Costo Extra)" de Nueva Orden. Cuando coincide con un extra existente, ya se combinó en la tabla de arriba — pero indica que el personal está escribiendo en lugar de usar el botón (y la comisión se calcula al 35% en vez de la comisión real del extra).</p>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 border-b">
+                                        <tr>
+                                            <th className="p-3">Texto capturado</th>
+                                            <th className="p-3">Coincide con</th>
+                                            <th className="p-3 text-right">Veces</th>
+                                            <th className="p-3 text-right">Ingresos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {processed.manualExtras.map((m, i) => (
+                                            <tr key={i} className="border-b last:border-0 hover:bg-slate-50">
+                                                <td className="p-3 font-medium text-slate-800">"{m.label}"</td>
+                                                <td className="p-3">{m.matchedId
+                                                    ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">{EXTRA_LABELS[m.matchedId] || m.matchedId} — usar el botón</span>
+                                                    : <span className="text-slate-400 text-xs">Cargo genuino</span>}
+                                                </td>
+                                                <td className="p-3 text-right text-slate-600">{formatInt(m.count)}</td>
+                                                <td className="p-3 text-right font-bold text-slate-800">{formatCurrency(m.revenue)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr className="bg-slate-50 font-bold text-slate-800">
+                                            <td className="p-3">TOTAL MANUAL</td>
+                                            <td className="p-3"></td>
+                                            <td className="p-3 text-right">{formatInt(processed.manualExtras.reduce((a, m) => a + m.count, 0))}</td>
+                                            <td className="p-3 text-right">{formatCurrency(processed.manualExtrasTotal)}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        )}
                     </div>
 
                     {/* NEW SECTION: DAILY TRENDS */}
