@@ -244,6 +244,23 @@
             }).format(amount);
         };
 
+        // Descripción legible de los extras de un ticket, ej: "1 Boleada, 2 Pinos"
+        const describeTicketItems = (ticket) => {
+            if (!ticket) return '';
+            const counts = new Map();
+            const bump = (label, qty) => counts.set(label, (counts.get(label) || 0) + qty);
+
+            (ticket.extras || []).forEach(e => bump(e.label || 'Extra', 1));
+            if (ticket.snackCount > 0) bump('Snack', ticket.snackCount);
+
+            // Solo pluraliza etiquetas de una palabra ("Pino" -> "Pinos"), no "Boleada (Caja)"
+            const pluralize = (label, count) => (count > 1 && /^[^\s]+[^s\s]$/i.test(label)) ? `${label}s` : label;
+
+            return Array.from(counts.entries())
+                .map(([label, count]) => `${count} ${pluralize(label, count)}`)
+                .join(', ');
+        };
+
         const filterRange = (ts, start, end) => {
             if (!ts) return false;
             const date = new Date(ts.toDate ? ts.toDate() : ts);
@@ -901,8 +918,9 @@ Firma: __________________
 
             generateCorte: (data) => {
                 const doc = new jsPDF();
-                const { totals, itemStats, expenses, cashIns, arqueos } = data;
+                const { totals, itemStats, expenses, cashIns, arqueos, drops } = data;
                 const pageWidth = doc.internal.pageSize.width;
+                const pageHeight = doc.internal.pageSize.height;
 
                 const lightGrey = [240, 240, 240];
                 const black = [0, 0, 0];
@@ -997,9 +1015,63 @@ Firma: __________________
                     });
                 }
 
+                currentY = doc.lastAutoTable.finalY + 6;
+                if (drops && drops.length > 0) {
+                    if (currentY > pageHeight - 40) {
+                        doc.addPage();
+                        currentY = 20;
+                    }
+                    doc.setFontSize(11);
+                    doc.text("Desglose de Retiros (Envíos)", 14, currentY);
+
+                    const dropStamp = (ts) => {
+                        const d = ts && ts.toDate ? ts.toDate() : (ts instanceof Date ? ts : new Date(ts));
+                        if (isNaN(d.getTime())) return '-';
+                        const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        return data.type === 'Diario' ? time : `${getLocalDateStr(d)} ${time}`;
+                    };
+
+                    const dropBody = drops.map(d => [
+                        d.code || '-',
+                        dropStamp(d.timestamp),
+                        d.user || '-',
+                        formatCurrency(d.amountMxn || 0),
+                        `$${(d.amountUsd || 0).toFixed(2)}`
+                    ]);
+                    dropBody.push([
+                        `TOTAL (${drops.length} ${drops.length === 1 ? 'retiro' : 'retiros'})`,
+                        '',
+                        '',
+                        formatCurrency(totals.dropsMxn),
+                        `$${totals.dropsUsd.toFixed(2)}`
+                    ]);
+
+                    autoTable(doc, {
+                        startY: currentY + 2,
+                        head: [['CÓDIGO', data.type === 'Diario' ? 'HORA' : 'FECHA / HORA', 'USUARIO', 'MXN', 'USD']],
+                        body: dropBody,
+                        theme: 'striped',
+                        headStyles: { fillColor: lightGrey, textColor: black, fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] },
+                        columnStyles: {
+                            3: { halign: 'right' },
+                            4: { halign: 'right' }
+                        },
+                        styles: { fontSize: 8, cellPadding: 1.5, textColor: black },
+                        didParseCell: (hookData) => {
+                            if (hookData.section === 'body' && hookData.row.index === dropBody.length - 1) {
+                                hookData.cell.styles.fontStyle = 'bold';
+                            }
+                        }
+                    });
+                }
+
                 currentY = doc.lastAutoTable.finalY + 10;
 
                 if (arqueos && arqueos.first && arqueos.last) {
+                    if (currentY > pageHeight - 60) {
+                        doc.addPage();
+                        currentY = 20;
+                    }
                     doc.setFontSize(11);
                     doc.text("Corte de Caja", 14, currentY);
 
@@ -2525,7 +2597,7 @@ const renderSizes = () => (
                                                     <div className="text-xs text-green-600 font-normal">${roundUsd(ticket.price).toFixed(2)} USD</div>
                                                 </div>
                                             </div>
-                                            <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || 'Extras'} <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size?.label || '-'}</span></div>
+                                            <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || describeTicketItems(ticket) || 'Extras'} {ticket.size?.label && <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size.label}</span>}</div>
                                         </div>
                                     );
                                 })}
@@ -2639,7 +2711,7 @@ const renderSizes = () => (
                                         </div>
                                         <div className="grid grid-cols-2 gap-2 text-sm text-left">
                                             <div><span className="text-gray-500 font-bold">Tamaño:</span> <span className="text-gray-800">{t.size?.label || 'N/A'}</span></div>
-                                            <div><span className="text-gray-500 font-bold">Paquete:</span> <span className="text-gray-800 font-bold text-blue-700">{t.service?.label || 'Solo Extras'}</span></div>
+                                            <div><span className="text-gray-500 font-bold">Paquete:</span> <span className="text-gray-800 font-bold text-blue-700">{t.service?.label || describeTicketItems(t) || 'Solo Extras'}</span></div>
                                         </div>
                                         {t.extras && t.extras.length > 0 && (
                                             <div className="mt-3 text-left">
@@ -3289,6 +3361,7 @@ const renderSizes = () => (
                     tickets: corteTickets,
                     expenses: corteExpenses.filter(e => e.status === 'APPROVED'),
                     cashIns: corteCashIns,
+                    drops: [...corteDrops].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)),
                     itemStats: itemStats,
                     arqueos: {
                         first: relevantArqueos.length > 0 ? relevantArqueos[0] : null,
