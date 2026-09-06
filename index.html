@@ -97,9 +97,14 @@
             { id: 'GENERAL', label: 'Lavado General' },
             { id: 'WAX', label: 'Lavado + Cera' },
             { id: 'COMPLETE', label: 'Paquete Completo' },
-            { id: 'PREMIUM', label: 'Paquete Premium' },
-            { id: 'PRESIDENTIAL', label: 'Paquete Presidencial' }
+            // retired: ya no se venden. Se conservan en SERVICES (y sus precios/comisiones en
+            // DEFAULTS) para que los tickets históricos, la nómina y los reportes sigan
+            // mostrando su etiqueta; ACTIVE_SERVICES es lo que se puede capturar/editar hoy.
+            { id: 'PREMIUM', label: 'Paquete Premium', retired: true },
+            { id: 'PRESIDENTIAL', label: 'Paquete Presidencial', retired: true }
         ];
+
+        const ACTIVE_SERVICES = SERVICES.filter(s => !s.retired);
 
         const DEFAULTS = {
             PINS: {
@@ -226,8 +231,8 @@
         // Servicios no se pueden auto-corregir (necesitan tamaño): se avisa.
         const matchServiceName = (text) => {
             const n = normVariosText(text);
-            if (/\bcera\b/.test(n)) return SERVICES.find(s => s.id === 'WAX');
-            return SERVICES.find(s => n.includes(normVariosText(s.label)));
+            if (/\bcera\b/.test(n)) return ACTIVE_SERVICES.find(s => s.id === 'WAX');
+            return ACTIVE_SERVICES.find(s => n.includes(normVariosText(s.label)));
         };
 
         const handleDbAction = async (actionFn) => {
@@ -2081,7 +2086,7 @@ const renderSizes = () => (
                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
                     <h3 className="font-bold mb-3 text-gray-700 flex items-center"><FileText className="w-5 h-5 mr-2" /> 3. Servicio</h3>
                     <div className={`space-y-2 mb-4 ${isDesktop ? 'text-sm' : ''}`}>
-                        {SERVICES.map(s => {
+                        {ACTIVE_SERVICES.map(s => {
                             const price = size && prices[s.id] ? prices[s.id][size.id] : null;
                             return <button key={s.id} disabled={!size} onClick={() => setService(s)} className={`w-full ${isDesktop ? 'p-2' : 'p-3'} text-left rounded-lg border-2 flex justify-between items-center transition-all ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 opacity-90 hover:bg-gray-50'}`}><span>{s.label}</span>{price !== null && <span className="bg-white px-2 py-1 rounded text-sm shadow-sm border">${price}</span>}</button>;
                         })}
@@ -4115,7 +4120,7 @@ const renderSizes = () => (
                         <table className="w-full text-sm text-left border-collapse">
                             <thead><tr className="bg-gray-100"><th className="p-3 border">Servicio</th>{SIZES.map(s => <th key={s.id} className="p-3 border">{s.label}</th>)}</tr></thead>
                             <tbody>
-                                {SERVICES.map(svc => (
+                                {ACTIVE_SERVICES.map(svc => (
                                     <tr key={svc.id}>
                                         <td className="p-3 border font-medium">{svc.label}</td>
                                         {SIZES.map(size => (
