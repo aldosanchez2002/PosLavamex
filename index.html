@@ -251,6 +251,20 @@
             }).format(amount);
         };
 
+        // Igual que formatCurrency pero sin los centavos cuando el monto es cerrado
+        // (los totales de ticket siempre lo son). Si llegara a traer centavos se
+        // muestran, para no redondear dinero en pantalla.
+        const formatCurrencyShort = (amount) => {
+            const n = Number(amount) || 0;
+            if (!Number.isInteger(n)) return formatCurrency(n);
+            return new Intl.NumberFormat('es-MX', {
+                style: 'currency',
+                currency: 'MXN',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(n);
+        };
+
         // Descripción legible de los extras de un ticket, ej: "1 Boleada, 2 Pinos"
         const describeTicketItems = (ticket) => {
             if (!ticket) return '';
@@ -2600,7 +2614,7 @@ const renderSizes = () => (
                                                     <span className="truncate">#{ticket.id.slice(-4).toUpperCase()}{ticket.vehicleDesc ? <span className="uppercase"> - {ticket.vehicleDesc}</span> : ''}</span>
                                                 </div>
                                                 <div className="text-right flex-shrink-0">
-                                                    <div className="whitespace-nowrap">{formatCurrency(ticket.price)} MXN</div>
+                                                    <div className="whitespace-nowrap">{formatCurrencyShort(ticket.price)} MXN</div>
                                                     <div className="text-xs text-green-600 font-normal">${roundUsd(ticket.price).toFixed(2)} USD</div>
                                                 </div>
                                             </div>
