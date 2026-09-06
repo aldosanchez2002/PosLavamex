@@ -117,10 +117,10 @@
         const EXTRA_LABELS = {
             PINO: 'Pino', BOLEADA: 'Boleada', MOTOR: 'Lavado Motor', CHASIS: 'Chasis',
             AROMA: 'Aroma', ARMORALL: 'Armor-All', LIMP_FOCOS: 'Limpieza de Focos',
-            ASPIRADO_CAJUELA: 'Aspirado de Cajuela', LIMP_ZONA: 'Limpieza por Zona', SNACKS: 'Snacks',
+            ASPIRADO_CAJUELA: 'Aspirado de Cajuela', LIMP_ZONA: 'Limpieza por Zona', CREMA_ASIENTOS: 'Crema Asientos', SNACKS: 'Snacks',
             RZR_CHICO: 'Razer Chico', RZR_GRANDE: 'Razer Grande'
         };
-        const KNOWN_EXTRA_IDS = new Set(['MOTOR', 'CHASIS', 'AROMA', 'ARMORALL', 'LIMP_FOCOS', 'ASPIRADO_CAJUELA', 'BOLEADA', 'LIMP_ZONA', 'PINO', 'SNACKS', 'RZR_CHICO', 'RZR_GRANDE']);
+        const KNOWN_EXTRA_IDS = new Set(['MOTOR', 'CHASIS', 'AROMA', 'ARMORALL', 'LIMP_FOCOS', 'ASPIRADO_CAJUELA', 'BOLEADA', 'LIMP_ZONA', 'CREMA_ASIENTOS', 'PINO', 'SNACKS', 'RZR_CHICO', 'RZR_GRANDE']);
 
         // Los extras capturados a mano en "Varios" llevan id VARIOS-<timestamp> y el texto
         // que escribió el usuario como label. Se doblan al extra canónico por nombre.
@@ -155,6 +155,7 @@
             ['ARMORALL', ['armorall', 'armor']],
             ['LIMP_FOCOS', ['focos', 'foco']],
             ['ASPIRADO_CAJUELA', ['cajuela']],
+            ['CREMA_ASIENTOS', ['crema', 'cremas']],
             ['LIMP_ZONA', ['zona']],
             ['AROMA', ['aroma', 'aromas']],
         ];
