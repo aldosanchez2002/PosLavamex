@@ -127,19 +127,19 @@
                 PRESIDENTIAL: { AUTO: 539, SUV_CHICA: 679, PICKUP: 812, SUV_GDE: 812 },
             },
             EXTRAS: [
-                { id: 'MOTOR', label: 'Lavado Motor', price: 400, commission: 140 },
+                { id: 'MOTOR', label: 'Lavar Motor', price: 400, commission: 140 },
                 { id: 'CHASIS', label: 'Chasis', price: 400, commission: 140 },
                 { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
                 { id: 'ARMORALL', label: 'Armor-All', price: 40, commission: 14 },
-                { id: 'LIMP_FOCOS', label: 'Limpieza de Focos', price: 340, commission: 120 },
-                { id: 'ASPIRADO_CAJUELA', label: 'Aspirado de Cajuela', price: 40, commission: 14 },
+                { id: 'LIMP_FOCOS', label: 'Limpiar Focos', price: 340, commission: 120 },
+                { id: 'ASPIRADO_CAJUELA', label: 'Aspirar Cajuela', price: 40, commission: 14 },
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
-                { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
+                { id: 'LIMP_ZONA', label: 'Limpiar Zona', price: 200, commission: 70 },
                 { id: 'CREMA_ASIENTOS', label: 'Crema Asientos', price: 300, commission: 100 },
                 { id: 'RZR_CHICO', label: 'Razer Chico', price: 640, commission: 224 },
                 { id: 'RZR_GRANDE', label: 'Razer Grande', price: 800, commission: 280 },
-                { id: 'ALFOMBRA', label: 'Lavado de Alfombra', price: 240, commission: 84 },
-                { id: 'ASIENTOS', label: 'Lavado de Asientos', price: 240, commission: 84 },
+                { id: 'ALFOMBRA', label: 'Lavar Alfombra', price: 240, commission: 84 },
+                { id: 'ASIENTOS', label: 'Lavar Asientos', price: 240, commission: 84 },
             ]
         };
 
@@ -1368,7 +1368,10 @@ Firma: __________________
                         const dbItems = extrasSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
                         const cleanList = DEFAULTS.EXTRAS.map(def => {
                             const match = dbItems.find(item => item.id === def.id);
-                            return match ? { ...def, ...match } : def;
+                            // La BD manda en precio y comisión (se editan en Precios), pero el
+                            // nombre del extra vive en el código: así un renombre del catálogo
+                            // se aplica solo, sin tener que tocar cada doc de Firestore.
+                            return match ? { ...def, ...match, label: def.label } : def;
                         });
                         setExtrasList(cleanList);
                     } else {
@@ -2013,6 +2016,20 @@ Firma: __________________
             );
         };
 
+        // El layout de 3 columnas de caja/admin solo cabe en pantallas anchas. En una ventana
+        // angosta (tablet vertical, media pantalla) se usa la captura por pasos del entrada,
+        // que sí escala hacia abajo.
+        const useIsWide = (min = 1024) => {
+            const [wide, setWide] = useState(window.innerWidth >= min);
+            useEffect(() => {
+                const onResize = () => setWide(window.innerWidth >= min);
+                window.addEventListener('resize', onResize);
+                onResize();
+                return () => window.removeEventListener('resize', onResize);
+            }, [min]);
+            return wide;
+        };
+
         // Paso colapsable de la captura móvil: al cerrarse deja una sola fila con lo elegido,
         // y toda la fila es el botón para volver a abrirlo.
         const StepSection = ({ num, icon: Icon, title, summary, done, open, onToggle, children }) => (
@@ -2047,7 +2064,8 @@ Firma: __________________
             const [deleteModal, setDeleteModal] = useState(null);
             const [deleteReason, setDeleteReason] = useState('');
 
-            const isDesktop = role === 'CASHIER' || role === 'ADMIN';
+            const isWide = useIsWide();
+            const isDesktop = (role === 'CASHIER' || role === 'ADMIN') && isWide;
             const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
 
             useEffect(() => {
@@ -2144,7 +2162,7 @@ Firma: __________________
             const renderSizes = () => renderCard(Car, '1. Tamaño', sizesContent());
 
             const washersContent = () => (
-                <div className={`grid ${isDesktop ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-3'}`}>
+                <div className={`grid ${isDesktop ? 'grid-cols-2 gap-2' : 'grid-cols-2 sm:grid-cols-3 gap-3'}`}>
                     {employees.filter(e => e.active && e.role !== 'BOLERO' && e.role !== 'SUPERVISOR').map(e => (
                         <button key={e.name} onClick={() => toggle(e.name)}
                             className={`${isDesktop ? 'p-2 text-sm' : 'p-4'} rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>
@@ -2165,23 +2183,23 @@ Firma: __________________
             );
             const renderServices = () => renderCard(FileText, '3. Servicio', servicesContent());
 
-            // Botón de un extra del catálogo. Boleada y Limpieza por Zona se venden varias veces
+            // Botón de un extra del catálogo. Boleada y Limpiar Zona se venden varias veces
             // en el mismo ticket, así que llevan contador en lugar de on/off.
             const renderExtraButton = (e) => {
                 const count = extras.filter(x => x.id === e.id).length;
                 if (e.id === 'BOLEADA' || e.id === 'LIMP_ZONA') {
                     return (
-                        <div key={e.id} className={`col-span-full w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}>
+                        <div key={e.id} className={`col-span-full w-full ${isDesktop ? 'p-2' : 'p-3'} rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}>
                             <span className="flex-1">{e.label} (+${e.price})</span>
                             <div className="flex items-center gap-2"><button onClick={() => removeExtra(e)} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button><span className="w-6 text-center font-bold">{count}</span><button onClick={() => addExtra(e)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button></div>
                         </div>
                     );
                 }
-                return <button key={e.id} onClick={() => toggleExtra(e)} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span className="pl-1">+${e.price}</span></button>;
+                return <button key={e.id} onClick={() => toggleExtra(e)} className={`w-full ${isDesktop ? 'p-2' : 'p-3'} rounded-lg border text-sm flex justify-between items-center gap-1 text-left transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span className="min-w-0">{e.label}</span><span className="shrink-0 whitespace-nowrap">+${e.price}</span></button>;
             };
 
             const stepper = (label, count, dec, inc, activeCls) => (
-                <div className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? activeCls : 'border-gray-200 hover:bg-gray-50'}`}>
+                <div className={`w-full ${isDesktop ? 'p-2' : 'p-3'} rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? activeCls : 'border-gray-200 hover:bg-gray-50'}`}>
                     <span className="flex-1">{label}</span>
                     <div className="flex items-center gap-2"><button onClick={dec} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button><span className="w-6 text-center font-bold">{count}</span><button onClick={inc} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button></div>
                 </div>
@@ -2192,7 +2210,7 @@ Firma: __________________
                     {groupedExtras.map(g => (g.items.length === 0 && g.id !== 'OTROS') ? null : (
                         <div key={g.id}>
                             <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">{g.label}</h4>
-                            <div className={`grid ${isDesktop ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
                                 {g.items.map(renderExtraButton)}
                                 {g.id === 'OTROS' && (
                                     <div className="col-span-full space-y-2">
@@ -2262,7 +2280,7 @@ Firma: __________________
                     <div className="flex-1 overflow-y-auto p-4">
                         {subTab === 'FORM' ? (
                             isDesktop ? (
-                                <div className="grid grid-cols-3 gap-4 h-full content-start">
+                                <div className="grid grid-cols-3 gap-4 h-full content-start [&>div]:min-w-0">
                                     <div className="flex flex-col gap-4">
                                         {renderSizes()}
                                         {renderWashers()}
@@ -2276,7 +2294,7 @@ Firma: __________________
                                     </div>
                                 </div>
                             ) : (
-                                <div className="max-w-2xl mx-auto space-y-3">
+                                <div className="max-w-3xl mx-auto space-y-3">
                                     <input
                                         value={desc}
                                         onChange={e => setDesc(e.target.value)}
