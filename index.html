@@ -246,6 +246,26 @@
             }
             return null;
         };
+        const shortTicketId = (id) => String(id || '').slice(-4).toUpperCase();
+
+        // "Conectar cliente": cuando un cliente trae dos vehículos (p. ej. camioneta y Razer)
+        // cada uno lleva su propio ticket —con su tamaño, servicio y lavadores— pero comparten
+        // groupId. Así caja no cobra uno y deja el otro abierto, y los reportes siguen contando
+        // un ticket por vehículo.
+        // Agrupa sin reordenar: el grupo se queda donde entró su primer ticket.
+        const groupTickets = (list) => {
+            const out = [];
+            const byGroup = {};
+            (list || []).forEach(t => {
+                if (!t.groupId) { out.push({ key: t.id, group: null, items: [t] }); return; }
+                if (byGroup[t.groupId]) { byGroup[t.groupId].items.push(t); return; }
+                const entry = { key: t.groupId, group: t.groupId, items: [t] };
+                byGroup[t.groupId] = entry;
+                out.push(entry);
+            });
+            return out;
+        };
+
         // Servicios no se pueden auto-corregir (necesitan tamaño): se avisa.
         const matchServiceName = (text) => {
             const n = normVariosText(text);
@@ -255,7 +275,7 @@
 
         const handleDbAction = async (actionFn) => {
             try {
-                await actionFn();
+                return await actionFn();
             } catch (e) {
                 alert("Error: " + e.message);
                 console.error(e);
@@ -1504,8 +1524,10 @@ Firma: __________________
                         await updateDoc(doc(db, "tickets", editingTicket.id), ticketData);
                         setEditingTicket(null);
                         if (role === 'CASHIER') setView('CASHIER');
+                        return editingTicket.id;
                     } else {
-                        await addDoc(collection(db, "tickets"), ticketData);
+                        const ref = await addDoc(collection(db, "tickets"), ticketData);
+                        return ref.id;
                     }
                 } finally { setIsSubmitting(false); }
             });
@@ -1827,6 +1849,28 @@ Firma: __________________
                 } finally { setIsSubmitting(false); }
             });
 
+            // Conectar cliente: deja la próxima orden ligada al ticket que se está viendo.
+            // Vive en el contexto para que caja también pueda iniciarla y caiga en Entrada.
+            const [connectTo, setConnectTo] = useState(null);
+            const startConnect = (ticket) => {
+                if (!ticket) return;
+                const group = ticket.groupId || ticket.id;
+                setEditingTicket(null);
+                setConnectTo({ group, shortId: shortTicketId(group), desc: ticket.vehicleDesc || '' });
+                setView('GREETER');
+                // El ticket ancla también lleva el groupId: si no, el grupo tendría un solo
+                // miembro y ni la lista ni el aviso de caja lo verían como cliente conectado.
+                // Solo se escribe si sigue pendiente (si ya se cobró, la conexión no aplica).
+                if (!ticket.groupId && tickets.some(x => x.id === ticket.id)) {
+                    handleDbAction(async () => {
+                        await updateDoc(doc(db, "tickets", ticket.id), { groupId: group });
+                    });
+                }
+            };
+            const disconnectTicket = (id) => handleDbAction(async () => {
+                await updateDoc(doc(db, "tickets", id), { groupId: null });
+            });
+
             const startEdit = (ticket) => { setEditingTicket(ticket); setView('GREETER'); };
             const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
 
@@ -1835,6 +1879,7 @@ Firma: __________________
                 prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
                 validateAndLogin, addPosCredential, updatePosCredential, deletePosCredential, resetPosCredential,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
+                connectTo, setConnectTo, startConnect, disconnectTicket,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, addAvance, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, processMultiPayment, addCashCount, addCashDrop, addCashIn,
                 updateEmployee, addAdminSnack, approveAdminSnack, deleteAdminSnack, addCortesia, approveCortesia, rejectCortesia,
@@ -2049,7 +2094,7 @@ Firma: __________________
         );
 
         const GreeterView = () => {
-            const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting, tickets, deleteTicket, startEdit, role, snackPrice } = useContext(AppContext);
+            const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting, tickets, deleteTicket, startEdit, role, snackPrice, connectTo, setConnectTo, startConnect, disconnectTicket } = useContext(AppContext);
             const [subTab, setSubTab] = useState('FORM');
             const [size, setSize] = useState(null);
             const [service, setService] = useState(null);
@@ -2061,6 +2106,7 @@ Firma: __________________
             const [vDesc, setVDesc] = useState('');
             const [vPrice, setVPrice] = useState('');
             const [openStep, setOpenStep] = useState('SIZE');
+            const [lastSaved, setLastSaved] = useState(null);
             const [deleteModal, setDeleteModal] = useState(null);
             const [deleteReason, setDeleteReason] = useState('');
 
@@ -2082,6 +2128,8 @@ Firma: __________________
                     // Al editar no se auto-avanza: todo cerrado, pero con el resumen a la vista
                     // para revisar el ticket de un vistazo.
                     setOpenStep(null);
+                    setLastSaved(null);
+                    setConnectTo(null);
                 } else {
                     setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); setPinoCount(0);
                     setOpenStep('SIZE');
@@ -2133,14 +2181,24 @@ Firma: __________________
             const totalPrice = basePrice + extrasPrice + (snackCount * snackPrice) + (pinoCount * pinoPrice);
             const extrasCount = extras.length + pinoCount + snackCount;
             const extrasSummary = extrasCount > 0 ? `${extrasCount} · $${extrasPrice + (snackCount * snackPrice) + (pinoCount * pinoPrice)}` : '';
-            const handleSubmit = () => {
+            const handleSubmit = async () => {
                 if (!canSubmit) return;
                 const finalExtras = [...extras];
                 for (let i = 0; i < pinoCount; i++) {
                     finalExtras.push({ id: 'PINO', label: 'Pino', price: pinoPrice, commission: 0 });
                 }
-                saveTicket({ size, service, washers, extras: finalExtras, vehicleDesc: desc, snackCount });
-                if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); setPinoCount(0); setOpenStep('SIZE'); }
+                const isNew = !editingTicket;
+                const connecting = isNew && connectTo ? connectTo : null;
+                const newId = await saveTicket({
+                    size, service, washers, extras: finalExtras, vehicleDesc: desc, snackCount,
+                    ...(connecting ? { groupId: connecting.group } : {})
+                });
+                // Si el guardado falló no se limpia la captura: el ticket se volvería a teclear.
+                if (isNew && newId) {
+                    setLastSaved({ id: newId, desc, price: totalPrice, groupId: connecting ? connecting.group : null });
+                    setConnectTo(null);
+                    setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); setPinoCount(0); setOpenStep('SIZE');
+                }
             };
             const renderCard = (Icon, title, content) => (
                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
@@ -2277,7 +2335,26 @@ Firma: __________________
                         </div>
                     )}
 
+                    {connectTo && !editingTicket && subTab === 'FORM' && (
+                        <div className="bg-indigo-100 p-3 font-bold text-indigo-900 flex justify-between items-center gap-3 px-4 shadow-sm z-10 shrink-0">
+                            <span className="flex items-center gap-2 text-sm min-w-0"><Layers className="w-4 h-4 shrink-0" /> <span className="truncate">CLIENTE CONECTADO A #{connectTo.shortId}{connectTo.desc ? ` · ${connectTo.desc.toUpperCase()}` : ''}</span></span>
+                            <Button onClick={() => setConnectTo(null)} variant="secondary" className="text-xs py-1 h-8 shrink-0">Desconectar</Button>
+                        </div>
+                    )}
+
                     <div className="flex-1 overflow-y-auto p-4">
+                        {subTab === 'FORM' && lastSaved && !editingTicket && (
+                            <div className="max-w-3xl mx-auto mb-3 bg-green-50 border-2 border-green-500 rounded-xl p-3 flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="font-bold text-green-800 flex items-center gap-2"><Check className="w-5 h-5 shrink-0" /> Ticket #{shortTicketId(lastSaved.id)} creado</div>
+                                    <div className="text-xs text-green-700 truncate">{lastSaved.desc ? lastSaved.desc.toUpperCase() : 'Sin descripción'} · {formatCurrency(lastSaved.price)}</div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <Button onClick={() => { startConnect({ id: lastSaved.id, groupId: lastSaved.groupId, vehicleDesc: lastSaved.desc }); setLastSaved(null); }} className="text-sm py-2 px-3"><PlusCircle size={16} /> Conectar cliente</Button>
+                                    <button onClick={() => setLastSaved(null)} className="text-green-700 p-2 hover:bg-green-100 rounded-lg" title="Cerrar"><X size={18} /></button>
+                                </div>
+                            </div>
+                        )}
                         {subTab === 'FORM' ? (
                             isDesktop ? (
                                 <div className="grid grid-cols-3 gap-4 h-full content-start [&>div]:min-w-0">
@@ -2331,7 +2408,8 @@ Firma: __________________
                         ) : (
                             <div className="max-w-3xl mx-auto space-y-4">
                                 {tickets.length === 0 && <div className="text-center text-gray-400 py-10">No hay vehículos en proceso.</div>}
-                                {tickets.map(t => (
+                                {groupTickets(tickets).map(g => {
+                                    const cards = g.items.map(t => (
                                     <div key={t.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
                                         <div className="flex justify-between items-start mb-3 border-b pb-3">
                                             <div>
@@ -2369,13 +2447,27 @@ Firma: __________________
                                         </div>
 
                                         {role !== 'CASHIER' && (
-                                            <div className="flex gap-3 pt-2">
+                                            <div className="flex flex-wrap gap-3 pt-2">
                                                 <Button onClick={() => startEdit(t)} variant="warning" className="flex-1 py-2 text-sm"><Pencil size={16} /> Editar</Button>
+                                                <Button onClick={() => startConnect(t)} variant="blueLight" className="flex-1 py-2 text-sm whitespace-nowrap"><PlusCircle size={16} /> Conectar cliente</Button>
                                                 <Button onClick={() => { setDeleteModal(t.id); setDeleteReason(''); }} variant="danger" className="flex-1 py-2 text-sm"><Trash2 size={16} /> Borrar</Button>
+                                                {t.groupId && <Button onClick={() => disconnectTicket(t.id)} variant="ghost" className="py-2 text-xs">Desconectar</Button>}
                                             </div>
                                         )}
                                     </div>
-                                ))}
+                                    ));
+                                    if (!g.group || g.items.length < 2) return cards;
+                                    const groupTotal = g.items.reduce((a, x) => a + (x.price || 0), 0);
+                                    return (
+                                        <div key={g.key} className="border-2 border-indigo-300 bg-indigo-50 rounded-xl p-2 space-y-2">
+                                            <div className="flex justify-between items-center px-2 pt-1 text-indigo-800">
+                                                <span className="font-bold text-xs uppercase tracking-wider flex items-center gap-2"><Layers size={14} /> Cliente conectado · {g.items.length} vehículos</span>
+                                                <span className="font-bold">{formatCurrency(groupTotal)}</span>
+                                            </div>
+                                            {cards}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -2404,7 +2496,7 @@ Firma: __________________
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, processMultiPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, addAvance, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList, addAdminSnack, cashCounts, addCortesia } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, processMultiPayment, deleteTicket, startEdit, startConnect, updateSnacks, updateQuickItem, addDeduction, addExpense, addAvance, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList, addAdminSnack, cashCounts, addCortesia } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showAdminSnack, setShowAdminSnack] = useState(false);
@@ -2435,6 +2527,7 @@ Firma: __________________
             const [changeModal, setChangeModal] = useState(null);
             const [multiMode, setMultiMode] = useState(false);
             const [selectedIds, setSelectedIds] = useState([]);
+            const [connectWarn, setConnectWarn] = useState(null);
 
             const [declaredMxn, setDeclaredMxn] = useState('');
             const [declaredUsd, setDeclaredUsd] = useState('');
@@ -2660,6 +2753,18 @@ Firma: __________________
             }
 
             const multiTickets = selectedIds.map(id => tickets.find(x => x.id === id)).filter(Boolean);
+            // Otros tickets del mismo cliente conectado que siguen pendientes ("tickets" solo
+            // trae PENDING, así que lo que aparece aquí es lo que falta por cobrar).
+            const groupMates = t && t.groupId ? tickets.filter(x => x.groupId === t.groupId && x.id !== t.id) : [];
+            const groupTotal = t ? (t.price || 0) + groupMates.reduce((a, x) => a + (x.price || 0), 0) : 0;
+            const payCash = () => processPayment(({ changeMxn, changeUsd, isOnlyUsd }) => { if (changeMxn > 0.005 || changeUsd > 0.005) setChangeModal({ changeMxn, changeUsd, isOnlyUsd }); });
+            const chargeAll = () => {
+                setConnectWarn(null);
+                setActiveId(null);
+                setMultiMode(true);
+                setSelectedIds([t.id, ...groupMates.map(m => m.id)]);
+                setPayment({ mxn: '', usd: '' });
+            };
             const combinedPrice = multiTickets.reduce((sum, t) => sum + t.price, 0);
             let multiChangeMxn = 0;
             let multiChangeUsd = 0;
@@ -2714,7 +2819,8 @@ Firma: __________________
                             )}
 
                             <div className="overflow-y-auto flex-1 p-2 space-y-2">
-                                {tickets.map(ticket => {
+                                {groupTickets(tickets).map(g => {
+                                    const cards = g.items.map(ticket => {
                                     const isSelectedMulti = selectedIds.includes(ticket.id);
                                     const isActiveSingle = activeId === ticket.id;
                                     return (
@@ -2734,6 +2840,18 @@ Firma: __________________
                                                 </div>
                                             </div>
                                             <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || describeTicketItems(ticket) || 'Extras'} {ticket.size?.label && <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size.label}</span>}</div>
+                                        </div>
+                                    );
+                                    });
+                                    if (!g.group || g.items.length < 2) return cards;
+                                    const groupTotal = g.items.reduce((a, x) => a + (x.price || 0), 0);
+                                    return (
+                                        <div key={g.key} className="border-2 border-indigo-300 bg-indigo-50 rounded-lg p-1.5 space-y-1.5">
+                                            <div className="flex justify-between items-center px-1.5 pt-0.5 text-indigo-800 text-xs font-bold">
+                                                <span className="uppercase tracking-wide flex items-center gap-1.5"><Layers size={12} /> Cliente conectado · {g.items.length}</span>
+                                                <span>{formatCurrencyShort(groupTotal)}</span>
+                                            </div>
+                                            {cards}
                                         </div>
                                     );
                                 })}
@@ -2865,6 +2983,15 @@ Firma: __________________
                                             <div className="text-gray-500 font-bold text-xs uppercase mb-1">Lavadores:</div>
                                             <div className="text-gray-800 text-sm">{t.washers && t.washers.length > 0 ? t.washers.join(', ') : 'Sin Asignar'}</div>
                                         </div>
+                                        {t.groupId && (
+                                            <div className={`mt-3 text-left rounded-lg p-2 text-sm font-bold flex items-center gap-2 ${groupMates.length > 0 ? 'bg-indigo-50 border border-indigo-300 text-indigo-800' : 'bg-gray-50 border border-gray-200 text-gray-500'}`}>
+                                                <Layers size={16} className="shrink-0" />
+                                                {groupMates.length > 0
+                                                    ? <span>Cliente conectado · falta cobrar {groupMates.length === 1 ? `#${shortTicketId(groupMates[0].id)}` : `${groupMates.length} tickets`} ({formatCurrency(groupMates.reduce((a, x) => a + (x.price || 0), 0))})</span>
+                                                    : <span>Cliente conectado · los demás tickets ya se cobraron</span>}
+                                            </div>
+                                        )}
+                                        <button onClick={() => startConnect(t)} className="mt-2 w-full text-sm font-bold text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-lg py-2 flex items-center justify-center gap-2"><PlusCircle size={16} /> Conectar cliente</button>
                                     </div>
 
                                     <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -2920,8 +3047,8 @@ Firma: __________________
                                             <div className="flex gap-3">
                                                 {role !== 'CASHIER' && <Button onClick={() => deleteTicket(t.id)} variant="danger" title="Borrar"><Trash2 className="w-6 h-6" /></Button>}
                                                 {role !== 'CASHIER' && <Button onClick={() => startEdit(t)} variant="warning" title="Editar"><Pencil className="w-6 h-6" /></Button>}
-                                                <Button onClick={() => processPayment(({ changeMxn, changeUsd, isOnlyUsd }) => { if (changeMxn > 0.005 || changeUsd > 0.005) setChangeModal({ changeMxn, changeUsd, isOnlyUsd }); })} disabled={isSubmitting} variant="success" className="flex-1 shadow-lg">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</Button>
-                                                {role === 'CASHIER' && <Button onClick={processCardPayment} disabled={isSubmitting} title="Tarjeta"><CreditCard className="w-6 h-6" /></Button>}
+                                                <Button onClick={() => { if (groupMates.length > 0) { setConnectWarn('CASH'); return; } payCash(); }} disabled={isSubmitting} variant="success" className="flex-1 shadow-lg">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</Button>
+                                                {role === 'CASHIER' && <Button onClick={() => { if (groupMates.length > 0) { setConnectWarn('CARD'); return; } processCardPayment(); }} disabled={isSubmitting} title="Tarjeta"><CreditCard className="w-6 h-6" /></Button>}
                                             </div>
                                             <div className="text-center mt-2">
                                                 <button onClick={() => setShowCortesia(true)} className="text-xs text-gray-400 hover:text-gray-500 underline underline-offset-2">Solicitar cortesía</button>
@@ -2931,6 +3058,31 @@ Firma: __________________
                                 </div>
                             ) : <div className="text-gray-400 flex flex-col items-center my-auto"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
                         </div>
+
+                        {connectWarn && t && groupMates.length > 0 && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                                    <div className="flex items-center gap-2 text-indigo-800 font-bold text-lg mb-1"><Layers className="w-6 h-6" /> Cliente conectado</div>
+                                    <p className="text-gray-600 text-sm mb-4">Este cliente tiene {groupMates.length === 1 ? 'otro ticket' : `otros ${groupMates.length} tickets`} sin cobrar:</p>
+                                    <div className="space-y-2 mb-5">
+                                        {groupMates.map(m => (
+                                            <div key={m.id} className="flex justify-between items-center bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                                                <div className="min-w-0">
+                                                    <div className="font-bold text-gray-800">#{shortTicketId(m.id)} {m.vehicleDesc ? <span className="uppercase font-normal text-sm">· {m.vehicleDesc}</span> : ''}</div>
+                                                    <div className="text-xs text-gray-500">{m.service?.label || describeTicketItems(m) || 'Extras'} {m.size?.label || ''}</div>
+                                                </div>
+                                                <span className="font-bold text-gray-800 shrink-0 pl-2">{formatCurrency(m.price)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <Button onClick={chargeAll} variant="success" className="w-full py-3">Cobrar los {groupMates.length + 1} — {formatCurrency(groupTotal)}</Button>
+                                        <Button onClick={() => { const mode = connectWarn; setConnectWarn(null); if (mode === 'CARD') processCardPayment(); else payCash(); }} variant="secondary" className="w-full">Solo este ticket</Button>
+                                        <button onClick={() => setConnectWarn(null)} className="text-gray-400 text-sm py-1 hover:text-gray-600">Cancelar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {changeModal && (
                             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
