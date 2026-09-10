@@ -86,11 +86,16 @@
         const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
         const db = getFirestore(app);
 
+        // El Razer es un vehículo aparte: se captura como tamaño propio y, en lugar de los
+        // paquetes de lavado, ofrece sus dos medidas. Así un Razer es un ticket como cualquier
+        // otro (cuenta en mezcla por tamaño, por servicio, ticket promedio y rejilla de nómina)
+        // en vez de un extra pegado al ticket de otro vehículo.
         const SIZES = [
             { id: 'AUTO', label: 'Auto' },
             { id: 'SUV_CHICA', label: 'SUV Chica' },
             { id: 'PICKUP', label: 'Pick-Up / SUV MD' },
-            { id: 'SUV_GDE', label: 'SUV Gde' }
+            { id: 'SUV_GDE', label: 'SUV Gde' },
+            { id: 'RZR', label: 'Razer', services: ['RAZER_CHICO', 'RAZER_GRANDE'] }
         ];
 
         const SERVICES = [
@@ -101,10 +106,22 @@
             // DEFAULTS) para que los tickets históricos, la nómina y los reportes sigan
             // mostrando su etiqueta; ACTIVE_SERVICES es lo que se puede capturar/editar hoy.
             { id: 'PREMIUM', label: 'Paquete Premium', retired: true },
-            { id: 'PRESIDENTIAL', label: 'Paquete Presidencial', retired: true }
+            { id: 'PRESIDENTIAL', label: 'Paquete Presidencial', retired: true },
+            { id: 'RAZER_CHICO', label: 'Razer Chico', shortLabel: 'Chico' },
+            { id: 'RAZER_GRANDE', label: 'Razer Grande', shortLabel: 'Grande' }
         ];
 
         const ACTIVE_SERVICES = SERVICES.filter(s => !s.retired);
+
+        // Servicios que se pueden vender en un tamaño: los tamaños con lista propia (Razer)
+        // muestran solo la suya, y el resto muestra lo que no está reservado a ningún tamaño.
+        const RESERVED_SERVICE_IDS = new Set(SIZES.flatMap(s => s.services || []));
+        const servicesForSize = (sizeId) => {
+            const size = SIZES.find(s => s.id === sizeId);
+            if (size && size.services) return ACTIVE_SERVICES.filter(s => size.services.includes(s.id));
+            return ACTIVE_SERVICES.filter(s => !RESERVED_SERVICE_IDS.has(s.id));
+        };
+        const serviceFitsSize = (serviceId, sizeId) => servicesForSize(sizeId).some(s => s.id === serviceId);
 
         const DEFAULTS = {
             PINS: {
@@ -118,6 +135,8 @@
                 COMPLETE: { AUTO: 840, SUV_CHICA: 1040, PICKUP: 1160, SUV_GDE: 1640 },
                 PREMIUM: { AUTO: 1180, SUV_CHICA: 1440, PICKUP: 1620, SUV_GDE: 2100 },
                 PRESIDENTIAL: { AUTO: 1540, SUV_CHICA: 1940, PICKUP: 2320, SUV_GDE: 2320 },
+                RAZER_CHICO: { RZR: 640 },
+                RAZER_GRANDE: { RZR: 800 },
             },
             COMMISSIONS: {
                 GENERAL: { AUTO: 70, SUV_CHICA: 84, PICKUP: 126, SUV_GDE: 126 },
@@ -125,6 +144,8 @@
                 COMPLETE: { AUTO: 294, SUV_CHICA: 364, PICKUP: 406, SUV_GDE: 574 },
                 PREMIUM: { AUTO: 413, SUV_CHICA: 504, PICKUP: 567, SUV_GDE: 735 },
                 PRESIDENTIAL: { AUTO: 539, SUV_CHICA: 679, PICKUP: 812, SUV_GDE: 812 },
+                RAZER_CHICO: { RZR: 224 },
+                RAZER_GRANDE: { RZR: 280 },
             },
             EXTRAS: [
                 { id: 'MOTOR', label: 'Lavar Motor', price: 400, commission: 140 },
@@ -136,8 +157,10 @@
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
                 { id: 'LIMP_ZONA', label: 'Limpiar Zona', price: 200, commission: 70 },
                 { id: 'CREMA_ASIENTOS', label: 'Crema Asientos', price: 300, commission: 100 },
-                { id: 'RZR_CHICO', label: 'Razer Chico', price: 640, commission: 224 },
-                { id: 'RZR_GRANDE', label: 'Razer Grande', price: 800, commission: 280 },
+                // Retirados: el Razer ahora se captura como tamaño. Se conservan en el catálogo
+                // para que los tickets y la nómina de antes sigan mostrando su etiqueta y comisión.
+                { id: 'RZR_CHICO', label: 'Razer Chico', price: 640, commission: 224, retired: true },
+                { id: 'RZR_GRANDE', label: 'Razer Grande', price: 800, commission: 280, retired: true },
                 { id: 'ALFOMBRA', label: 'Lavar Alfombra', price: 240, commission: 84 },
                 { id: 'ASIENTOS', label: 'Lavar Asientos', price: 240, commission: 84 },
             ]
@@ -235,11 +258,6 @@
             const has = (kw) => words.some(w => fuzzyWordMatch(w, kw));
             // "moto(s)" está a 1 letra de "motor" pero es otra cosa: no auto-corregir
             const isMoto = words.some(w => w === 'moto' || w === 'motos' || w === 'motocicleta');
-            if (RZR_KEYWORDS.some(has)) {
-                if (has('grande') || has('grandes') || words.includes('gde')) return 'RZR_GRANDE';
-                if (has('chico') || has('chica')) return 'RZR_CHICO';
-                return (typeof price === 'number' && !isNaN(price) && Math.abs(price - 800) < Math.abs(price - 640)) ? 'RZR_GRANDE' : 'RZR_CHICO';
-            }
             for (const [id, kws] of EXTRA_KEYWORDS) {
                 if (id === 'MOTOR' && isMoto) continue;
                 if (kws.some(has)) return id;
@@ -247,6 +265,17 @@
             return null;
         };
         const shortTicketId = (id) => String(id || '').slice(-4).toUpperCase();
+
+        // La BD manda en lo que ya tiene capturado; lo que falta (un servicio o tamaño recién
+        // agregado al catálogo) toma el valor de fábrica, para no vender en $0 mientras alguien
+        // abre Precios y guarda. Al primer guardado la BD ya queda completa.
+        const withDefaultRates = (defaults, dbData) => {
+            const out = { ...defaults };
+            Object.entries(dbData || {}).forEach(([svcId, bySize]) => {
+                out[svcId] = { ...(defaults[svcId] || {}), ...bySize };
+            });
+            return out;
+        };
 
         // "Conectar cliente": cuando un cliente trae dos vehículos (p. ej. camioneta y Razer)
         // cada uno lleva su propio ticket —con su tamaño, servicio y lavadores— pero comparten
@@ -264,6 +293,11 @@
                 out.push(entry);
             });
             return out;
+        };
+
+        const isRazerText = (text) => {
+            const words = normVariosText(text).split(' ').filter(Boolean);
+            return words.some(w => RZR_KEYWORDS.some(k => fuzzyWordMatch(w, k)));
         };
 
         // Servicios no se pueden auto-corregir (necesitan tamaño): se avisa.
@@ -718,7 +752,7 @@ ${ticket.vehicleDesc ? ticket.vehicleDesc.toUpperCase() : ''}
 Fecha: ${new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
 Metodo: ${payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO'}
 --------------------------------
-${ticket.service ? ticket.service.label : 'General'} $${ticket.basePrice || 0}
+${ticket.service ? `${ticket.service.label} $${ticket.basePrice || 0}` : ''}
 ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label} $${e.price}`).join('\n') : ''}
 ${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount}) $${ticket.snackCount * (currentSnackPrice || 30)}` : ''}
 --------------------------------
@@ -1378,10 +1412,10 @@ Firma: __________________
                         getDocs(collection(db, "pos_credentials"))
                     ]);
 
-                    if (pricesSnap.exists()) setPrices(pricesSnap.data());
+                    if (pricesSnap.exists()) setPrices(withDefaultRates(DEFAULTS.PRICES, pricesSnap.data()));
                     else { setDoc(doc(db, "settings", "prices"), DEFAULTS.PRICES); setPrices(DEFAULTS.PRICES); }
 
-                    if (commissionsSnap.exists()) setCommissions(commissionsSnap.data());
+                    if (commissionsSnap.exists()) setCommissions(withDefaultRates(DEFAULTS.COMMISSIONS, commissionsSnap.data()));
                     else { setDoc(doc(db, "settings", "commissions"), DEFAULTS.COMMISSIONS); setCommissions(DEFAULTS.COMMISSIONS); }
 
                     if (!extrasSnap.empty) {
@@ -2167,7 +2201,14 @@ Firma: __________________
             const toggleStep = (k) => setOpenStep(prev => prev === k ? null : k);
             // Auto-avance: al elegir se colapsa el paso y se abre el siguiente. Si el siguiente
             // ya está resuelto (están corrigiendo un dato) solo se cierra, sin brincar.
-            const pickSize = (s) => { setSize(s); if (!isDesktop) setOpenStep(service ? null : 'SERVICE'); };
+            const pickSize = (s) => {
+                // Al cambiar entre Razer y un vehículo normal el servicio elegido deja de existir:
+                // se limpia para no guardar una combinación sin precio.
+                const keepService = service && serviceFitsSize(service.id, s.id);
+                if (!keepService) setService(null);
+                setSize(s);
+                if (!isDesktop) setOpenStep(keepService ? null : 'SERVICE');
+            };
             const pickService = (s) => { setService(s); if (!isDesktop) setOpenStep(washers.length > 0 ? null : 'WASHERS'); };
             const toggle = (item) => setWashers(prev => toggleSelection(prev, item, 3));
             const toggleExtra = (item) => setExtras(prev => toggleSelection(prev, item));
@@ -2176,6 +2217,9 @@ Firma: __________________
             const addVarios = () => {
                 const price = parseFloat(vPrice);
                 if (!vDesc || !price || price <= 0) return alert("Error.");
+                if (isRazerText(vDesc)) {
+                    return alert('⛔ El Razer se captura con el tamaño "Razer" y luego Chico o Grande — no en Varios.');
+                }
                 const svc = matchServiceName(vDesc);
                 if (svc) {
                     return alert(`⛔ "${vDesc}" es un servicio.\n\nSelecciona el Tamaño y el Servicio con los botones — no lo escribas en Varios.`);
@@ -2201,7 +2245,7 @@ Firma: __________________
             const canSubmit = ((size && service) || extras.length > 0 || snackCount > 0 || pinoCount > 0);
 
             const groupedExtras = (() => {
-                const visible = extrasList.filter(e => !['PINO', 'QA_PINO'].includes(e.id));
+                const visible = extrasList.filter(e => !e.retired && !['PINO', 'QA_PINO'].includes(e.id));
                 return EXTRA_GROUPS.map(g => ({ ...g, items: visible.filter(e => (EXTRA_GROUP_OF[e.id] || 'OTROS') === g.id) }));
             })();
             const basePrice = (size && service && prices[service.id]?.[size.id]) || 0;
@@ -2255,9 +2299,9 @@ Firma: __________________
 
             const servicesContent = () => (
                 <div className={`space-y-2 ${isDesktop ? 'text-sm' : ''}`}>
-                    {ACTIVE_SERVICES.map(s => {
+                    {(size ? servicesForSize(size.id) : ACTIVE_SERVICES.filter(s => !RESERVED_SERVICE_IDS.has(s.id))).map(s => {
                         const price = size && prices[s.id] ? prices[s.id][size.id] : null;
-                        return <button key={s.id} disabled={!size} onClick={() => pickService(s)} className={`w-full ${isDesktop ? 'p-2' : 'p-3'} text-left rounded-lg border-2 flex justify-between items-center transition-all ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 opacity-90 hover:bg-gray-50'}`}><span>{s.label}</span>{price !== null && <span className="bg-white px-2 py-1 rounded text-sm shadow-sm border">${price}</span>}</button>;
+                        return <button key={s.id} disabled={!size} onClick={() => pickService(s)} className={`w-full ${isDesktop ? 'p-2' : 'p-3'} text-left rounded-lg border-2 flex justify-between items-center transition-all ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 opacity-90 hover:bg-gray-50'}`}><span>{size && s.shortLabel ? s.shortLabel : s.label}</span>{price != null && <span className="bg-white px-2 py-1 rounded text-sm shadow-sm border">${price}</span>}</button>;
                     })}
                 </div>
             );
@@ -4432,10 +4476,12 @@ Firma: __________________
                                         <td className="p-3 border font-medium">{svc.label}</td>
                                         {SIZES.map(size => (
                                             <td key={size.id} className="p-2 border">
-                                                <div className="flex flex-col gap-1">
-                                                    <input type="number" value={editPrices[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('prices', svc.id, size.id, e.target.value)} className="border p-1 rounded w-full text-center text-green-700 font-bold" placeholder="Precio" />
-                                                    <input type="number" value={editComms[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('commissions', svc.id, size.id, e.target.value)} className="border p-1 rounded w-full text-center text-blue-600 text-xs" placeholder="Com" />
-                                                </div>
+                                                {serviceFitsSize(svc.id, size.id) ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <input type="number" value={editPrices[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('prices', svc.id, size.id, e.target.value)} className="border p-1 rounded w-full text-center text-green-700 font-bold" placeholder="Precio" />
+                                                        <input type="number" value={editComms[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('commissions', svc.id, size.id, e.target.value)} className="border p-1 rounded w-full text-center text-blue-600 text-xs" placeholder="Com" />
+                                                    </div>
+                                                ) : <div className="text-center text-gray-300">—</div>}
                                             </td>
                                         ))}
                                     </tr>
@@ -4457,7 +4503,7 @@ Firma: __________________
                                 </tr>
                             </thead>
                             <tbody>
-                                {editExtras.map((ex, idx) => (
+                                {editExtras.map((ex, idx) => ex.retired ? null : (
                                     <tr key={idx}>
                                         <td className="p-3 border font-bold text-gray-700 bg-gray-50">
                                             {ex.label}
