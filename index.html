@@ -2177,6 +2177,7 @@ Firma: __________________
             const [vDesc, setVDesc] = useState('');
             const [vPrice, setVPrice] = useState('');
             const [openStep, setOpenStep] = useState('SIZE');
+            const [showVarios, setShowVarios] = useState(false);
             const [deleteModal, setDeleteModal] = useState(null);
             const [deleteReason, setDeleteReason] = useState('');
 
@@ -2263,6 +2264,7 @@ Firma: __________________
             const basePrice = (size && service && prices[service.id]?.[size.id]) || 0;
             const extrasPrice = extras.reduce((a, b) => a + b.price, 0);
             const totalPrice = basePrice + extrasPrice + (snackCount * snackPrice) + (pinoCount * pinoPrice);
+            const variosList = extras.filter(e => e.id.startsWith('VARIOS'));
             const extrasCount = extras.length + pinoCount + snackCount;
             const extrasSummary = extrasCount > 0 ? `${extrasCount} · $${extrasPrice + (snackCount * snackPrice) + (pinoCount * pinoPrice)}` : '';
             const handleSubmit = async () => {
@@ -2276,6 +2278,7 @@ Firma: __________________
                 // Si el guardado falló no se limpia la captura: el ticket se volvería a teclear.
                 if (isNew && newId) {
                     setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); setPinoCount(0); setOpenStep('SIZE');
+                    setShowVarios(false);
                 }
             };
             const renderCard = (Icon, title, content) => (
@@ -2319,50 +2322,66 @@ Firma: __________________
             );
             const renderServices = () => renderCard(FileText, '3. Servicio', servicesContent());
 
-            // Botón de un extra del catálogo. Boleada y Limpiar Zona se venden varias veces
-            // en el mismo ticket, así que llevan contador en lugar de on/off.
+            // Todos los extras se ven igual: una tarjeta del mismo tamaño. Los que se venden
+            // varias veces en un ticket (Limpiar Zona, Boleada, Pinos, Snacks) muestran el -/+
+            // adentro de la tarjeta solo cuando ya llevan uno, para que la retícula no se parta.
+            const COUNTER_EXTRA_IDS = ['BOLEADA', 'LIMP_ZONA'];
+            const itemCard = (key, label, price, count, onAdd, onRemove, isCounter) => (
+                <button key={key} onClick={onAdd}
+                    className={`w-full ${isDesktop ? 'p-2' : 'p-3'} rounded-lg border text-sm text-left transition-all flex flex-col ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                    <span className="flex justify-between items-start gap-1 w-full">
+                        <span className="min-w-0">{label}</span>
+                        <span className="shrink-0 whitespace-nowrap">+${price}</span>
+                    </span>
+                    {count > 0 && isCounter && (
+                        <span className="flex items-center justify-between w-full mt-2">
+                            <span onClick={ev => { ev.stopPropagation(); onRemove(); }} className="w-9 h-9 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold text-gray-700">−</span>
+                            <span className="font-bold text-base">{count}</span>
+                            <span onClick={ev => { ev.stopPropagation(); onAdd(); }} className="w-9 h-9 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold text-gray-700">+</span>
+                        </span>
+                    )}
+                </button>
+            );
+
             const renderExtraButton = (e) => {
                 const count = extras.filter(x => x.id === e.id).length;
-                if (e.id === 'BOLEADA' || e.id === 'LIMP_ZONA') {
-                    return (
-                        <div key={e.id} className={`col-span-full w-full ${isDesktop ? 'p-2' : 'p-3'} rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}>
-                            <span className="flex-1">{e.label} (+${e.price})</span>
-                            <div className="flex items-center gap-2"><button onClick={() => removeExtra(e)} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button><span className="w-6 text-center font-bold">{count}</span><button onClick={() => addExtra(e)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button></div>
-                        </div>
-                    );
-                }
-                return <button key={e.id} onClick={() => toggleExtra(e)} className={`w-full ${isDesktop ? 'p-2' : 'p-3'} rounded-lg border text-sm flex justify-between items-center gap-1 text-left transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span className="min-w-0">{e.label}</span><span className="shrink-0 whitespace-nowrap">+${e.price}</span></button>;
+                const isCounter = COUNTER_EXTRA_IDS.includes(e.id);
+                return itemCard(e.id, e.label, e.price, count,
+                    () => isCounter ? addExtra(e) : toggleExtra(e),
+                    () => removeExtra(e), isCounter);
             };
-
-            const stepper = (label, count, dec, inc, activeCls) => (
-                <div className={`w-full ${isDesktop ? 'p-2' : 'p-3'} rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? activeCls : 'border-gray-200 hover:bg-gray-50'}`}>
-                    <span className="flex-1">{label}</span>
-                    <div className="flex items-center gap-2"><button onClick={dec} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button><span className="w-6 text-center font-bold">{count}</span><button onClick={inc} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button></div>
-                </div>
-            );
 
             const extrasContent = () => (
                 <div className="space-y-3">
                     {groupedExtras.map(g => (g.items.length === 0 && g.id !== 'OTROS') ? null : (
-                        <div key={g.id}>
-                            <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">{g.label}</h4>
+                        <div key={g.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                            <h4 className="font-bold text-gray-700 text-sm mb-2">{g.label}</h4>
                             <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
                                 {g.items.map(renderExtraButton)}
                                 {g.id === 'OTROS' && (
-                                    <div className="col-span-full space-y-2">
-                                        {stepper(`Pinos (+$${pinoPrice})`, pinoCount, () => setPinoCount(p => Math.max(0, p - 1)), () => setPinoCount(p => p + 1), 'bg-green-50 border-green-600 font-bold text-green-800')}
-                                        {stepper(`Snacks (+$${snackPrice})`, snackCount, () => setSnackCount(s => Math.max(0, s - 1)), () => setSnackCount(s => s + 1), 'bg-orange-50 border-orange-600 font-bold text-orange-800')}
-                                    </div>
+                                    <>
+                                        {itemCard('PINO', 'Pinos', pinoPrice, pinoCount, () => setPinoCount(p => p + 1), () => setPinoCount(p => Math.max(0, p - 1)), true)}
+                                        {itemCard('SNACKS', 'Snacks', snackPrice, snackCount, () => setSnackCount(s => s + 1), () => setSnackCount(s => Math.max(0, s - 1)), true)}
+                                    </>
                                 )}
                             </div>
                         </div>
                     ))}
-                    <div className="border-t pt-2">
-                        <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">Varios (costo extra)</h4>
-                        <div className="flex gap-2 mb-2"><input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Motivo" className="w-full p-2 border rounded text-sm" /><input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" /><Button onClick={addVarios} className="py-2 px-3"><PlusCircle size={16} /></Button></div>
-                        {extras.filter(e => e.id.startsWith('VARIOS')).map(e => (
-                            <div key={e.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 border rounded mb-1"><span>{e.label}</span><div className="flex items-center gap-2"><span className="font-bold">${e.price}</span><button onClick={() => setExtras(prev => prev.filter(x => x.id !== e.id))} className="text-red-500"><Trash2 size={14} /></button></div></div>
+                    <div>
+                        {variosList.map(e => (
+                            <div key={e.id} className="flex justify-between items-center text-sm p-2 bg-white border rounded mb-1"><span className="min-w-0 truncate">{e.label}</span><div className="flex items-center gap-2 shrink-0"><span className="font-bold">${e.price}</span><button onClick={() => setExtras(prev => prev.filter(x => x.id !== e.id))} className="text-red-500"><Trash2 size={14} /></button></div></div>
                         ))}
+                        {showVarios ? (
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="font-bold text-gray-700 text-sm">Otro cargo</h4>
+                                    <button onClick={() => { setShowVarios(false); setVDesc(''); setVPrice(''); }} className="text-gray-400 p-1"><X size={16} /></button>
+                                </div>
+                                <div className="flex gap-2"><input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Motivo" className="w-full p-2 border rounded text-sm" /><input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" /><Button onClick={addVarios} className="py-2 px-3"><PlusCircle size={16} /></Button></div>
+                            </div>
+                        ) : (
+                            <button onClick={() => setShowVarios(true)} className="w-full text-sm font-bold text-blue-700 py-2 hover:bg-blue-50 rounded-lg flex items-center justify-center gap-2"><PlusCircle size={16} /> Otro cargo…</button>
+                        )}
                     </div>
                 </div>
             );
