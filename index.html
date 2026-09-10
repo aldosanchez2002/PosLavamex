@@ -2178,6 +2178,8 @@ Firma: __________________
             const [vPrice, setVPrice] = useState('');
             const [openStep, setOpenStep] = useState('SIZE');
             const [showVarios, setShowVarios] = useState(false);
+            const [descError, setDescError] = useState(false);
+            const descRef = useRef(null);
             const [deleteModal, setDeleteModal] = useState(null);
             const [deleteReason, setDeleteReason] = useState('');
 
@@ -2199,6 +2201,7 @@ Firma: __________________
                     // Al editar no se auto-avanza: todo cerrado, pero con el resumen a la vista
                     // para revisar el ticket de un vistazo.
                     setOpenStep(null);
+                    setDescError(false);
                 } else {
                     setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); setPinoCount(0);
                     setOpenStep('SIZE');
@@ -2269,6 +2272,14 @@ Firma: __________________
             const extrasSummary = extrasCount > 0 ? `${extrasCount} · $${extrasPrice + (snackCount * snackPrice) + (pinoCount * pinoPrice)}` : '';
             const handleSubmit = async () => {
                 if (!canSubmit) return;
+                // Sin descripción el ticket no se puede amarrar a un carro: ni los lavadores
+                // saben cuál es, ni caja sabe a quién le está cobrando.
+                if (!desc.trim()) {
+                    setDescError(true);
+                    setOpenStep(null);
+                    if (descRef.current) { descRef.current.focus(); descRef.current.scrollIntoView({ block: 'center' }); }
+                    return alert('⛔ Falta la DESCRIPCIÓN VISUAL del vehículo.\n\nEscribe color y modelo, por ejemplo: NISSAN NP300 BLANCA.');
+                }
                 const finalExtras = [...extras];
                 for (let i = 0; i < pinoCount; i++) {
                     finalExtras.push({ id: 'PINO', label: 'Pino', price: pinoPrice, commission: 0 });
@@ -2278,9 +2289,22 @@ Firma: __________________
                 // Si el guardado falló no se limpia la captura: el ticket se volvería a teclear.
                 if (isNew && newId) {
                     setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); setPinoCount(0); setOpenStep('SIZE');
-                    setShowVarios(false);
+                    setShowVarios(false); setDescError(false);
                 }
             };
+            const descInput = (sizeCls) => (
+                <>
+                    <input
+                        ref={descRef}
+                        value={desc}
+                        onChange={e => { setDesc(e.target.value); if (descError) setDescError(false); }}
+                        placeholder="DESCRIPCIÓN VISUAL"
+                        className={`w-full ${sizeCls} border-4 rounded-xl font-bold transition-colors text-center uppercase ${descError ? 'border-red-500 bg-red-50 text-red-900 placeholder-red-400' : 'border-blue-600 bg-blue-50 text-blue-900 placeholder-blue-400 focus:bg-white'}`}
+                    />
+                    {descError && <p className="text-red-600 text-xs font-bold text-center mt-1">Escribe color y modelo, ej. NISSAN NP300 BLANCA</p>}
+                </>
+            );
+
             const renderCard = (Icon, title, content) => (
                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
                     <h3 className="font-bold mb-3 text-gray-700 flex items-center"><Icon className="w-5 h-5 mr-2" /> {title}</h3>
@@ -2388,12 +2412,7 @@ Firma: __________________
             const renderExtras = () => renderCard(Package, 'Extras', extrasContent());
             const renderActions = () => (
                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
-                    <input
-                        value={desc}
-                        onChange={e => setDesc(e.target.value)}
-                        placeholder="DESCRIPCIÓN VISUAL"
-                        className="w-full p-4 border-4 border-blue-600 rounded-xl mb-4 text-xl font-bold bg-blue-50 text-blue-900 placeholder-blue-400 focus:bg-white transition-colors text-center uppercase"
-                    />
+                    <div className="mb-4">{descInput('p-4 text-xl')}</div>
                     <div className="space-y-2">
                         {isDesktop && (
                             <div className="bg-gray-50 p-3 rounded-lg border text-sm mb-4">
@@ -2466,12 +2485,7 @@ Firma: __________________
                                     </StepSection>
                                     <div className="sticky bottom-0 -mx-4 px-4 pt-2 pb-1 bg-gray-100">
                                         <div className="bg-white rounded-xl shadow-lg border p-3">
-                                            <input
-                                                value={desc}
-                                                onChange={e => setDesc(e.target.value)}
-                                                placeholder="DESCRIPCIÓN VISUAL"
-                                                className="w-full p-3 mb-2 border-4 border-blue-600 rounded-xl text-lg font-bold bg-blue-50 text-blue-900 placeholder-blue-400 focus:bg-white transition-colors text-center uppercase"
-                                            />
+                                            <div className="mb-2">{descInput('p-3 text-lg')}</div>
                                             <div className="flex justify-between items-baseline mb-2 px-1">
                                                 <span className="font-bold text-gray-600">Total</span>
                                                 <span className="font-bold text-2xl text-green-700">${totalPrice}</span>
