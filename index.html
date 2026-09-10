@@ -1880,6 +1880,21 @@ Firma: __________________
             const disconnectTicket = (id) => handleDbAction(async () => {
                 await updateDoc(doc(db, "tickets", id), { groupId: null });
             });
+            const disconnectSelected = () => handleDbAction(async () => {
+                const chosen = tickets.filter(t => connectIds.includes(t.id) && t.groupId);
+                if (chosen.length === 0) return;
+                const batch = writeBatch(db);
+                chosen.forEach(t => batch.update(doc(db, "tickets", t.id), { groupId: null }));
+                // Un grupo que se queda con un solo ticket ya no es un cliente conectado.
+                const affected = new Set(chosen.map(t => t.groupId));
+                tickets.forEach(t => {
+                    if (!t.groupId || !affected.has(t.groupId) || connectIds.includes(t.id)) return;
+                    const remaining = tickets.filter(x => x.groupId === t.groupId && !connectIds.includes(x.id));
+                    if (remaining.length === 1) batch.update(doc(db, "tickets", t.id), { groupId: null });
+                });
+                await batch.commit();
+                closeConnectPicker();
+            });
 
             const startEdit = (ticket) => { setEditingTicket(ticket); setView('GREETER'); };
             const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
@@ -1889,7 +1904,7 @@ Firma: __________________
                 prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
                 validateAndLogin, addPosCredential, updatePosCredential, deletePosCredential, resetPosCredential,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
-                connectMode, connectIds, openConnectPicker, closeConnectPicker, toggleConnectId, connectSelected, disconnectTicket,
+                connectMode, connectIds, openConnectPicker, closeConnectPicker, toggleConnectId, connectSelected, disconnectSelected, disconnectTicket,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, addAvance, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, processMultiPayment, addCashCount, addCashDrop, addCashIn,
                 updateEmployee, addAdminSnack, approveAdminSnack, deleteAdminSnack, addCortesia, approveCortesia, rejectCortesia,
@@ -2104,7 +2119,7 @@ Firma: __________________
         );
 
         const GreeterView = () => {
-            const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting, tickets, deleteTicket, startEdit, role, snackPrice, connectMode, connectIds, openConnectPicker, closeConnectPicker, toggleConnectId, connectSelected, disconnectTicket } = useContext(AppContext);
+            const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting, tickets, deleteTicket, startEdit, role, snackPrice, connectMode, connectIds, openConnectPicker, closeConnectPicker, toggleConnectId, connectSelected, disconnectSelected, disconnectTicket } = useContext(AppContext);
             const [subTab, setSubTab] = useState('FORM');
             const [size, setSize] = useState(null);
             const [service, setService] = useState(null);
@@ -2144,6 +2159,10 @@ Firma: __________________
             }, [editingTicket]);
 
             useEffect(() => { if (connectMode) setSubTab('LIST'); }, [connectMode]);
+
+            // Si todo lo marcado ya es el mismo cliente conectado, el botón desconecta.
+            const pickedTickets = tickets.filter(t => connectIds.includes(t.id));
+            const isDisconnect = pickedTickets.length > 0 && pickedTickets.every(t => t.groupId && t.groupId === pickedTickets[0].groupId);
 
             const toggleStep = (k) => setOpenStep(prev => prev === k ? null : k);
             // Auto-avance: al elegir se colapsa el paso y se abre el siguiente. Si el siguiente
@@ -2395,11 +2414,13 @@ Firma: __________________
                                     <div className="sticky top-0 z-10 bg-indigo-600 text-white rounded-xl p-3 shadow-lg flex items-center justify-between gap-3">
                                         <span className="font-bold text-sm min-w-0">
                                             <span className="flex items-center gap-2"><Layers size={16} className="shrink-0" /> Conectar cliente</span>
-                                            <span className="block text-xs font-normal text-indigo-100 mt-0.5">{connectIds.length < 2 ? 'Marca los tickets del mismo cliente' : `${connectIds.length} tickets seleccionados`}</span>
+                                            <span className="block text-xs font-normal text-indigo-100 mt-0.5">{isDisconnect ? `Ya están conectados · se desconectan ${connectIds.length > 1 ? `los ${connectIds.length}` : ''}`.trim() : (connectIds.length < 2 ? 'Marca los tickets del mismo cliente' : `${connectIds.length} tickets seleccionados`)}</span>
                                         </span>
                                         <div className="flex gap-2 shrink-0">
                                             <Button onClick={closeConnectPicker} variant="secondary" className="py-2 text-sm">Cancelar</Button>
-                                            <Button onClick={connectSelected} disabled={connectIds.length < 2} variant="success" className="py-2 text-sm">Conectar {connectIds.length >= 2 ? `(${connectIds.length})` : ''}</Button>
+                                            {isDisconnect
+                                                ? <Button onClick={disconnectSelected} variant="danger" className="py-2 text-sm">Desconectar ({connectIds.length})</Button>
+                                                : <Button onClick={connectSelected} disabled={connectIds.length < 2} variant="success" className="py-2 text-sm">Conectar {connectIds.length >= 2 ? `(${connectIds.length})` : ''}</Button>}
                                         </div>
                                     </div>
                                 ) : (
