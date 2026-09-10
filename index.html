@@ -95,7 +95,8 @@
             { id: 'SUV_CHICA', label: 'SUV Chica' },
             { id: 'PICKUP', label: 'Pick-Up / SUV MD' },
             { id: 'SUV_GDE', label: 'SUV Gde' },
-            { id: 'RZR', label: 'Razer', services: ['RAZER_CHICO', 'RAZER_GRANDE'] }
+            { id: 'RZR', label: 'Razer', services: ['RAZER_CHICO', 'RAZER_GRANDE'] },
+            { id: 'TRAILA', label: 'Traila', services: ['TRAILA_CHICA', 'TRAILA_GRANDE', 'TRAILA_CERRADA'] }
         ];
 
         const SERVICES = [
@@ -108,7 +109,10 @@
             { id: 'PREMIUM', label: 'Paquete Premium', retired: true },
             { id: 'PRESIDENTIAL', label: 'Paquete Presidencial', retired: true },
             { id: 'RAZER_CHICO', label: 'Razer Chico', shortLabel: 'Chico' },
-            { id: 'RAZER_GRANDE', label: 'Razer Grande', shortLabel: 'Grande' }
+            { id: 'RAZER_GRANDE', label: 'Razer Grande', shortLabel: 'Grande' },
+            { id: 'TRAILA_CHICA', label: 'Traila Chica', shortLabel: 'Chica' },
+            { id: 'TRAILA_GRANDE', label: 'Traila Grande', shortLabel: 'Grande' },
+            { id: 'TRAILA_CERRADA', label: 'Traila Cerrada', shortLabel: 'Cerrada' }
         ];
 
         const ACTIVE_SERVICES = SERVICES.filter(s => !s.retired);
@@ -137,6 +141,9 @@
                 PRESIDENTIAL: { AUTO: 1540, SUV_CHICA: 1940, PICKUP: 2320, SUV_GDE: 2320 },
                 RAZER_CHICO: { RZR: 640 },
                 RAZER_GRANDE: { RZR: 800 },
+                TRAILA_CHICA: { TRAILA: 200 },
+                TRAILA_GRANDE: { TRAILA: 300 },
+                TRAILA_CERRADA: { TRAILA: 400 },
             },
             COMMISSIONS: {
                 GENERAL: { AUTO: 70, SUV_CHICA: 84, PICKUP: 126, SUV_GDE: 126 },
@@ -146,6 +153,9 @@
                 PRESIDENTIAL: { AUTO: 539, SUV_CHICA: 679, PICKUP: 812, SUV_GDE: 812 },
                 RAZER_CHICO: { RZR: 224 },
                 RAZER_GRANDE: { RZR: 280 },
+                TRAILA_CHICA: { TRAILA: 70 },
+                TRAILA_GRANDE: { TRAILA: 105 },
+                TRAILA_CERRADA: { TRAILA: 140 },
             },
             EXTRAS: [
                 { id: 'MOTOR', label: 'Lavar Motor', price: 400, commission: 140 },
