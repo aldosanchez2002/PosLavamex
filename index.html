@@ -6,6 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Lavamex POS</title>
 
+    <!-- Instalable: con esto el acceso directo de la pantalla de inicio abre en modo app
+         (sin barra de direcciones ni pestañas) en Samsung Internet y Chrome. -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Lavamex">
+    <link rel="apple-touch-icon" href="/icons/app-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/app-512.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@babel/standalone@7.23.9/babel.min.js"></script>
 
@@ -32,6 +43,13 @@
         .no-scrollbar {
             -ms-overflow-style: none;
             scrollbar-width: none;
+        }
+
+        /* El campo de PIN se enmascara por CSS en vez de usar type="password": así el
+           navegador no lo reconoce como contraseña y no ofrece guardarla ni autocompletarla. */
+        .pin-masked {
+            -webkit-text-security: disc;
+            text-security: disc;
         }
 
         /* Expands the clickable area of the date picker icon to cover the whole input */
@@ -276,6 +294,33 @@
             }
             return null;
         };
+        const readSession = () => {
+            try {
+                const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+                if (!s || !s.role) return null;
+                if (s.day !== getLocalDateStr()) return null;
+                const limit = IDLE_LIMIT_MIN[s.role];
+                if (limit && Date.now() - (s.lastSeen || 0) > limit * 60000) return null;
+                return s;
+            } catch (e) { return null; }
+        };
+        const writeSession = (role) => {
+            try {
+                const now = Date.now();
+                localStorage.setItem(SESSION_KEY, JSON.stringify({ role, day: getLocalDateStr(), loginAt: now, lastSeen: now }));
+            } catch (e) { /* almacenamiento bloqueado: la sesión dura lo que dure la pestaña */ }
+        };
+        const touchSession = () => {
+            try {
+                const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+                if (!s || !s.role) return;
+                localStorage.setItem(SESSION_KEY, JSON.stringify({ ...s, lastSeen: Date.now() }));
+            } catch (e) { /* ignorar */ }
+        };
+        // Sesiones de la versión anterior (sin caducidad): se descartan para que nadie siga
+        // dentro con el rol que dejó abierto hace semanas.
+        try { localStorage.removeItem('lavamex_role'); } catch (e) { /* ignorar */ }
+
         const shortTicketId = (id) => String(id || '').slice(-4).toUpperCase();
 
         // La BD manda en lo que ya tiene capturado; lo que falta (un servicio o tamaño recién
@@ -371,6 +416,14 @@
             const date = new Date(ts.toDate ? ts.toDate() : ts);
             return date >= start && date <= end;
         };
+
+        // La sesión del POS ya no vive para siempre: se guarda con el día en que se abrió y la
+        // hora del último uso. Entrada aguanta toda la jornada (la tablet está pineada y se usa
+        // todo el día) pero caduca al cambiar el día; caja y admin caducan además por
+        // inactividad, que es lo peligroso: una tablet que entró una vez como admin se quedaba
+        // como admin para siempre.
+        const SESSION_KEY = 'lavamex_session';
+        const IDLE_LIMIT_MIN = { ADMIN: 45, CASHIER: 45 };
 
         const getLocalDateStr = (d = new Date()) => {
             const y = d.getFullYear();
@@ -1359,11 +1412,8 @@ Firma: __________________
         const AppContext = createContext();
 
         const AppProvider = ({ children }) => {
-            const [role, setRole] = useState(() => localStorage.getItem('lavamex_role') || null);
-            const [view, setView] = useState(() => {
-                const savedRole = localStorage.getItem('lavamex_role');
-                return savedRole === 'ADMIN' ? 'ADMIN' : 'GREETER';
-            });
+            const [role, setRole] = useState(() => readSession()?.role || null);
+            const [view, setView] = useState(() => readSession()?.role === 'ADMIN' ? 'ADMIN' : 'GREETER');
             const [employees, setEmployees] = useState([]);
             const [posCredentials, setPosCredentials] = useState([]);
             const [tickets, setTickets] = useState([]);
@@ -1390,15 +1440,40 @@ Firma: __________________
 
             const login = (r) => {
                 setRole(r);
-                localStorage.setItem('lavamex_role', r);
+                writeSession(r);
                 if (r) setView(r === 'ADMIN' ? 'ADMIN' : (r === 'CASHIER' ? 'CASHIER' : 'GREETER'));
             };
 
             const logout = () => {
                 setRole(null);
-                localStorage.removeItem('lavamex_role');
+                try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignorar */ }
                 setView('GREETER');
             };
+
+            // Mientras haya sesión se marca actividad (con throttle, para no escribir en cada
+            // toque) y se revisa si ya caducó, también al volver de segundo plano.
+            useEffect(() => {
+                if (!role) return;
+                let lastWrite = 0;
+                const touch = () => {
+                    const now = Date.now();
+                    if (now - lastWrite < 30000) return;
+                    lastWrite = now;
+                    touchSession();
+                };
+                const check = () => { if (!readSession()) logout(); };
+                const onVisible = () => { if (document.visibilityState === 'visible') { check(); } else { touchSession(); } };
+                window.addEventListener('pointerdown', touch, true);
+                window.addEventListener('keydown', touch, true);
+                document.addEventListener('visibilitychange', onVisible);
+                const timer = setInterval(check, 60000);
+                return () => {
+                    window.removeEventListener('pointerdown', touch, true);
+                    window.removeEventListener('keydown', touch, true);
+                    document.removeEventListener('visibilitychange', onVisible);
+                    clearInterval(timer);
+                };
+            }, [role]);
 
             useEffect(() => {
                 const unsub = onSnapshot(query(collection(db, "employees"), orderBy("name")), (snap) => {
@@ -2110,6 +2185,7 @@ Firma: __________________
             const { validateAndLogin } = useContext(AppContext);
             const [pin, setPin] = useState('');
             const [loading, setLoading] = useState(false);
+            const [show, setShow] = useState(false);
             const handleLogin = async () => {
                 if (!pin.trim() || loading) return;
                 setLoading(true);
@@ -2122,7 +2198,30 @@ Firma: __________________
                     <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center">
                         <h1 className="text-3xl font-bold mb-6 text-gray-800">LAVAMEX POS</h1>
                         <div className="flex flex-col gap-4">
-                            <input type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" className="w-full p-4 border rounded-lg text-center text-3xl tracking-widest mb-2" autoFocus disabled={loading} />
+                            {/* No es type="password" a propósito: así el navegador no lo trata como
+                                contraseña y no ofrece guardarla ni la autocompleta en la tablet.
+                                El enmascarado lo hace la clase .pin-masked por CSS. */}
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="lavamex-acceso"
+                                    value={pin}
+                                    onChange={e => setPin(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                                    placeholder="PIN"
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    autoCapitalize="off"
+                                    spellCheck={false}
+                                    className={`w-full p-4 pr-14 border rounded-lg text-center text-3xl tracking-widest ${show ? '' : 'pin-masked'}`}
+                                    autoFocus
+                                    disabled={loading}
+                                />
+                                <button type="button" onClick={() => setShow(v => !v)} title={show ? 'Ocultar' : 'Mostrar'}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-2">
+                                    {show ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                </button>
+                            </div>
                             <Button onClick={handleLogin} className="w-full p-4 text-lg" disabled={loading}>
                                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'ENTRAR'}
                             </Button>
