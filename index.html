@@ -2225,7 +2225,7 @@ Firma: __________________
                 setSize(s);
                 if (!isDesktop) setOpenStep(keepService ? null : 'SERVICE');
             };
-            const pickService = (s) => { setService(s); if (!isDesktop) setOpenStep(washers.length > 0 ? null : 'WASHERS'); };
+            const pickService = (s) => { setService(s); if (!isDesktop) setOpenStep(extrasCount > 0 ? null : 'EXTRAS'); };
             const toggle = (item) => setWashers(prev => toggleSelection(prev, item, 3));
             const toggleExtra = (item) => setExtras(prev => toggleSelection(prev, item));
             const addExtra = (item) => setExtras(prev => [...prev, item]);
@@ -2476,12 +2476,13 @@ Firma: __________________
                                         {!size && <p className="text-sm text-gray-500 mb-2">Elige primero el tamaño.</p>}
                                         {servicesContent()}
                                     </StepSection>
-                                    <StepSection num={3} icon={User} title={`Lavadores (${washers.length}/3)`} summary={washers.join(', ')} done={washers.length > 0} open={openStep === 'WASHERS'} onToggle={() => toggleStep('WASHERS')}>
+                                    <StepSection num={3} icon={Package} title="Extras" summary={extrasSummary} done={extrasCount > 0} open={openStep === 'EXTRAS'} onToggle={() => toggleStep('EXTRAS')}>
+                                        {extrasContent()}
+                                        <Button variant="secondary" onClick={() => setOpenStep('WASHERS')} className="w-full mt-3">Listo</Button>
+                                    </StepSection>
+                                    <StepSection num={4} icon={User} title={`Lavadores (${washers.length}/3)`} summary={washers.join(', ')} done={washers.length > 0} open={openStep === 'WASHERS'} onToggle={() => toggleStep('WASHERS')}>
                                         {washersContent()}
                                         <Button variant="secondary" onClick={() => setOpenStep(null)} className="w-full mt-3">Listo</Button>
-                                    </StepSection>
-                                    <StepSection num={4} icon={Package} title="Extras" summary={extrasSummary} done={extrasCount > 0} open={openStep === 'EXTRAS'} onToggle={() => toggleStep('EXTRAS')}>
-                                        {extrasContent()}
                                     </StepSection>
                                     <div className="sticky bottom-0 -mx-4 px-4 pt-2 pb-1 bg-gray-100">
                                         <div className="bg-white rounded-xl shadow-lg border p-3">
