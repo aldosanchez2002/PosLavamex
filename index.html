@@ -61,7 +61,7 @@
             PlusCircle, Coffee, History, ArrowLeft, Save, UserCheck, Activity,
             AlertTriangle, Upload, Loader2, Calendar, CreditCard,
             TrendingUp, Banknote, TrendingDown, AlertCircle, Check, X, Briefcase, Clock,
-            EyeOff, Eye, Key, ClipboardList, ShieldCheck, UserCog, Package, ChevronLeft, ChevronRight, Gift, BarChart2, Layers
+            EyeOff, Eye, Key, ClipboardList, ShieldCheck, UserCog, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Gift, BarChart2, Layers
         } from 'lucide-react';
 
         import { jsPDF } from 'jspdf';
@@ -86,11 +86,17 @@
         const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
         const db = getFirestore(app);
 
+        // El Razer es un vehículo aparte: se captura como tamaño propio y, en lugar de los
+        // paquetes de lavado, ofrece sus dos medidas. Así un Razer es un ticket como cualquier
+        // otro (cuenta en mezcla por tamaño, por servicio, ticket promedio y rejilla de nómina)
+        // en vez de un extra pegado al ticket de otro vehículo.
         const SIZES = [
             { id: 'AUTO', label: 'Auto' },
             { id: 'SUV_CHICA', label: 'SUV Chica' },
             { id: 'PICKUP', label: 'Pick-Up / SUV MD' },
-            { id: 'SUV_GDE', label: 'SUV Gde' }
+            { id: 'SUV_GDE', label: 'SUV Gde' },
+            { id: 'RZR', label: 'Razer', services: ['RAZER_CHICO', 'RAZER_GRANDE'] },
+            { id: 'TRAILA', label: 'Traila', services: ['TRAILA_CHICA', 'TRAILA_GRANDE', 'TRAILA_CERRADA'] }
         ];
 
         const SERVICES = [
@@ -101,10 +107,27 @@
             // DEFAULTS) para que los tickets históricos, la nómina y los reportes sigan
             // mostrando su etiqueta; ACTIVE_SERVICES es lo que se puede capturar/editar hoy.
             { id: 'PREMIUM', label: 'Paquete Premium', retired: true },
-            { id: 'PRESIDENTIAL', label: 'Paquete Presidencial', retired: true }
+            { id: 'PRESIDENTIAL', label: 'Paquete Presidencial', retired: true },
+            { id: 'RAZER_CHICO', label: 'Razer Chico', shortLabel: 'Chico' },
+            { id: 'RAZER_GRANDE', label: 'Razer Grande', shortLabel: 'Grande' },
+            { id: 'TRAILA_CHICA', label: 'Traila Chica', shortLabel: 'Chica' },
+            { id: 'TRAILA_GRANDE', label: 'Traila Grande', shortLabel: 'Grande' },
+            { id: 'TRAILA_CERRADA', label: 'Traila Cerrada', shortLabel: 'Cerrada' }
         ];
 
         const ACTIVE_SERVICES = SERVICES.filter(s => !s.retired);
+
+        // Servicios que se pueden vender en un tamaño: los tamaños con lista propia (Razer)
+        // muestran solo la suya, y el resto muestra lo que no está reservado a ningún tamaño.
+        const RESERVED_SERVICE_IDS = new Set(SIZES.flatMap(s => s.services || []));
+        const VEHICLE_SIZES = SIZES.filter(s => !s.services);
+        const SPECIAL_SIZES = SIZES.filter(s => s.services);
+        const servicesForSize = (sizeId) => {
+            const size = SIZES.find(s => s.id === sizeId);
+            if (size && size.services) return ACTIVE_SERVICES.filter(s => size.services.includes(s.id));
+            return ACTIVE_SERVICES.filter(s => !RESERVED_SERVICE_IDS.has(s.id));
+        };
+        const serviceFitsSize = (serviceId, sizeId) => servicesForSize(sizeId).some(s => s.id === serviceId);
 
         const DEFAULTS = {
             PINS: {
@@ -118,6 +141,11 @@
                 COMPLETE: { AUTO: 840, SUV_CHICA: 1040, PICKUP: 1160, SUV_GDE: 1640 },
                 PREMIUM: { AUTO: 1180, SUV_CHICA: 1440, PICKUP: 1620, SUV_GDE: 2100 },
                 PRESIDENTIAL: { AUTO: 1540, SUV_CHICA: 1940, PICKUP: 2320, SUV_GDE: 2320 },
+                RAZER_CHICO: { RZR: 640 },
+                RAZER_GRANDE: { RZR: 800 },
+                TRAILA_CHICA: { TRAILA: 200 },
+                TRAILA_GRANDE: { TRAILA: 300 },
+                TRAILA_CERRADA: { TRAILA: 400 },
             },
             COMMISSIONS: {
                 GENERAL: { AUTO: 70, SUV_CHICA: 84, PICKUP: 126, SUV_GDE: 126 },
@@ -125,21 +153,28 @@
                 COMPLETE: { AUTO: 294, SUV_CHICA: 364, PICKUP: 406, SUV_GDE: 574 },
                 PREMIUM: { AUTO: 413, SUV_CHICA: 504, PICKUP: 567, SUV_GDE: 735 },
                 PRESIDENTIAL: { AUTO: 539, SUV_CHICA: 679, PICKUP: 812, SUV_GDE: 812 },
+                RAZER_CHICO: { RZR: 224 },
+                RAZER_GRANDE: { RZR: 280 },
+                TRAILA_CHICA: { TRAILA: 70 },
+                TRAILA_GRANDE: { TRAILA: 105 },
+                TRAILA_CERRADA: { TRAILA: 140 },
             },
             EXTRAS: [
-                { id: 'MOTOR', label: 'Lavado Motor', price: 400, commission: 140 },
+                { id: 'MOTOR', label: 'Lavar Motor', price: 400, commission: 140 },
                 { id: 'CHASIS', label: 'Chasis', price: 400, commission: 140 },
                 { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
                 { id: 'ARMORALL', label: 'Armor-All', price: 40, commission: 14 },
-                { id: 'LIMP_FOCOS', label: 'Limpieza de Focos', price: 340, commission: 120 },
-                { id: 'ASPIRADO_CAJUELA', label: 'Aspirado de Cajuela', price: 40, commission: 14 },
+                { id: 'LIMP_FOCOS', label: 'Limpiar Focos', price: 340, commission: 120 },
+                { id: 'ASPIRADO_CAJUELA', label: 'Aspirar Cajuela', price: 40, commission: 14 },
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
-                { id: 'LIMP_ZONA', label: 'Limpieza por Zona', price: 200, commission: 70 },
+                { id: 'LIMP_ZONA', label: 'Limpiar Zona', price: 200, commission: 70 },
                 { id: 'CREMA_ASIENTOS', label: 'Crema Asientos', price: 300, commission: 100 },
-                { id: 'RZR_CHICO', label: 'Razer Chico', price: 640, commission: 224 },
-                { id: 'RZR_GRANDE', label: 'Razer Grande', price: 800, commission: 280 },
-                { id: 'ALFOMBRA', label: 'Lavado de Alfombra', price: 240, commission: 84 },
-                { id: 'ASIENTOS', label: 'Lavado de Asientos', price: 240, commission: 84 },
+                // Retirados: el Razer ahora se captura como tamaño. Se conservan en el catálogo
+                // para que los tickets y la nómina de antes sigan mostrando su etiqueta y comisión.
+                { id: 'RZR_CHICO', label: 'Razer Chico', price: 640, commission: 224, retired: true },
+                { id: 'RZR_GRANDE', label: 'Razer Grande', price: 800, commission: 280, retired: true },
+                { id: 'ALFOMBRA', label: 'Lavar Alfombra', price: 240, commission: 84 },
+                { id: 'ASIENTOS', label: 'Lavar Asientos', price: 240, commission: 84 },
             ]
         };
 
@@ -212,6 +247,20 @@
         ];
         const RZR_KEYWORDS = ['rzr', 'razer', 'razr', 'raser', 'racer'];
 
+        // Agrupación visual de los extras en la captura. Vive en código (no en los docs de
+        // Firestore) para que un extra creado a mano en la BD no se quede sin grupo: todo lo
+        // que no esté aquí cae en "Otros".
+        const EXTRA_GROUPS = [
+            { id: 'INTERIOR', label: 'Interior' },
+            { id: 'EXTERIOR', label: 'Exterior' },
+            { id: 'OTROS', label: 'Otros' },
+        ];
+        const EXTRA_GROUP_OF = {
+            ALFOMBRA: 'INTERIOR', ASIENTOS: 'INTERIOR', CREMA_ASIENTOS: 'INTERIOR',
+            ASPIRADO_CAJUELA: 'INTERIOR', AROMA: 'INTERIOR', ARMORALL: 'INTERIOR', LIMP_ZONA: 'INTERIOR',
+            MOTOR: 'EXTERIOR', CHASIS: 'EXTERIOR', LIMP_FOCOS: 'EXTERIOR',
+        };
+
         // Devuelve el id del extra del catálogo que nombra el texto (null = cargo genuino).
         // Para Razer decide chico/grande por la palabra escrita o por el precio capturado.
         const matchCatalogExtra = (text, price) => {
@@ -221,17 +270,48 @@
             const has = (kw) => words.some(w => fuzzyWordMatch(w, kw));
             // "moto(s)" está a 1 letra de "motor" pero es otra cosa: no auto-corregir
             const isMoto = words.some(w => w === 'moto' || w === 'motos' || w === 'motocicleta');
-            if (RZR_KEYWORDS.some(has)) {
-                if (has('grande') || has('grandes') || words.includes('gde')) return 'RZR_GRANDE';
-                if (has('chico') || has('chica')) return 'RZR_CHICO';
-                return (typeof price === 'number' && !isNaN(price) && Math.abs(price - 800) < Math.abs(price - 640)) ? 'RZR_GRANDE' : 'RZR_CHICO';
-            }
             for (const [id, kws] of EXTRA_KEYWORDS) {
                 if (id === 'MOTOR' && isMoto) continue;
                 if (kws.some(has)) return id;
             }
             return null;
         };
+        const shortTicketId = (id) => String(id || '').slice(-4).toUpperCase();
+
+        // La BD manda en lo que ya tiene capturado; lo que falta (un servicio o tamaño recién
+        // agregado al catálogo) toma el valor de fábrica, para no vender en $0 mientras alguien
+        // abre Precios y guarda. Al primer guardado la BD ya queda completa.
+        const withDefaultRates = (defaults, dbData) => {
+            const out = { ...defaults };
+            Object.entries(dbData || {}).forEach(([svcId, bySize]) => {
+                out[svcId] = { ...(defaults[svcId] || {}), ...bySize };
+            });
+            return out;
+        };
+
+        // "Conectar cliente": cuando un cliente trae dos vehículos (p. ej. camioneta y Razer)
+        // cada uno lleva su propio ticket —con su tamaño, servicio y lavadores— pero comparten
+        // groupId. Así caja no cobra uno y deja el otro abierto, y los reportes siguen contando
+        // un ticket por vehículo.
+        // Agrupa sin reordenar: el grupo se queda donde entró su primer ticket.
+        const groupTickets = (list) => {
+            const out = [];
+            const byGroup = {};
+            (list || []).forEach(t => {
+                if (!t.groupId) { out.push({ key: t.id, group: null, items: [t] }); return; }
+                if (byGroup[t.groupId]) { byGroup[t.groupId].items.push(t); return; }
+                const entry = { key: t.groupId, group: t.groupId, items: [t] };
+                byGroup[t.groupId] = entry;
+                out.push(entry);
+            });
+            return out;
+        };
+
+        const isRazerText = (text) => {
+            const words = normVariosText(text).split(' ').filter(Boolean);
+            return words.some(w => RZR_KEYWORDS.some(k => fuzzyWordMatch(w, k)));
+        };
+
         // Servicios no se pueden auto-corregir (necesitan tamaño): se avisa.
         const matchServiceName = (text) => {
             const n = normVariosText(text);
@@ -241,7 +321,7 @@
 
         const handleDbAction = async (actionFn) => {
             try {
-                await actionFn();
+                return await actionFn();
             } catch (e) {
                 alert("Error: " + e.message);
                 console.error(e);
@@ -684,7 +764,7 @@ ${ticket.vehicleDesc ? ticket.vehicleDesc.toUpperCase() : ''}
 Fecha: ${new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
 Metodo: ${payment.method === 'CARD' ? 'TARJETA' : 'EFECTIVO'}
 --------------------------------
-${ticket.service ? ticket.service.label : 'General'} $${ticket.basePrice || 0}
+${ticket.service ? `${ticket.service.label} $${ticket.basePrice || 0}` : ''}
 ${ticket.extras && ticket.extras.length > 0 ? ticket.extras.map(e => `+ ${e.label} $${e.price}`).join('\n') : ''}
 ${ticket.snackCount > 0 ? `+ Snacks (${ticket.snackCount}) $${ticket.snackCount * (currentSnackPrice || 30)}` : ''}
 --------------------------------
@@ -1344,17 +1424,20 @@ Firma: __________________
                         getDocs(collection(db, "pos_credentials"))
                     ]);
 
-                    if (pricesSnap.exists()) setPrices(pricesSnap.data());
+                    if (pricesSnap.exists()) setPrices(withDefaultRates(DEFAULTS.PRICES, pricesSnap.data()));
                     else { setDoc(doc(db, "settings", "prices"), DEFAULTS.PRICES); setPrices(DEFAULTS.PRICES); }
 
-                    if (commissionsSnap.exists()) setCommissions(commissionsSnap.data());
+                    if (commissionsSnap.exists()) setCommissions(withDefaultRates(DEFAULTS.COMMISSIONS, commissionsSnap.data()));
                     else { setDoc(doc(db, "settings", "commissions"), DEFAULTS.COMMISSIONS); setCommissions(DEFAULTS.COMMISSIONS); }
 
                     if (!extrasSnap.empty) {
                         const dbItems = extrasSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
                         const cleanList = DEFAULTS.EXTRAS.map(def => {
                             const match = dbItems.find(item => item.id === def.id);
-                            return match ? { ...def, ...match } : def;
+                            // La BD manda en precio y comisión (se editan en Precios), pero el
+                            // nombre del extra vive en el código: así un renombre del catálogo
+                            // se aplica solo, sin tener que tocar cada doc de Firestore.
+                            return match ? { ...def, ...match, label: def.label } : def;
                         });
                         setExtrasList(cleanList);
                     } else {
@@ -1487,8 +1570,10 @@ Firma: __________________
                         await updateDoc(doc(db, "tickets", editingTicket.id), ticketData);
                         setEditingTicket(null);
                         if (role === 'CASHIER') setView('CASHIER');
+                        return editingTicket.id;
                     } else {
-                        await addDoc(collection(db, "tickets"), ticketData);
+                        const ref = await addDoc(collection(db, "tickets"), ticketData);
+                        return ref.id;
                     }
                 } finally { setIsSubmitting(false); }
             });
@@ -1810,6 +1895,53 @@ Firma: __________________
                 } finally { setIsSubmitting(false); }
             });
 
+            // Conectar cliente: se eligen en "En Proceso" los tickets que son del mismo cliente
+            // y se ligan con un groupId común. Vive en el contexto para que caja también pueda
+            // abrir el selector (cae en Entrada con el ticket ya marcado).
+            const [connectMode, setConnectMode] = useState(false);
+            const [connectIds, setConnectIds] = useState([]);
+            const openConnectPicker = (ticket) => {
+                setEditingTicket(null);
+                setConnectMode(true);
+                setConnectIds(ticket ? [ticket.id] : []);
+                setView('GREETER');
+            };
+            const closeConnectPicker = () => { setConnectMode(false); setConnectIds([]); };
+            const toggleConnectId = (id) => setConnectIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+            const connectSelected = () => handleDbAction(async () => {
+                // Se recorre en el orden de la lista (por hora de entrada), no en el de los toques.
+                const chosen = tickets.filter(t => connectIds.includes(t.id));
+                if (chosen.length < 2) return;
+                // Si alguno ya venía conectado se reutiliza su grupo, para sumar un vehículo más
+                // a un cliente que ya tenía dos; si no, el grupo es el ticket más antiguo.
+                const existing = new Set(chosen.map(t => t.groupId).filter(Boolean));
+                const group = chosen.find(t => t.groupId)?.groupId || chosen[0].id;
+                // Arrastra a los compañeros que no se seleccionaron, para no partir un grupo.
+                const targets = tickets.filter(t => connectIds.includes(t.id) || (t.groupId && existing.has(t.groupId)));
+                const batch = writeBatch(db);
+                targets.forEach(t => batch.update(doc(db, "tickets", t.id), { groupId: group }));
+                await batch.commit();
+                closeConnectPicker();
+            });
+            const disconnectTicket = (id) => handleDbAction(async () => {
+                await updateDoc(doc(db, "tickets", id), { groupId: null });
+            });
+            const disconnectSelected = () => handleDbAction(async () => {
+                const chosen = tickets.filter(t => connectIds.includes(t.id) && t.groupId);
+                if (chosen.length === 0) return;
+                const batch = writeBatch(db);
+                chosen.forEach(t => batch.update(doc(db, "tickets", t.id), { groupId: null }));
+                // Un grupo que se queda con un solo ticket ya no es un cliente conectado.
+                const affected = new Set(chosen.map(t => t.groupId));
+                tickets.forEach(t => {
+                    if (!t.groupId || !affected.has(t.groupId) || connectIds.includes(t.id)) return;
+                    const remaining = tickets.filter(x => x.groupId === t.groupId && !connectIds.includes(x.id));
+                    if (remaining.length === 1) batch.update(doc(db, "tickets", t.id), { groupId: null });
+                });
+                await batch.commit();
+                closeConnectPicker();
+            });
+
             const startEdit = (ticket) => { setEditingTicket(ticket); setView('GREETER'); };
             const cancelEdit = () => { setEditingTicket(null); if (role === 'CASHIER') setView('CASHIER'); };
 
@@ -1818,6 +1950,7 @@ Firma: __________________
                 prices, commissions, extrasList, exRate, snackPrice, updateGlobalSettings,
                 validateAndLogin, addPosCredential, updatePosCredential, deletePosCredential, resetPosCredential,
                 editingTicket, startEdit, cancelEdit, activeId, setActiveId, payment, setPayment,
+                connectMode, connectIds, openConnectPicker, closeConnectPicker, toggleConnectId, connectSelected, disconnectSelected, disconnectTicket,
                 saveTicket, updateSnacks, updateQuickItem, saveBatchAttendance, addEmployee, archiveEmployee, deleteTicket, addDeduction,
                 addExpense, addAvance, addBusinessExpense, updateExpense, resolveExpense, processPayment, processCardPayment, processMultiPayment, addCashCount, addCashDrop, addCashIn,
                 updateEmployee, addAdminSnack, approveAdminSnack, deleteAdminSnack, addCortesia, approveCortesia, rejectCortesia,
@@ -1999,8 +2132,40 @@ Firma: __________________
             );
         };
 
+        // El layout de 3 columnas de caja/admin solo cabe en pantallas anchas. En una ventana
+        // angosta (tablet vertical, media pantalla) se usa la captura por pasos del entrada,
+        // que sí escala hacia abajo.
+        const useIsWide = (min = 1024) => {
+            const [wide, setWide] = useState(window.innerWidth >= min);
+            useEffect(() => {
+                const onResize = () => setWide(window.innerWidth >= min);
+                window.addEventListener('resize', onResize);
+                onResize();
+                return () => window.removeEventListener('resize', onResize);
+            }, [min]);
+            return wide;
+        };
+
+        // Paso colapsable de la captura móvil: al cerrarse deja una sola fila con lo elegido,
+        // y toda la fila es el botón para volver a abrirlo.
+        const StepSection = ({ num, icon: Icon, title, summary, done, open, onToggle, children }) => (
+            <div className="bg-white rounded-xl shadow border overflow-hidden">
+                <button onClick={onToggle} className={`w-full flex items-center gap-2 p-3 text-left ${open ? 'border-b bg-gray-50' : ''}`}>
+                    <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm font-bold ${done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {done ? <Check className="w-4 h-4" /> : num}
+                    </span>
+                    <span className="font-bold text-gray-700 flex items-center gap-2 shrink-0"><Icon className="w-5 h-5" /> {title}</span>
+                    <span className="ml-auto flex items-center gap-2 min-w-0">
+                        {!open && summary && <span className="font-bold text-blue-700 truncate">{summary}</span>}
+                        {open ? <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" /> : <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />}
+                    </span>
+                </button>
+                {open && <div className="p-3">{children}</div>}
+            </div>
+        );
+
         const GreeterView = () => {
-            const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting, tickets, deleteTicket, startEdit, role, snackPrice } = useContext(AppContext);
+            const { employees, saveTicket, editingTicket, cancelEdit, prices, extrasList, isSubmitting, tickets, deleteTicket, startEdit, role, snackPrice, connectMode, connectIds, openConnectPicker, closeConnectPicker, toggleConnectId, connectSelected, disconnectSelected, disconnectTicket } = useContext(AppContext);
             const [subTab, setSubTab] = useState('FORM');
             const [size, setSize] = useState(null);
             const [service, setService] = useState(null);
@@ -2011,10 +2176,15 @@ Firma: __________________
             const [desc, setDesc] = useState('');
             const [vDesc, setVDesc] = useState('');
             const [vPrice, setVPrice] = useState('');
+            const [openStep, setOpenStep] = useState('SIZE');
+            const [showVarios, setShowVarios] = useState(false);
+            const [descError, setDescError] = useState(false);
+            const descRef = useRef(null);
             const [deleteModal, setDeleteModal] = useState(null);
             const [deleteReason, setDeleteReason] = useState('');
 
-            const isDesktop = role === 'CASHIER' || role === 'ADMIN';
+            const isWide = useIsWide();
+            const isDesktop = (role === 'CASHIER' || role === 'ADMIN') && isWide;
             const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
 
             useEffect(() => {
@@ -2028,11 +2198,34 @@ Firma: __________________
                     setExtras((editingTicket.extras || []).filter(e => !['PINO', 'QA_PINO'].includes(e.id)));
                     setDesc(editingTicket.vehicleDesc || '');
                     setSnackCount(editingTicket.snackCount || 0);
+                    // Al editar no se auto-avanza: todo cerrado, pero con el resumen a la vista
+                    // para revisar el ticket de un vistazo.
+                    setOpenStep(null);
+                    setDescError(false);
                 } else {
                     setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); setPinoCount(0);
+                    setOpenStep('SIZE');
                 }
             }, [editingTicket]);
 
+            useEffect(() => { if (connectMode) setSubTab('LIST'); }, [connectMode]);
+
+            // Si todo lo marcado ya es el mismo cliente conectado, el botón desconecta.
+            const pickedTickets = tickets.filter(t => connectIds.includes(t.id));
+            const isDisconnect = pickedTickets.length > 0 && pickedTickets.every(t => t.groupId && t.groupId === pickedTickets[0].groupId);
+
+            const toggleStep = (k) => setOpenStep(prev => prev === k ? null : k);
+            // Auto-avance: al elegir se colapsa el paso y se abre el siguiente. Si el siguiente
+            // ya está resuelto (están corrigiendo un dato) solo se cierra, sin brincar.
+            const pickSize = (s) => {
+                // Al cambiar entre Razer y un vehículo normal el servicio elegido deja de existir:
+                // se limpia para no guardar una combinación sin precio.
+                const keepService = service && serviceFitsSize(service.id, s.id);
+                if (!keepService) setService(null);
+                setSize(s);
+                if (!isDesktop) setOpenStep(keepService ? null : 'SERVICE');
+            };
+            const pickService = (s) => { setService(s); if (!isDesktop) setOpenStep(extrasCount > 0 ? null : 'EXTRAS'); };
             const toggle = (item) => setWashers(prev => toggleSelection(prev, item, 3));
             const toggleExtra = (item) => setExtras(prev => toggleSelection(prev, item));
             const addExtra = (item) => setExtras(prev => [...prev, item]);
@@ -2040,6 +2233,9 @@ Firma: __________________
             const addVarios = () => {
                 const price = parseFloat(vPrice);
                 if (!vDesc || !price || price <= 0) return alert("Error.");
+                if (isRazerText(vDesc)) {
+                    return alert('⛔ El Razer se captura con el tamaño "Razer" y luego Chico o Grande — no en Varios.');
+                }
                 const svc = matchServiceName(vDesc);
                 if (svc) {
                     return alert(`⛔ "${vDesc}" es un servicio.\n\nSelecciona el Tamaño y el Servicio con los botones — no lo escribas en Varios.`);
@@ -2063,105 +2259,168 @@ Firma: __________________
                 setVPrice('');
             };
             const canSubmit = ((size && service) || extras.length > 0 || snackCount > 0 || pinoCount > 0);
-            const handleSubmit = () => {
+
+            const groupedExtras = (() => {
+                const visible = extrasList.filter(e => !e.retired && !['PINO', 'QA_PINO'].includes(e.id));
+                return EXTRA_GROUPS.map(g => ({ ...g, items: visible.filter(e => (EXTRA_GROUP_OF[e.id] || 'OTROS') === g.id) }));
+            })();
+            const basePrice = (size && service && prices[service.id]?.[size.id]) || 0;
+            const extrasPrice = extras.reduce((a, b) => a + b.price, 0);
+            const totalPrice = basePrice + extrasPrice + (snackCount * snackPrice) + (pinoCount * pinoPrice);
+            const variosList = extras.filter(e => e.id.startsWith('VARIOS'));
+            const extrasCount = extras.length + pinoCount + snackCount;
+            const extrasSummary = extrasCount > 0 ? `${extrasCount} · $${extrasPrice + (snackCount * snackPrice) + (pinoCount * pinoPrice)}` : '';
+            const handleSubmit = async () => {
                 if (!canSubmit) return;
+                // Sin descripción el ticket no se puede amarrar a un carro: ni los lavadores
+                // saben cuál es, ni caja sabe a quién le está cobrando.
+                if (!desc.trim()) {
+                    setDescError(true);
+                    setOpenStep(null);
+                    if (descRef.current) { descRef.current.focus(); descRef.current.scrollIntoView({ block: 'center' }); }
+                    return alert('⛔ Falta la DESCRIPCIÓN VISUAL del vehículo.\n\nEscribe color y modelo, por ejemplo: NISSAN NP300 BLANCA.');
+                }
                 const finalExtras = [...extras];
                 for (let i = 0; i < pinoCount; i++) {
                     finalExtras.push({ id: 'PINO', label: 'Pino', price: pinoPrice, commission: 0 });
                 }
-                saveTicket({ size, service, washers, extras: finalExtras, vehicleDesc: desc, snackCount });
-                if (!editingTicket) { setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); setPinoCount(0); }
+                const isNew = !editingTicket;
+                const newId = await saveTicket({ size, service, washers, extras: finalExtras, vehicleDesc: desc, snackCount });
+                // Si el guardado falló no se limpia la captura: el ticket se volvería a teclear.
+                if (isNew && newId) {
+                    setSize(null); setService(null); setWashers([]); setExtras([]); setDesc(''); setSnackCount(0); setPinoCount(0); setOpenStep('SIZE');
+                    setShowVarios(false); setDescError(false);
+                }
             };
-const renderSizes = () => (
+            const descInput = (sizeCls) => (
+                <>
+                    <input
+                        ref={descRef}
+                        value={desc}
+                        onChange={e => { setDesc(e.target.value); if (descError) setDescError(false); }}
+                        placeholder="DESCRIPCIÓN VISUAL"
+                        className={`w-full ${sizeCls} border-4 rounded-xl font-bold transition-colors text-center uppercase ${descError ? 'border-red-500 bg-red-50 text-red-900 placeholder-red-400' : 'border-blue-600 bg-blue-50 text-blue-900 placeholder-blue-400 focus:bg-white'}`}
+                    />
+                    {descError && <p className="text-red-600 text-xs font-bold text-center mt-1">Escribe color y modelo, ej. NISSAN NP300 BLANCA</p>}
+                </>
+            );
+
+            const renderCard = (Icon, title, content) => (
                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
-                    <h3 className="font-bold mb-3 text-gray-700 flex items-center"><Car className="w-5 h-5 mr-2" /> 1. Tamaño</h3>
-                    <div className={`grid ${isDesktop ? 'grid-cols-1 gap-2' : 'grid-cols-1 space-y-2'}`}>
-                        {SIZES.map(s => (
-                            <button key={s.id} onClick={() => setSize(s)}
-                                className={`w-full ${isDesktop ? 'p-2' : 'p-4'} text-left rounded-lg border-2 transition-all ${size?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 hover:bg-gray-50'}`}>
-                                {s.label}
-                            </button>
-                        ))}
-                    </div>
+                    <h3 className="font-bold mb-3 text-gray-700 flex items-center"><Icon className="w-5 h-5 mr-2" /> {title}</h3>
+                    {content}
                 </div>
             );
 
-            const renderWashers = () => (
-                <div className="bg-white p-4 rounded-xl shadow border h-fit">
-                    <h3 className="font-bold mb-3 text-gray-700 flex items-center"><User className="w-5 h-5 mr-2" /> 2. Lavadores ({washers.length}/3)</h3>
-                    <div className={`grid ${isDesktop ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-3'} mb-4`}>
-                        {employees.filter(e => e.active && e.role !== 'BOLERO' && e.role !== 'SUPERVISOR').map(e => (
-                            <button key={e.name} onClick={() => toggle(e.name)}
-                                className={`${isDesktop ? 'p-2 text-sm' : 'p-4'} rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>
-                                {e.name}
-                            </button>
-                        ))}
-                    </div>
+            const sizesContent = () => (
+                <div className={`grid ${isDesktop ? 'grid-cols-1 gap-2' : 'grid-cols-1 space-y-2'}`}>
+                    {SIZES.map(s => (
+                        <button key={s.id} onClick={() => pickSize(s)}
+                            className={`w-full ${isDesktop ? 'p-2' : 'p-4'} text-left rounded-lg border-2 transition-all ${size?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 hover:bg-gray-50'}`}>
+                            {s.label}
+                        </button>
+                    ))}
                 </div>
             );
+            const renderSizes = () => renderCard(Car, '1. Tamaño', sizesContent());
 
-            const renderServices = () => (
-                <div className="bg-white p-4 rounded-xl shadow border h-fit">
-                    <h3 className="font-bold mb-3 text-gray-700 flex items-center"><FileText className="w-5 h-5 mr-2" /> 3. Servicio</h3>
-                    <div className={`space-y-2 mb-4 ${isDesktop ? 'text-sm' : ''}`}>
-                        {ACTIVE_SERVICES.map(s => {
-                            const price = size && prices[s.id] ? prices[s.id][size.id] : null;
-                            return <button key={s.id} disabled={!size} onClick={() => setService(s)} className={`w-full ${isDesktop ? 'p-2' : 'p-3'} text-left rounded-lg border-2 flex justify-between items-center transition-all ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 opacity-90 hover:bg-gray-50'}`}><span>{s.label}</span>{price !== null && <span className="bg-white px-2 py-1 rounded text-sm shadow-sm border">${price}</span>}</button>;
-                        })}
-                    </div>
-                    <div className="mt-4 border-t pt-2">
-                        <h3 className="font-bold mb-2 text-gray-700 text-sm">Extras</h3>
-                        <div className={`grid ${isDesktop ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-2'}`}>
-                            {extrasList.filter(e => !['PINO', 'QA_PINO'].includes(e.id)).map(e => {
-                                const count = extras.filter(x => x.id === e.id).length;
-                                if (e.id === 'BOLEADA' || e.id === 'LIMP_ZONA') {
-                                    return (
-                                        <div key={e.id} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'} ${isDesktop ? 'col-span-2' : ''}`}>
-                                            <span className="flex-1">{e.label} (+${e.price})</span>
-                                            <div className="flex items-center gap-2"><button onClick={() => removeExtra(e)} disabled={count === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button><span className="w-6 text-center font-bold">{count}</span><button onClick={() => addExtra(e)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button></div>
-                                        </div>
-                                    );
-                                }
-                                return <button key={e.id} onClick={() => toggleExtra(e)} className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${extras.some(x => x.id === e.id) ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'border-gray-200 hover:bg-gray-50'}`}><span>{e.label}</span><span>+${e.price}</span></button>;
-                            })}
-                        </div>
-                        <div className="mt-2 border-t pt-2 space-y-2">
-                            <div className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${pinoCount > 0 ? 'bg-green-50 border-green-600 font-bold text-green-800' : 'border-gray-200 hover:bg-gray-50'} ${isDesktop ? 'col-span-2' : ''}`}>
-                                <span className="flex-1">Pinos (+${pinoPrice})</span>
-                                <div className="flex items-center gap-2"><button onClick={() => setPinoCount(p => Math.max(0, p - 1))} disabled={pinoCount === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button><span className="w-6 text-center font-bold">{pinoCount}</span><button onClick={() => setPinoCount(p => p + 1)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button></div>
+            const washersContent = () => (
+                <div className={`grid ${isDesktop ? 'grid-cols-2 gap-2' : 'grid-cols-2 sm:grid-cols-3 gap-3'}`}>
+                    {employees.filter(e => e.active && e.role !== 'BOLERO' && e.role !== 'SUPERVISOR').map(e => (
+                        <button key={e.name} onClick={() => toggle(e.name)}
+                            className={`${isDesktop ? 'p-2 text-sm' : 'p-4'} rounded-lg border-2 text-center font-medium transition-all ${washers.includes(e.name) ? 'bg-green-100 border-green-600 text-green-800 shadow-inner' : 'border-gray-200 hover:bg-gray-50'}`}>
+                            {e.name}
+                        </button>
+                    ))}
+                </div>
+            );
+            const renderWashers = () => renderCard(User, `2. Lavadores (${washers.length}/3)`, <div className="mb-1">{washersContent()}</div>);
+
+            const servicesContent = () => (
+                <div className={`space-y-2 ${isDesktop ? 'text-sm' : ''}`}>
+                    {(size ? servicesForSize(size.id) : ACTIVE_SERVICES.filter(s => !RESERVED_SERVICE_IDS.has(s.id))).map(s => {
+                        const price = size && prices[s.id] ? prices[s.id][size.id] : null;
+                        return <button key={s.id} disabled={!size} onClick={() => pickService(s)} className={`w-full ${isDesktop ? 'p-2' : 'p-3'} text-left rounded-lg border-2 flex justify-between items-center transition-all ${service?.id === s.id ? 'border-blue-600 bg-blue-50 font-bold text-blue-800 shadow-sm' : 'border-gray-200 opacity-90 hover:bg-gray-50'}`}><span>{size && s.shortLabel ? s.shortLabel : s.label}</span>{price != null && <span className="bg-white px-2 py-1 rounded text-sm shadow-sm border">${price}</span>}</button>;
+                    })}
+                </div>
+            );
+            const renderServices = () => renderCard(FileText, '3. Servicio', servicesContent());
+
+            // Todos los extras se ven igual: una tarjeta del mismo tamaño. Los que se venden
+            // varias veces en un ticket (Limpiar Zona, Boleada, Pinos, Snacks) muestran el -/+
+            // adentro de la tarjeta solo cuando ya llevan uno, para que la retícula no se parta.
+            const COUNTER_EXTRA_IDS = ['BOLEADA', 'LIMP_ZONA'];
+            const itemCard = (key, label, price, count, onAdd, onRemove, isCounter) => (
+                <button key={key} onClick={onAdd}
+                    className={`w-full ${isDesktop ? 'p-2' : 'p-3'} rounded-lg border text-sm text-left transition-all flex flex-col ${count > 0 ? 'bg-indigo-50 border-indigo-600 font-bold text-indigo-800' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                    <span className="flex justify-between items-start gap-1 w-full">
+                        <span className="min-w-0">{label}</span>
+                        <span className="shrink-0 whitespace-nowrap">+${price}</span>
+                    </span>
+                    {count > 0 && isCounter && (
+                        <span className="flex items-center justify-between w-full mt-2">
+                            <span onClick={ev => { ev.stopPropagation(); onRemove(); }} className="w-9 h-9 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold text-gray-700">−</span>
+                            <span className="font-bold text-base">{count}</span>
+                            <span onClick={ev => { ev.stopPropagation(); onAdd(); }} className="w-9 h-9 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold text-gray-700">+</span>
+                        </span>
+                    )}
+                </button>
+            );
+
+            const renderExtraButton = (e) => {
+                const count = extras.filter(x => x.id === e.id).length;
+                const isCounter = COUNTER_EXTRA_IDS.includes(e.id);
+                return itemCard(e.id, e.label, e.price, count,
+                    () => isCounter ? addExtra(e) : toggleExtra(e),
+                    () => removeExtra(e), isCounter);
+            };
+
+            const extrasContent = () => (
+                <div className="space-y-3">
+                    {groupedExtras.map(g => (g.items.length === 0 && g.id !== 'OTROS') ? null : (
+                        <div key={g.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                            <h4 className="font-bold text-gray-700 text-sm mb-2">{g.label}</h4>
+                            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
+                                {g.items.map(renderExtraButton)}
+                                {g.id === 'OTROS' && (
+                                    <>
+                                        {itemCard('PINO', 'Pinos', pinoPrice, pinoCount, () => setPinoCount(p => p + 1), () => setPinoCount(p => Math.max(0, p - 1)), true)}
+                                        {itemCard('SNACKS', 'Snacks', snackPrice, snackCount, () => setSnackCount(s => s + 1), () => setSnackCount(s => Math.max(0, s - 1)), true)}
+                                    </>
+                                )}
                             </div>
-                            <div className={`w-full p-2 rounded-lg border text-sm flex justify-between items-center transition-all ${snackCount > 0 ? 'bg-orange-50 border-orange-600 font-bold text-orange-800' : 'border-gray-200 hover:bg-gray-50'} ${isDesktop ? 'col-span-2' : ''}`}>
-                                <span className="flex-1">Snacks (+${snackPrice})</span>
-                                <div className="flex items-center gap-2"><button onClick={() => setSnackCount(s => Math.max(0, s - 1))} disabled={snackCount === 0} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">-</button><span className="w-6 text-center font-bold">{snackCount}</span><button onClick={() => setSnackCount(s => s + 1)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-full font-bold">+</button></div>
-                            </div>
                         </div>
-                    </div>
-                    <div className="mt-4 border-t pt-2">
-                        <h3 className="font-bold mb-2 text-gray-700 text-sm">Varios (Costo Extra)</h3>
-                        <div className="flex gap-2 mb-2"><input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Motivo" className="w-full p-2 border rounded text-sm" /><input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" /><Button onClick={addVarios} className="py-2 px-3"><PlusCircle size={16} /></Button></div>
-                        {extras.filter(e => e.id.startsWith('VARIOS')).map(e => (
-                            <div key={e.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 border rounded mb-1"><span>{e.label}</span><div className="flex items-center gap-2"><span className="font-bold">${e.price}</span><button onClick={() => setExtras(prev => prev.filter(x => x.id !== e.id))} className="text-red-500"><Trash2 size={14} /></button></div></div>
+                    ))}
+                    <div>
+                        {variosList.map(e => (
+                            <div key={e.id} className="flex justify-between items-center text-sm p-2 bg-white border rounded mb-1"><span className="min-w-0 truncate">{e.label}</span><div className="flex items-center gap-2 shrink-0"><span className="font-bold">${e.price}</span><button onClick={() => setExtras(prev => prev.filter(x => x.id !== e.id))} className="text-red-500"><Trash2 size={14} /></button></div></div>
                         ))}
+                        {showVarios ? (
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="font-bold text-gray-700 text-sm">Otro cargo</h4>
+                                    <button onClick={() => { setShowVarios(false); setVDesc(''); setVPrice(''); }} className="text-gray-400 p-1"><X size={16} /></button>
+                                </div>
+                                <div className="flex gap-2"><input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Motivo" className="w-full p-2 border rounded text-sm" /><input type="number" value={vPrice} onChange={e => setVPrice(e.target.value)} placeholder="$" className="w-20 p-2 border rounded text-sm" /><Button onClick={addVarios} className="py-2 px-3"><PlusCircle size={16} /></Button></div>
+                            </div>
+                        ) : (
+                            <button onClick={() => setShowVarios(true)} className="w-full text-sm font-bold text-blue-700 py-2 hover:bg-blue-50 rounded-lg flex items-center justify-center gap-2"><PlusCircle size={16} /> Otro cargo…</button>
+                        )}
                     </div>
                 </div>
             );
-
+            const renderExtras = () => renderCard(Package, 'Extras', extrasContent());
             const renderActions = () => (
                 <div className="bg-white p-4 rounded-xl shadow border h-fit">
-                    <input
-                        value={desc}
-                        onChange={e => setDesc(e.target.value)}
-                        placeholder="DESCRIPCIÓN VISUAL"
-                        className="w-full p-4 border-4 border-blue-600 rounded-xl mb-4 text-xl font-bold bg-blue-50 text-blue-900 placeholder-blue-400 focus:bg-white transition-colors text-center uppercase"
-                    />
+                    <div className="mb-4">{descInput('p-4 text-xl')}</div>
                     <div className="space-y-2">
                         {isDesktop && (
                             <div className="bg-gray-50 p-3 rounded-lg border text-sm mb-4">
-                                <div className="flex justify-between mb-1"><span>Base:</span> <span>${(size && service && prices[service.id]?.[size.id]) || 0}</span></div>
-                                <div className="flex justify-between mb-1"><span>Extras:</span> <span>${extras.reduce((a, b) => a + b.price, 0)}</span></div>
+                                <div className="flex justify-between mb-1"><span>Base:</span> <span>${basePrice}</span></div>
+                                <div className="flex justify-between mb-1"><span>Extras:</span> <span>${extrasPrice}</span></div>
                                 {pinoCount > 0 && <div className="flex justify-between mb-1 text-green-600"><span>Pinos:</span> <span>${pinoCount * pinoPrice}</span></div>}
                                 {snackCount > 0 && <div className="flex justify-between mb-1 text-orange-600"><span>Snacks:</span> <span>${snackCount * snackPrice}</span></div>}
-                                <div className="flex justify-between font-bold text-lg border-t pt-1 mt-1 text-green-700"><span>Total:</span> <span>${((size && service && prices[service.id]?.[size.id]) || 0) + extras.reduce((a, b) => a + b.price, 0) + (snackCount * snackPrice) + (pinoCount * pinoPrice)}</span></div>
+                                <div className="flex justify-between font-bold text-lg border-t pt-1 mt-1 text-green-700"><span>Total:</span> <span>${totalPrice}</span></div>
                             </div>
                         )}
                         <Button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className={`w-full py-5 text-xl shadow-lg ${!canSubmit ? 'bg-gray-300' : ''}`}>
@@ -2195,36 +2454,82 @@ const renderSizes = () => (
                     <div className="flex-1 overflow-y-auto p-4">
                         {subTab === 'FORM' ? (
                             isDesktop ? (
-                                <div className="grid grid-cols-3 gap-4 h-full content-start">
+                                <div className="grid grid-cols-3 gap-4 h-full content-start [&>div]:min-w-0">
                                     <div className="flex flex-col gap-4">
                                         {renderSizes()}
                                         {renderWashers()}
                                     </div>
                                     <div className="flex flex-col gap-4 h-full overflow-y-auto">
                                         {renderServices()}
+                                        {renderExtras()}
                                     </div>
                                     <div className="flex flex-col gap-4">
                                         {renderActions()}
                                     </div>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full content-start">
-                                    {renderSizes()}
-                                    {renderWashers()}
-                                    {renderServices()}
-                                    <div className="md:col-span-2 mt-auto">
-                                        {renderActions()}
+                                <div className="max-w-3xl mx-auto space-y-3">
+                                    <StepSection num={1} icon={Car} title="Tamaño" summary={size?.label} done={!!size} open={openStep === 'SIZE'} onToggle={() => toggleStep('SIZE')}>
+                                        {sizesContent()}
+                                    </StepSection>
+                                    <StepSection num={2} icon={FileText} title="Servicio" summary={service ? `${service.label}${basePrice ? ` · $${basePrice}` : ''}` : ''} done={!!service} open={openStep === 'SERVICE'} onToggle={() => toggleStep('SERVICE')}>
+                                        {!size && <p className="text-sm text-gray-500 mb-2">Elige primero el tamaño.</p>}
+                                        {servicesContent()}
+                                    </StepSection>
+                                    <StepSection num={3} icon={Package} title="Extras" summary={extrasSummary} done={extrasCount > 0} open={openStep === 'EXTRAS'} onToggle={() => toggleStep('EXTRAS')}>
+                                        {extrasContent()}
+                                        <Button variant="secondary" onClick={() => setOpenStep('WASHERS')} className="w-full mt-3">Listo</Button>
+                                    </StepSection>
+                                    <StepSection num={4} icon={User} title={`Lavadores (${washers.length}/3)`} summary={washers.join(', ')} done={washers.length > 0} open={openStep === 'WASHERS'} onToggle={() => toggleStep('WASHERS')}>
+                                        {washersContent()}
+                                        <Button variant="secondary" onClick={() => setOpenStep(null)} className="w-full mt-3">Listo</Button>
+                                    </StepSection>
+                                    <div className="sticky bottom-0 -mx-4 px-4 pt-2 pb-1 bg-gray-100">
+                                        <div className="bg-white rounded-xl shadow-lg border p-3">
+                                            <div className="mb-2">{descInput('p-3 text-lg')}</div>
+                                            <div className="flex justify-between items-baseline mb-2 px-1">
+                                                <span className="font-bold text-gray-600">Total</span>
+                                                <span className="font-bold text-2xl text-green-700">${totalPrice}</span>
+                                            </div>
+                                            <Button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} className={`w-full py-4 text-xl shadow-lg ${!canSubmit ? 'bg-gray-300' : ''}`}>
+                                                {isSubmitting ? <Loader2 className="animate-spin" /> : (editingTicket ? <><Save className="w-6 h-6" /> GUARDAR</> : <><PlusCircle className="w-6 h-6" /> CREAR TICKET</>)}
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             )
                         ) : (
                             <div className="max-w-3xl mx-auto space-y-4">
+                                {tickets.length > 0 && (connectMode ? (
+                                    <div className="sticky top-0 z-10 bg-indigo-600 text-white rounded-xl p-3 shadow-lg flex items-center justify-between gap-3">
+                                        <span className="font-bold text-sm min-w-0">
+                                            <span className="flex items-center gap-2"><Layers size={16} className="shrink-0" /> Conectar cliente</span>
+                                            <span className="block text-xs font-normal text-indigo-100 mt-0.5">{isDisconnect ? `Ya están conectados · se desconectan ${connectIds.length > 1 ? `los ${connectIds.length}` : ''}`.trim() : (connectIds.length < 2 ? 'Marca los tickets del mismo cliente' : `${connectIds.length} tickets seleccionados`)}</span>
+                                        </span>
+                                        <div className="flex gap-2 shrink-0">
+                                            <Button onClick={closeConnectPicker} variant="secondary" className="py-2 text-sm">Cancelar</Button>
+                                            {isDisconnect
+                                                ? <Button onClick={disconnectSelected} variant="danger" className="py-2 text-sm">Desconectar ({connectIds.length})</Button>
+                                                : <Button onClick={connectSelected} disabled={connectIds.length < 2} variant="success" className="py-2 text-sm">Conectar {connectIds.length >= 2 ? `(${connectIds.length})` : ''}</Button>}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Button onClick={() => openConnectPicker(null)} variant="blueLight" className="w-full py-3"><Layers size={18} /> Conectar cliente (varios vehículos)</Button>
+                                ))}
                                 {tickets.length === 0 && <div className="text-center text-gray-400 py-10">No hay vehículos en proceso.</div>}
-                                {tickets.map(t => (
-                                    <div key={t.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                                {groupTickets(tickets).map(g => {
+                                    const cards = g.items.map(t => {
+                                    const picked = connectIds.includes(t.id);
+                                    return (
+                                    <div key={t.id} onClick={connectMode ? () => toggleConnectId(t.id) : undefined} className={`bg-white p-5 rounded-xl shadow-sm border transition-shadow ${connectMode ? `cursor-pointer ${picked ? 'border-indigo-600 ring-2 ring-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'}` : 'border-gray-200 hover:shadow-md'}`}>
                                         <div className="flex justify-between items-start mb-3 border-b pb-3">
                                             <div>
                                                 <div className="flex items-center gap-2">
+                                                    {connectMode && (
+                                                        <div className={`w-6 h-6 rounded border-2 shrink-0 flex items-center justify-center ${picked ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-400'}`}>
+                                                            {picked && <Check size={16} />}
+                                                        </div>
+                                                    )}
                                                     <span className="font-mono font-bold text-xl text-gray-800 bg-gray-100 px-2 py-1 rounded">#{t.id.slice(-4).toUpperCase()}</span>
                                                     <span className="text-xs font-bold text-gray-500 flex items-center bg-gray-50 px-2 py-1 rounded border"><Clock size={12} className="mr-1" /> {t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                                                 </div>
@@ -2257,14 +2562,28 @@ const renderSizes = () => (
                                             </div>
                                         </div>
 
-                                        {role !== 'CASHIER' && (
-                                            <div className="flex gap-3 pt-2">
+                                        {role !== 'CASHIER' && !connectMode && (
+                                            <div className="flex flex-wrap gap-3 pt-2">
                                                 <Button onClick={() => startEdit(t)} variant="warning" className="flex-1 py-2 text-sm"><Pencil size={16} /> Editar</Button>
                                                 <Button onClick={() => { setDeleteModal(t.id); setDeleteReason(''); }} variant="danger" className="flex-1 py-2 text-sm"><Trash2 size={16} /> Borrar</Button>
+                                                {t.groupId && <Button onClick={() => disconnectTicket(t.id)} variant="ghost" className="py-2 text-xs">Desconectar</Button>}
                                             </div>
                                         )}
                                     </div>
-                                ))}
+                                    );
+                                    });
+                                    if (!g.group || g.items.length < 2) return cards;
+                                    const groupTotal = g.items.reduce((a, x) => a + (x.price || 0), 0);
+                                    return (
+                                        <div key={g.key} className="border-2 border-indigo-300 bg-indigo-50 rounded-xl p-2 space-y-2">
+                                            <div className="flex justify-between items-center px-2 pt-1 text-indigo-800">
+                                                <span className="font-bold text-xs uppercase tracking-wider flex items-center gap-2"><Layers size={14} /> Cliente conectado · {g.items.length} vehículos</span>
+                                                <span className="font-bold">{formatCurrency(groupTotal)}</span>
+                                            </div>
+                                            {cards}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -2293,7 +2612,7 @@ const renderSizes = () => (
         };
 
         const CashierView = () => {
-            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, processMultiPayment, deleteTicket, startEdit, updateSnacks, updateQuickItem, addDeduction, addExpense, addAvance, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList, addAdminSnack, cashCounts, addCortesia } = useContext(AppContext);
+            const { tickets, history, activeId, setActiveId, payment, setPayment, processPayment, processCardPayment, processMultiPayment, deleteTicket, startEdit, openConnectPicker, updateSnacks, updateQuickItem, addDeduction, addExpense, addAvance, employees, exRate, saveBatchAttendance, isSubmitting, role, snackPrice, expenses, addCashCount, addCashDrop, cashDrops, cashIns, getOpeningCash, extrasList, addAdminSnack, cashCounts, addCortesia } = useContext(AppContext);
             const t = tickets.find(x => x.id === activeId);
             const [showSnack, setShowSnack] = useState(false);
             const [showAdminSnack, setShowAdminSnack] = useState(false);
@@ -2324,6 +2643,7 @@ const renderSizes = () => (
             const [changeModal, setChangeModal] = useState(null);
             const [multiMode, setMultiMode] = useState(false);
             const [selectedIds, setSelectedIds] = useState([]);
+            const [connectWarn, setConnectWarn] = useState(null);
 
             const [declaredMxn, setDeclaredMxn] = useState('');
             const [declaredUsd, setDeclaredUsd] = useState('');
@@ -2549,6 +2869,18 @@ const renderSizes = () => (
             }
 
             const multiTickets = selectedIds.map(id => tickets.find(x => x.id === id)).filter(Boolean);
+            // Otros tickets del mismo cliente conectado que siguen pendientes ("tickets" solo
+            // trae PENDING, así que lo que aparece aquí es lo que falta por cobrar).
+            const groupMates = t && t.groupId ? tickets.filter(x => x.groupId === t.groupId && x.id !== t.id) : [];
+            const groupTotal = t ? (t.price || 0) + groupMates.reduce((a, x) => a + (x.price || 0), 0) : 0;
+            const payCash = () => processPayment(({ changeMxn, changeUsd, isOnlyUsd }) => { if (changeMxn > 0.005 || changeUsd > 0.005) setChangeModal({ changeMxn, changeUsd, isOnlyUsd }); });
+            const chargeAll = () => {
+                setConnectWarn(null);
+                setActiveId(null);
+                setMultiMode(true);
+                setSelectedIds([t.id, ...groupMates.map(m => m.id)]);
+                setPayment({ mxn: '', usd: '' });
+            };
             const combinedPrice = multiTickets.reduce((sum, t) => sum + t.price, 0);
             let multiChangeMxn = 0;
             let multiChangeUsd = 0;
@@ -2603,7 +2935,8 @@ const renderSizes = () => (
                             )}
 
                             <div className="overflow-y-auto flex-1 p-2 space-y-2">
-                                {tickets.map(ticket => {
+                                {groupTickets(tickets).map(g => {
+                                    const cards = g.items.map(ticket => {
                                     const isSelectedMulti = selectedIds.includes(ticket.id);
                                     const isActiveSingle = activeId === ticket.id;
                                     return (
@@ -2623,6 +2956,18 @@ const renderSizes = () => (
                                                 </div>
                                             </div>
                                             <div className="text-sm text-gray-600 mt-1">{ticket.service?.label || describeTicketItems(ticket) || 'Extras'} {ticket.size?.label && <span className="bg-gray-200 px-1.5 rounded text-xs">{ticket.size.label}</span>}</div>
+                                        </div>
+                                    );
+                                    });
+                                    if (!g.group || g.items.length < 2) return cards;
+                                    const groupTotal = g.items.reduce((a, x) => a + (x.price || 0), 0);
+                                    return (
+                                        <div key={g.key} className="border-2 border-indigo-300 bg-indigo-50 rounded-lg p-1.5 space-y-1.5">
+                                            <div className="flex justify-between items-center px-1.5 pt-0.5 text-indigo-800 text-xs font-bold">
+                                                <span className="uppercase tracking-wide flex items-center gap-1.5"><Layers size={12} /> Cliente conectado · {g.items.length}</span>
+                                                <span>{formatCurrencyShort(groupTotal)}</span>
+                                            </div>
+                                            {cards}
                                         </div>
                                     );
                                 })}
@@ -2754,6 +3099,15 @@ const renderSizes = () => (
                                             <div className="text-gray-500 font-bold text-xs uppercase mb-1">Lavadores:</div>
                                             <div className="text-gray-800 text-sm">{t.washers && t.washers.length > 0 ? t.washers.join(', ') : 'Sin Asignar'}</div>
                                         </div>
+                                        {t.groupId && (
+                                            <div className={`mt-3 text-left rounded-lg p-2 text-sm font-bold flex items-center gap-2 ${groupMates.length > 0 ? 'bg-indigo-50 border border-indigo-300 text-indigo-800' : 'bg-gray-50 border border-gray-200 text-gray-500'}`}>
+                                                <Layers size={16} className="shrink-0" />
+                                                {groupMates.length > 0
+                                                    ? <span>Cliente conectado · falta cobrar {groupMates.length === 1 ? `#${shortTicketId(groupMates[0].id)}` : `${groupMates.length} tickets`} ({formatCurrency(groupMates.reduce((a, x) => a + (x.price || 0), 0))})</span>
+                                                    : <span>Cliente conectado · los demás tickets ya se cobraron</span>}
+                                            </div>
+                                        )}
+                                        <button onClick={() => openConnectPicker(t)} className="mt-2 w-full text-sm font-bold text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-lg py-2 flex items-center justify-center gap-2"><Layers size={16} /> Conectar cliente</button>
                                     </div>
 
                                     <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -2809,8 +3163,8 @@ const renderSizes = () => (
                                             <div className="flex gap-3">
                                                 {role !== 'CASHIER' && <Button onClick={() => deleteTicket(t.id)} variant="danger" title="Borrar"><Trash2 className="w-6 h-6" /></Button>}
                                                 {role !== 'CASHIER' && <Button onClick={() => startEdit(t)} variant="warning" title="Editar"><Pencil className="w-6 h-6" /></Button>}
-                                                <Button onClick={() => processPayment(({ changeMxn, changeUsd, isOnlyUsd }) => { if (changeMxn > 0.005 || changeUsd > 0.005) setChangeModal({ changeMxn, changeUsd, isOnlyUsd }); })} disabled={isSubmitting} variant="success" className="flex-1 shadow-lg">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</Button>
-                                                {role === 'CASHIER' && <Button onClick={processCardPayment} disabled={isSubmitting} title="Tarjeta"><CreditCard className="w-6 h-6" /></Button>}
+                                                <Button onClick={() => { if (groupMates.length > 0) { setConnectWarn('CASH'); return; } payCash(); }} disabled={isSubmitting} variant="success" className="flex-1 shadow-lg">{isSubmitting ? <Loader2 className="animate-spin" /> : <><Printer className="w-6 h-6" /> COBRAR</>}</Button>
+                                                {role === 'CASHIER' && <Button onClick={() => { if (groupMates.length > 0) { setConnectWarn('CARD'); return; } processCardPayment(); }} disabled={isSubmitting} title="Tarjeta"><CreditCard className="w-6 h-6" /></Button>}
                                             </div>
                                             <div className="text-center mt-2">
                                                 <button onClick={() => setShowCortesia(true)} className="text-xs text-gray-400 hover:text-gray-500 underline underline-offset-2">Solicitar cortesía</button>
@@ -2820,6 +3174,31 @@ const renderSizes = () => (
                                 </div>
                             ) : <div className="text-gray-400 flex flex-col items-center my-auto"><LogOut className="w-16 h-16 opacity-20 mb-2" />Selecciona un ticket</div>}
                         </div>
+
+                        {connectWarn && t && groupMates.length > 0 && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                                    <div className="flex items-center gap-2 text-indigo-800 font-bold text-lg mb-1"><Layers className="w-6 h-6" /> Cliente conectado</div>
+                                    <p className="text-gray-600 text-sm mb-4">Este cliente tiene {groupMates.length === 1 ? 'otro ticket' : `otros ${groupMates.length} tickets`} sin cobrar:</p>
+                                    <div className="space-y-2 mb-5">
+                                        {groupMates.map(m => (
+                                            <div key={m.id} className="flex justify-between items-center bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                                                <div className="min-w-0">
+                                                    <div className="font-bold text-gray-800">#{shortTicketId(m.id)} {m.vehicleDesc ? <span className="uppercase font-normal text-sm">· {m.vehicleDesc}</span> : ''}</div>
+                                                    <div className="text-xs text-gray-500">{m.service?.label || describeTicketItems(m) || 'Extras'} {m.size?.label || ''}</div>
+                                                </div>
+                                                <span className="font-bold text-gray-800 shrink-0 pl-2">{formatCurrency(m.price)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <Button onClick={chargeAll} variant="success" className="w-full py-3">Cobrar los {groupMates.length + 1} — {formatCurrency(groupTotal)}</Button>
+                                        <Button onClick={() => { const mode = connectWarn; setConnectWarn(null); if (mode === 'CARD') processCardPayment(); else payCash(); }} variant="secondary" className="w-full">Solo este ticket</Button>
+                                        <button onClick={() => setConnectWarn(null)} className="text-gray-400 text-sm py-1 hover:text-gray-600">Cancelar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {changeModal && (
                             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -4136,12 +4515,12 @@ const renderSizes = () => (
 
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
                         <table className="w-full text-sm text-left border-collapse">
-                            <thead><tr className="bg-gray-100"><th className="p-3 border">Servicio</th>{SIZES.map(s => <th key={s.id} className="p-3 border">{s.label}</th>)}</tr></thead>
+                            <thead><tr className="bg-gray-100"><th className="p-3 border">Servicio</th>{VEHICLE_SIZES.map(s => <th key={s.id} className="p-3 border">{s.label}</th>)}</tr></thead>
                             <tbody>
-                                {ACTIVE_SERVICES.map(svc => (
+                                {ACTIVE_SERVICES.filter(svc => !RESERVED_SERVICE_IDS.has(svc.id)).map(svc => (
                                     <tr key={svc.id}>
                                         <td className="p-3 border font-medium">{svc.label}</td>
-                                        {SIZES.map(size => (
+                                        {VEHICLE_SIZES.map(size => (
                                             <td key={size.id} className="p-2 border">
                                                 <div className="flex flex-col gap-1">
                                                     <input type="number" value={editPrices[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('prices', svc.id, size.id, e.target.value)} className="border p-1 rounded w-full text-center text-green-700 font-bold" placeholder="Precio" />
@@ -4154,6 +4533,30 @@ const renderSizes = () => (
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Los tamaños con medidas propias (Razer, Traila) llevan su tabla aparte:
+                        en la de arriba serían una columna con una sola celda usable. */}
+                    {SPECIAL_SIZES.map(size => (
+                        <div key={size.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-6">
+                            <h4 className="font-bold text-gray-700 mb-4">{size.label}</h4>
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead><tr className="bg-gray-100"><th className="p-3 border">Medida</th><th className="p-3 border text-center">Precio ($)</th><th className="p-3 border text-center">Comisión ($)</th></tr></thead>
+                                <tbody>
+                                    {servicesForSize(size.id).map(svc => (
+                                        <tr key={svc.id}>
+                                            <td className="p-3 border font-medium">{svc.label}</td>
+                                            <td className="p-2 border">
+                                                <input type="number" value={editPrices[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('prices', svc.id, size.id, e.target.value)} className="border p-2 rounded w-full text-center text-green-700 font-bold" placeholder="Precio" />
+                                            </td>
+                                            <td className="p-2 border">
+                                                <input type="number" value={editComms[svc.id]?.[size.id] || 0} onChange={(e) => updateLocalPrice('commissions', svc.id, size.id, e.target.value)} className="border p-2 rounded w-full text-center text-blue-600 font-bold" placeholder="Com" />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ))}
 
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-6">
                         <div className="flex justify-between items-center mb-4">
@@ -4168,7 +4571,7 @@ const renderSizes = () => (
                                 </tr>
                             </thead>
                             <tbody>
-                                {editExtras.map((ex, idx) => (
+                                {editExtras.map((ex, idx) => ex.retired ? null : (
                                     <tr key={idx}>
                                         <td className="p-3 border font-bold text-gray-700 bg-gray-50">
                                             {ex.label}
