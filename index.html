@@ -191,8 +191,17 @@
                 // para que los tickets y la nómina de antes sigan mostrando su etiqueta y comisión.
                 { id: 'RZR_CHICO', label: 'Razer Chico', price: 640, commission: 224, retired: true },
                 { id: 'RZR_GRANDE', label: 'Razer Grande', price: 800, commission: 280, retired: true },
-                { id: 'ALFOMBRA', label: 'Lavar Alfombra', price: 240, commission: 84 },
-                { id: 'ASIENTOS', label: 'Lavar Asientos', price: 240, commission: 84 },
+                // Estos tres se cobran según el tamaño del vehículo, no con un precio único.
+                // Comisión al 35%, que es la tarifa del resto de los extras.
+                { id: 'CERA', label: 'Cera',
+                    prices: { AUTO: 340, SUV_CHICA: 400, PICKUP: 400, SUV_GDE: 460 },
+                    commissions: { AUTO: 119, SUV_CHICA: 140, PICKUP: 140, SUV_GDE: 161 } },
+                { id: 'ALFOMBRA', label: 'Lavar Alfombra',
+                    prices: { AUTO: 320, SUV_CHICA: 400, PICKUP: 400, SUV_GDE: 640 },
+                    commissions: { AUTO: 112, SUV_CHICA: 140, PICKUP: 140, SUV_GDE: 224 } },
+                { id: 'ASIENTOS', label: 'Lavar Asientos',
+                    prices: { AUTO: 320, SUV_CHICA: 400, PICKUP: 400, SUV_GDE: 640 },
+                    commissions: { AUTO: 112, SUV_CHICA: 140, PICKUP: 140, SUV_GDE: 224 } },
             ]
         };
 
@@ -273,7 +282,16 @@
             { id: 'EXTERIOR', label: 'Exterior' },
             { id: 'OTROS', label: 'Otros' },
         ];
+        // Un extra con tarifa por tamaño guarda mapas `prices`/`commissions` en vez de un
+        // precio único. El ticket siempre guarda el importe ya resuelto, así que recibos, caja
+        // y nómina siguen leyendo un solo número.
+        const isSizedExtra = (e) => !!(e && e.prices);
+        const extraPriceFor = (e, sizeId) => isSizedExtra(e) ? (sizeId && e.prices[sizeId] != null ? e.prices[sizeId] : null) : (e.price || 0);
+        const extraCommissionFor = (e, sizeId) => isSizedExtra(e) ? ((sizeId && e.commissions && e.commissions[sizeId]) || 0) : (e.commission || 0);
+        const extraForTicket = (e, sizeId) => ({ id: e.id, label: e.label, price: extraPriceFor(e, sizeId) || 0, commission: extraCommissionFor(e, sizeId) });
+
         const EXTRA_GROUP_OF = {
+            CERA: 'EXTERIOR',
             ALFOMBRA: 'INTERIOR', ASIENTOS: 'INTERIOR', CREMA_ASIENTOS: 'INTERIOR',
             ASPIRADO_CAJUELA: 'INTERIOR', AROMA: 'INTERIOR', ARMORALL: 'INTERIOR', LIMP_ZONA: 'INTERIOR',
             MOTOR: 'EXTERIOR', CHASIS: 'EXTERIOR', LIMP_FOCOS: 'EXTERIOR',
@@ -631,7 +649,10 @@
                         if (item.extras && item.extras.length > 0) {
                             item.extras.forEach(ex => {
                                 const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
-                                const commissionValue = dbExtra ? (dbExtra.commission || 0) : (ex.commission || 0);
+                                // Un extra con tarifa por tamaño no tiene una comisión única en el
+                                // catálogo: vale la que quedó guardada en el ticket, que es la del
+                                // tamaño con el que se cobró.
+                                const commissionValue = (dbExtra && !isSizedExtra(dbExtra)) ? (dbExtra.commission || 0) : (ex.commission || 0);
                                 const share = Math.round((commissionValue / washerCount) * 100) / 100;
 
                                 if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
@@ -1512,7 +1533,15 @@ Firma: __________________
                             // La BD manda en precio y comisión (se editan en Precios), pero el
                             // nombre del extra vive en el código: así un renombre del catálogo
                             // se aplica solo, sin tener que tocar cada doc de Firestore.
-                            return match ? { ...def, ...match, label: def.label } : def;
+                            if (!match) return def;
+                            const merged = { ...def, ...match, label: def.label };
+                            // Igual que con los servicios: un tamaño que la BD todavía no tiene
+                            // toma su tarifa de fábrica en lugar de quedarse sin precio.
+                            if (isSizedExtra(def)) {
+                                merged.prices = { ...def.prices, ...(match.prices || {}) };
+                                merged.commissions = { ...def.commissions, ...(match.commissions || {}) };
+                            }
+                            return merged;
                         });
                         setExtrasList(cleanList);
                     } else {
@@ -2321,6 +2350,20 @@ Firma: __________________
                 // se limpia para no guardar una combinación sin precio.
                 const keepService = service && serviceFitsSize(service.id, s.id);
                 if (!keepService) setService(null);
+                // Los extras con tarifa por tamaño ya cobrados se recalculan al nuevo tamaño, y
+                // se quitan si ahí no se venden: si no, el ticket se quedaría con el precio del
+                // tamaño anterior.
+                // Se calcula sobre el estado actual, no dentro del updater: ahí el código no
+                // corre en este momento y el aviso nunca saldría.
+                const dropped = [];
+                const nextExtras = extras.map(x => {
+                    const def = extrasList.find(d => d.id === x.id);
+                    if (!def || !isSizedExtra(def)) return x;
+                    if (extraPriceFor(def, s.id) == null) { dropped.push(def.label); return null; }
+                    return extraForTicket(def, s.id);
+                }).filter(Boolean);
+                setExtras(nextExtras);
+                if (dropped.length > 0) alert(`Se quitaron del ticket porque no se cobran en ${s.label}: ${[...new Set(dropped)].join(', ')}.`);
                 setSize(s);
                 if (!isDesktop) setOpenStep(keepService ? null : 'SERVICE');
             };
@@ -2332,6 +2375,9 @@ Firma: __________________
             const addVarios = () => {
                 const price = parseFloat(vPrice);
                 if (!vDesc || !price || price <= 0) return alert("Error.");
+                if (/\bceras?\b/.test(normVariosText(vDesc))) {
+                    return alert('⛔ ¿Es el paquete "Lavado + Cera" o el extra "Cera"?\n\nUsa el botón del servicio o el del extra, no Varios.');
+                }
                 if (isRazerText(vDesc)) {
                     return alert('⛔ El Razer se captura con el tamaño "Razer" y luego Chico o Grande — no en Varios.');
                 }
@@ -2346,8 +2392,11 @@ Firma: __________________
                 if (matchId === 'SNACKS') { setSnackCount(s => s + 1); setVDesc(''); setVPrice(''); return; }
                 if (matchId) {
                     const catalogExtra = extrasList.find(e => e.id === matchId);
+                    if (catalogExtra && isSizedExtra(catalogExtra) && extraPriceFor(catalogExtra, size?.id) == null) {
+                        return alert(`⛔ "${catalogExtra.label}" se cobra según el tamaño. Elige primero el tamaño del vehículo.`);
+                    }
                     if (catalogExtra) {
-                        setExtras(prev => [...prev, catalogExtra]);
+                        setExtras(prev => [...prev, extraForTicket(catalogExtra, size?.id)]);
                         setVDesc('');
                         setVPrice('');
                         return;
@@ -2360,12 +2409,16 @@ Firma: __________________
             const canSubmit = ((size && service) || extras.length > 0 || snackCount > 0 || pinoCount > 0);
 
             const groupedExtras = (() => {
-                const visible = extrasList.filter(e => !e.retired && !['PINO', 'QA_PINO'].includes(e.id));
+                const visible = extrasList.filter(e => !e.retired && !['PINO', 'QA_PINO'].includes(e.id)
+                    && (!isSizedExtra(e) || extraPriceFor(e, size?.id) != null));
                 return EXTRA_GROUPS.map(g => ({ ...g, items: visible.filter(e => (EXTRA_GROUP_OF[e.id] || 'OTROS') === g.id) }));
             })();
             const basePrice = (size && service && prices[service.id]?.[size.id]) || 0;
             const extrasPrice = extras.reduce((a, b) => a + b.price, 0);
             const totalPrice = basePrice + extrasPrice + (snackCount * snackPrice) + (pinoCount * pinoPrice);
+            // Extras con tarifa por tamaño que no se pueden cobrar con el tamaño elegido
+            // (o sin tamaño): se avisa en vez de esconderlos sin explicación.
+            const hiddenSizedExtras = extrasList.filter(e => !e.retired && isSizedExtra(e) && extraPriceFor(e, size?.id) == null);
             const variosList = extras.filter(e => e.id.startsWith('VARIOS'));
             const extrasCount = extras.length + pinoCount + snackCount;
             const extrasSummary = extrasCount > 0 ? `${extrasCount} · $${extrasPrice + (snackCount * snackPrice) + (pinoCount * pinoPrice)}` : '';
@@ -2469,8 +2522,10 @@ Firma: __________________
             const renderExtraButton = (e) => {
                 const count = extras.filter(x => x.id === e.id).length;
                 const isCounter = COUNTER_EXTRA_IDS.includes(e.id);
-                return itemCard(e.id, e.label, e.price, count,
-                    () => isCounter ? addExtra(e) : toggleExtra(e),
+                const price = extraPriceFor(e, size?.id);
+                const item = extraForTicket(e, size?.id);
+                return itemCard(e.id, e.label, price, count,
+                    () => isCounter ? addExtra(item) : toggleExtra(item),
                     () => removeExtra(e), isCounter);
             };
 
@@ -2479,6 +2534,9 @@ Firma: __________________
                     {groupedExtras.map(g => (g.items.length === 0 && g.id !== 'OTROS') ? null : (
                         <div key={g.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
                             <h4 className="font-bold text-gray-700 text-sm mb-2">{g.label}</h4>
+                            {hiddenSizedExtras.length > 0 && g.id === 'INTERIOR' && (
+                                <p className="text-xs text-gray-500 mb-2">Elige el tamaño para cobrar {hiddenSizedExtras.map(e => e.label).join(', ')}.</p>
+                            )}
                             <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
                                 {g.items.map(renderExtraButton)}
                                 {g.id === 'OTROS' && (
@@ -4571,7 +4629,15 @@ Firma: __________________
 
             const updateLocalExtra = (index, field, val) => {
                 const arr = [...editExtras];
-                arr[index][field] = val;
+                arr[index] = { ...arr[index], [field]: val };
+                setEditExtras(arr);
+            };
+
+            const updateLocalExtraSize = (index, field, sizeId, val) => {
+                const arr = [...editExtras];
+                const ex = { ...arr[index] };
+                ex[field] = { ...(ex[field] || {}), [sizeId]: parseFloat(val) || 0 };
+                arr[index] = ex;
                 setEditExtras(arr);
             };
 
@@ -4583,11 +4649,13 @@ Firma: __________________
                 batch.set(doc(db, "settings", "commissions"), editComms);
 
                 editExtras.forEach(e => {
+                    const rates = isSizedExtra(e)
+                        ? { prices: e.prices, commissions: e.commissions }
+                        : { price: parseFloat(e.price) || 0, commission: parseFloat(e.commission) || 0 };
                     if (e.docId) {
                         batch.update(doc(db, "extras", e.docId), {
                             label: e.label,
-                            price: parseFloat(e.price) || 0,
-                            commission: parseFloat(e.commission) || 0,
+                            ...rates,
                             id: e.id
                         });
                     } else {
@@ -4595,8 +4663,7 @@ Firma: __________________
                         batch.set(newRef, {
                             id: e.id || `EXTRA_${Date.now()}`,
                             label: e.label,
-                            price: parseFloat(e.price) || 0,
-                            commission: parseFloat(e.commission) || 0
+                            ...rates
                         });
                     }
                 });
@@ -4657,6 +4724,31 @@ Firma: __________________
                         </div>
                     ))}
 
+                    {editExtras.some(ex => isSizedExtra(ex) && !ex.retired) && (
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-6">
+                            <h4 className="font-bold text-gray-700 mb-1">Extras por tamaño</h4>
+                            <p className="text-xs text-gray-500 mb-4">Estos extras se cobran según el vehículo. Arriba el precio, abajo la comisión.</p>
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead><tr className="bg-gray-100"><th className="p-3 border">Extra</th>{VEHICLE_SIZES.map(sz => <th key={sz.id} className="p-3 border">{sz.label}</th>)}</tr></thead>
+                                <tbody>
+                                    {editExtras.map((ex, idx) => (!isSizedExtra(ex) || ex.retired) ? null : (
+                                        <tr key={ex.id}>
+                                            <td className="p-3 border font-medium">{ex.label}</td>
+                                            {VEHICLE_SIZES.map(sz => (
+                                                <td key={sz.id} className="p-2 border">
+                                                    <div className="flex flex-col gap-1">
+                                                        <input type="number" value={ex.prices?.[sz.id] || 0} onChange={(e) => updateLocalExtraSize(idx, 'prices', sz.id, e.target.value)} className="border p-1 rounded w-full text-center text-green-700 font-bold" placeholder="Precio" />
+                                                        <input type="number" value={ex.commissions?.[sz.id] || 0} onChange={(e) => updateLocalExtraSize(idx, 'commissions', sz.id, e.target.value)} className="border p-1 rounded w-full text-center text-blue-600 text-xs" placeholder="Com" />
+                                                    </div>
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-6">
                         <div className="flex justify-between items-center mb-4">
                             <h4 className="font-bold text-gray-700">Extras (Lista Fija)</h4>
@@ -4670,7 +4762,7 @@ Firma: __________________
                                 </tr>
                             </thead>
                             <tbody>
-                                {editExtras.map((ex, idx) => ex.retired ? null : (
+                                {editExtras.map((ex, idx) => (ex.retired || isSizedExtra(ex)) ? null : (
                                     <tr key={idx}>
                                         <td className="p-3 border font-bold text-gray-700 bg-gray-50">
                                             {ex.label}
