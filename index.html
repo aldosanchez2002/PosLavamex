@@ -186,7 +186,9 @@
                 { id: 'ASPIRADO_CAJUELA', label: 'Aspirar Cajuela', price: 40, commission: 14 },
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
                 { id: 'LIMP_ZONA', label: 'Limpiar Zona', price: 200, commission: 70 },
-                { id: 'CREMA_ASIENTOS', label: 'Crema Asientos', price: 300, commission: 100 },
+                { id: 'CREMA_ASIENTOS', label: 'Crema Asientos',
+                    prices: { AUTO: 340, SUV_CHICA: 400, PICKUP: 460, SUV_GDE: 460 },
+                    commissions: { AUTO: 119, SUV_CHICA: 140, PICKUP: 161, SUV_GDE: 161 } },
                 // Retirados: el Razer ahora se captura como tamaño. Se conservan en el catálogo
                 // para que los tickets y la nómina de antes sigan mostrando su etiqueta y comisión.
                 { id: 'RZR_CHICO', label: 'Razer Chico', price: 640, commission: 224, retired: true },
@@ -194,8 +196,8 @@
                 // Estos tres se cobran según el tamaño del vehículo, no con un precio único.
                 // Comisión al 35%, que es la tarifa del resto de los extras.
                 { id: 'CERA', label: 'Cera',
-                    prices: { AUTO: 340, SUV_CHICA: 400, PICKUP: 400, SUV_GDE: 460 },
-                    commissions: { AUTO: 119, SUV_CHICA: 140, PICKUP: 140, SUV_GDE: 161 } },
+                    prices: { AUTO: 340, SUV_CHICA: 400, PICKUP: 460, SUV_GDE: 460 },
+                    commissions: { AUTO: 119, SUV_CHICA: 140, PICKUP: 161, SUV_GDE: 161 } },
                 { id: 'ALFOMBRA', label: 'Lavar Alfombra',
                     prices: { AUTO: 320, SUV_CHICA: 400, PICKUP: 400, SUV_GDE: 640 },
                     commissions: { AUTO: 112, SUV_CHICA: 140, PICKUP: 140, SUV_GDE: 224 } },
