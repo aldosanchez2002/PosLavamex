@@ -154,16 +154,16 @@
             EXCHANGE_RATE: 18.10,
             SNACK_PRICE: 30,
             PRICES: {
-                GENERAL: { AUTO: 200, SUV_CHICA: 240, PICKUP: 360, SUV_GDE: 360 },
-                WAX: { AUTO: 540, SUV_CHICA: 640, PICKUP: 820, SUV_GDE: 820 },
-                COMPLETE: { AUTO: 840, SUV_CHICA: 1040, PICKUP: 1160, SUV_GDE: 1640 },
-                PREMIUM: { AUTO: 1180, SUV_CHICA: 1440, PICKUP: 1620, SUV_GDE: 2100 },
-                PRESIDENTIAL: { AUTO: 1540, SUV_CHICA: 1940, PICKUP: 2320, SUV_GDE: 2320 },
-                RAZER_CHICO: { RZR: 640 },
-                RAZER_GRANDE: { RZR: 800 },
-                TRAILA_CHICA: { TRAILA: 200 },
-                TRAILA_GRANDE: { TRAILA: 300 },
-                TRAILA_CERRADA: { TRAILA: 400 },
+                GENERAL: { AUTO: 210, SUV_CHICA: 250, PICKUP: 380, SUV_GDE: 380 },
+                WAX: { AUTO: 570, SUV_CHICA: 670, PICKUP: 860, SUV_GDE: 860 },
+                COMPLETE: { AUTO: 890, SUV_CHICA: 1090, PICKUP: 1220, SUV_GDE: 1720 },
+                PREMIUM: { AUTO: 1250, SUV_CHICA: 1510, PICKUP: 1700, SUV_GDE: 2200 },
+                PRESIDENTIAL: { AUTO: 1620, SUV_CHICA: 2040, PICKUP: 2440, SUV_GDE: 2440 },
+                RAZER_CHICO: { RZR: 670 },
+                RAZER_GRANDE: { RZR: 840 },
+                TRAILA_CHICA: { TRAILA: 210 },
+                TRAILA_GRANDE: { TRAILA: 320 },
+                TRAILA_CERRADA: { TRAILA: 420 },
             },
             COMMISSIONS: {
                 GENERAL: { AUTO: 70, SUV_CHICA: 84, PICKUP: 126, SUV_GDE: 126 },
@@ -178,16 +178,16 @@
                 TRAILA_CERRADA: { TRAILA: 140 },
             },
             EXTRAS: [
-                { id: 'MOTOR', label: 'Lavar Motor', price: 400, commission: 140 },
-                { id: 'CHASIS', label: 'Chasis', price: 400, commission: 140 },
+                { id: 'MOTOR', label: 'Lavar Motor', price: 420, commission: 140 },
+                { id: 'CHASIS', label: 'Chasis', price: 420, commission: 140 },
                 { id: 'AROMA', label: 'Aroma', price: 30, commission: 10.50 },
                 { id: 'ARMORALL', label: 'Armor-All', price: 40, commission: 14 },
-                { id: 'LIMP_FOCOS', label: 'Limpiar Focos', price: 340, commission: 120 },
+                { id: 'LIMP_FOCOS', label: 'Limpiar Focos', price: 360, commission: 120 },
                 { id: 'ASPIRADO_CAJUELA', label: 'Aspirar Cajuela', price: 40, commission: 14 },
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
-                { id: 'LIMP_ZONA', label: 'Limpiar Zona', price: 200, commission: 70 },
+                { id: 'LIMP_ZONA', label: 'Limpiar Zona', price: 210, commission: 70 },
                 { id: 'CREMA_ASIENTOS', label: 'Crema Asientos',
-                    prices: { AUTO: 340, SUV_CHICA: 400, PICKUP: 460, SUV_GDE: 460 },
+                    prices: { AUTO: 360, SUV_CHICA: 420, PICKUP: 480, SUV_GDE: 480 },
                     commissions: { AUTO: 119, SUV_CHICA: 140, PICKUP: 161, SUV_GDE: 161 } },
                 // Retirados: el Razer ahora se captura como tamaño. Se conservan en el catálogo
                 // para que los tickets y la nómina de antes sigan mostrando su etiqueta y comisión.
@@ -196,13 +196,13 @@
                 // Estos tres se cobran según el tamaño del vehículo, no con un precio único.
                 // Comisión al 35%, que es la tarifa del resto de los extras.
                 { id: 'CERA', label: 'Cera',
-                    prices: { AUTO: 340, SUV_CHICA: 400, PICKUP: 460, SUV_GDE: 460 },
+                    prices: { AUTO: 360, SUV_CHICA: 420, PICKUP: 480, SUV_GDE: 480 },
                     commissions: { AUTO: 119, SUV_CHICA: 140, PICKUP: 161, SUV_GDE: 161 } },
                 { id: 'ALFOMBRA', label: 'Lavar Alfombra',
-                    prices: { AUTO: 320, SUV_CHICA: 400, PICKUP: 400, SUV_GDE: 640 },
+                    prices: { AUTO: 340, SUV_CHICA: 420, PICKUP: 420, SUV_GDE: 670 },
                     commissions: { AUTO: 112, SUV_CHICA: 140, PICKUP: 140, SUV_GDE: 224 } },
                 { id: 'ASIENTOS', label: 'Lavar Asientos',
-                    prices: { AUTO: 320, SUV_CHICA: 400, PICKUP: 400, SUV_GDE: 640 },
+                    prices: { AUTO: 340, SUV_CHICA: 420, PICKUP: 420, SUV_GDE: 670 },
                     commissions: { AUTO: 112, SUV_CHICA: 140, PICKUP: 140, SUV_GDE: 224 } },
             ]
         };
@@ -1707,7 +1707,7 @@ Firma: __________________
                 const label = type === 'PINO' ? 'Pino (Caja)' : 'Boleada (Caja)';
 
                 const dbExtra = extrasList.find(e => e.id === (type === 'PINO' ? 'PINO' : 'BOLEADA'));
-                const price = dbExtra ? dbExtra.price : (type === 'PINO' ? 35 : 60);
+                const price = dbExtra ? dbExtra.price : (type === 'PINO' ? 40 : 60);
 
                 if (change > 0) {
                     newExtras.push({ id: targetId, label, price, commission: 0 });
@@ -2315,7 +2315,7 @@ Firma: __________________
 
             const isWide = useIsWide();
             const isDesktop = (role === 'CASHIER' || role === 'ADMIN') && isWide;
-            const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
+            const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 40;
 
             useEffect(() => {
                 if (editingTicket) {
@@ -3055,7 +3055,7 @@ Firma: __________________
                 }
             }
 
-            const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 35;
+            const pinoPrice = extrasList.find(e => e.id === 'PINO')?.price || 40;
             const boleadaPrice = extrasList.find(e => e.id === 'BOLEADA')?.price || 60;
 
             return (
@@ -4613,6 +4613,7 @@ Firma: __________________
             const [editPrices, setEditPrices] = useState({});
             const [editComms, setEditComms] = useState({});
             const [editExtras, setEditExtras] = useState([]);
+            const [raisePct, setRaisePct] = useState('5');
 
             useEffect(() => {
                 setEditPrices(JSON.parse(JSON.stringify(prices)));
@@ -4641,6 +4642,24 @@ Firma: __________________
                 ex[field] = { ...(ex[field] || {}), [sizeId]: parseFloat(val) || 0 };
                 arr[index] = ex;
                 setEditExtras(arr);
+            };
+
+            // Los precios vivos están en Firestore, no en el código: cambiarlos ahí es teclear
+            // treinta números a mano. Esto los sube de golpe SOLO en el formulario —las
+            // comisiones no se tocan— y se revisan antes de guardar.
+            const applyRaise = () => {
+                const pct = parseFloat(raisePct);
+                if (!pct || !confirm(`¿Subir TODOS los precios ${pct}% y redondear al 10 más cercano?\n\nLas comisiones no cambian. Revisa los valores y luego presiona GUARDAR.`)) return;
+                const up = (v) => Math.round(((parseFloat(v) || 0) * (1 + pct / 100)) / 10) * 10;
+                const newPrices = {};
+                Object.entries(editPrices).forEach(([svc, bySize]) => {
+                    newPrices[svc] = {};
+                    Object.entries(bySize || {}).forEach(([sz, val]) => { newPrices[svc][sz] = up(val); });
+                });
+                setEditPrices(newPrices);
+                setEditExtras(editExtras.map(ex => isSizedExtra(ex)
+                    ? { ...ex, prices: Object.fromEntries(Object.entries(ex.prices || {}).map(([sz, v]) => [sz, up(v)])) }
+                    : { ...ex, price: up(ex.price) }));
             };
 
             const saveAllSettings = () => handleDbAction(async () => {
@@ -4678,7 +4697,15 @@ Firma: __________________
                 <div className="space-y-6">
                     <div className="bg-blue-50 border-blue-200 border p-4 rounded-xl flex justify-between items-center">
                         <div><h3 className="font-bold text-blue-800">Edición de Precios</h3><p className="text-sm text-blue-600">Edita los valores y guarda para aplicar.</p></div>
-                        <Button onClick={saveAllSettings} className="px-6 py-3 shadow-lg"><Upload className="w-5 h-5" /> GUARDAR</Button>
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 bg-white border border-blue-200 rounded-lg px-2 py-1">
+                                <span className="text-xs font-bold text-gray-500">Subir</span>
+                                <input type="number" value={raisePct} onChange={e => setRaisePct(e.target.value)} className="w-14 p-1 border rounded text-center font-bold" />
+                                <span className="text-xs font-bold text-gray-500">%</span>
+                                <Button onClick={applyRaise} variant="blueLight" className="py-1 px-2 text-xs">Aplicar</Button>
+                            </div>
+                            <Button onClick={saveAllSettings} className="px-6 py-3 shadow-lg"><Upload className="w-5 h-5" /> GUARDAR</Button>
+                        </div>
                     </div>
 
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">

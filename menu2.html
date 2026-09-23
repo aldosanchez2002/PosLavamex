@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lista de Precios Lavamex</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --orange: #E86C24;
+            --navy: #0F2D4A;
+            --blue: #3A6894;
+            --col-autos: rgb(66, 197, 245);
+            --col-suv-chica: rgb(61, 89, 125);
+            --col-pickup: rgb(204, 103, 42);
+            --col-suv-gde: rgb(245, 123, 66);
+            --line: #dfe5ec;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #000;
+            overflow: hidden;
+            width: 100vw;
+            height: 100dvh;
+        }
+
+        /* El letrero vive en una tablet montada de lado: si el navegador reporta vertical,
+           se gira la página entera para que siempre se lea horizontal. */
+        #rotation-wrapper { width: 100vw; height: 100dvh; position: relative; background: #fff; }
+
+        @media screen and (orientation: portrait) {
+            #rotation-wrapper {
+                width: 100dvh;
+                height: 100vw;
+                transform: rotate(90deg);
+                transform-origin: top left;
+                position: absolute;
+                top: 0;
+                left: 100vw;
+            }
+        }
+
+        .menu {
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            padding: 1.2vmin 1.6vmax;
+            background: #fff;
+        }
+
+        /* --- Encabezado --- */
+        header { display: flex; justify-content: center; align-items: center; gap: 1.6vmax; flex: 0 0 auto; }
+        .logo { color: var(--orange); font-size: 6.2vmin; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; line-height: 1; }
+        a { text-decoration: none; }
+        .droplets { color: var(--blue); font-size: 3vmin; display: flex; align-items: flex-end; gap: 0.4vmax; }
+        .d-sm { font-size: 0.6em; margin-bottom: 4px; }
+        .d-md { font-size: 0.8em; margin-bottom: 2px; }
+
+        /* --- Tabla única: todo se lee bajando por la columna del vehículo --- */
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; flex: 1 1 auto; }
+        th, td { text-align: center; vertical-align: middle; }
+        thead th { padding-bottom: 0.6vmin; }
+        thead th:first-child { width: 30%; }
+
+        .col-head { display: flex; flex-direction: column; align-items: center; gap: 0.2vmin; line-height: 1; }
+        .col-head i { font-size: 3.4vmin; }
+        .col-head span { font-size: 1.7vmin; font-weight: 900; text-transform: uppercase; letter-spacing: 0.3px; }
+        .c-auto { color: var(--col-autos); }
+        .c-chica { color: var(--col-suv-chica); }
+        .c-pickup { color: var(--col-pickup); }
+        .c-gde { color: var(--col-suv-gde); }
+
+        /* Banda que separa los tres pasos */
+        .band td {
+            background: var(--navy); color: #fff;
+            font-size: 1.7vmin; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;
+            text-align: left; padding: 0.5vmin 1.2vmax;
+        }
+        .band .hint { font-weight: 500; text-transform: none; letter-spacing: 0; opacity: 0.85; font-size: 1.5vmin; }
+
+        tbody tr.item { border-bottom: 1px solid var(--line); }
+        tbody tr.item td { padding: 0.55vmin 0; }
+
+        .name { text-align: left; padding-left: 1.2vmax !important; }
+        .name b { display: block; font-size: 2.2vmin; font-weight: 900; color: var(--navy); text-transform: uppercase; line-height: 1.1; }
+        .name small { display: block; font-size: 1.4vmin; color: #6b7684; font-weight: 500; }
+
+        .price { font-size: 2.6vmin; font-weight: 900; color: var(--navy); }
+        .add { font-size: 2.3vmin; font-weight: 700; color: var(--blue); }
+
+        /* El paquete se ve distinto: es el renglón que queremos que elijan */
+        tr.pack td { background: #FDF3EC; padding: 0.7vmin 0; }
+        tr.pack .price { color: var(--orange); font-size: 2.9vmin; }
+        tr.pack .name b { color: var(--orange); }
+
+        /* --- Servicios de precio único --- */
+        .flat { flex: 0 0 auto; margin-top: 0.8vmin; }
+        .flat h3 {
+            font-size: 1.6vmin; font-weight: 900; color: var(--navy); text-transform: uppercase;
+            letter-spacing: 1px; margin-bottom: 0.5vmin;
+        }
+        .pills { display: flex; flex-wrap: wrap; gap: 0.6vmin 0.8vmax; }
+        .pill {
+            border: 1.5px solid var(--line); border-radius: 999px;
+            padding: 0.35vmin 1vmax; font-size: 1.6vmin; font-weight: 700; color: var(--navy);
+            white-space: nowrap;
+        }
+        .pill b { color: var(--orange); }
+
+        .zone {
+            margin-top: 0.6vmin; background: var(--blue); color: #fff; border-radius: 4px;
+            padding: 0.4vmin 1.2vmax; display: flex; align-items: center; gap: 1.5vmax;
+            font-size: 1.6vmin; font-weight: 700;
+        }
+        .zone .z-title { font-weight: 900; text-transform: uppercase; white-space: nowrap; }
+        .zone .z-list { display: flex; justify-content: space-between; flex: 1; text-transform: uppercase; }
+
+        /* --- Pie: otros vehículos --- */
+        .footer {
+            background: var(--orange); color: #fff; border-radius: 4px; margin-top: 0.8vmin;
+            padding: 0 1.2vmax; height: 5.4vmin;
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 1.8vmin; font-weight: 800; text-transform: uppercase;
+        }
+        .footer .group { display: flex; gap: 1.2vmax; align-items: center; }
+        .footer .lbl { font-weight: 900; letter-spacing: 0.5px; }
+
+        .disclaimer { font-size: 1.3vmin; color: #6b7684; font-weight: 500; margin-top: 0.4vmin; padding-left: 0.4vmax; }
+    </style>
+</head>
+
+<body>
+    <div id="rotation-wrapper">
+        <div class="menu">
+
+            <header>
+                <div class="droplets">
+                    <i class="fa-solid fa-droplet d-sm" style="transform: rotate(15deg);"></i>
+                    <i class="fa-solid fa-droplet d-md"></i>
+                    <i class="fa-solid fa-droplet"></i>
+                </div>
+                <a href="https://lavamex.work"><div class="logo">Lavamex</div></a>
+                <div class="droplets">
+                    <i class="fa-solid fa-droplet" style="transform: rotate(15deg);"></i>
+                    <i class="fa-solid fa-droplet d-md"></i>
+                    <i class="fa-solid fa-droplet d-sm" style="transform: rotate(-15deg);"></i>
+                </div>
+            </header>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th><div class="col-head c-auto"><i class="fa-solid fa-car-side"></i><span>Autos</span></div></th>
+                        <th><div class="col-head c-chica"><i class="fa-solid fa-car"></i><span>SUV Chica</span></div></th>
+                        <th><div class="col-head c-pickup"><i class="fa-solid fa-truck-pickup"></i><span>Pick-Up / SUV Md</span></div></th>
+                        <th><div class="col-head c-gde"><i class="fa-solid fa-truck-monster"></i><span>SUV Grande</span></div></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="band"><td colspan="5">1 · Empieza aquí</td></tr>
+                    <tr class="item">
+                        <td class="name"><b>Lavado General</b><small>Exterior · interior · brillo</small></td>
+                        <td class="price">$210</td>
+                        <td class="price">$250</td>
+                        <td class="price">$380</td>
+                        <td class="price">$380</td>
+                    </tr>
+
+                    <tr class="band"><td colspan="5">2 · Agrégale lo que quieras <span class="hint">— precio sobre tu lavado general</span></td></tr>
+                    <tr class="item">
+                        <td class="name"><b>Cera</b><small>Protege la pintura y le da brillo</small></td>
+                        <td class="add">+$360</td>
+                        <td class="add">+$420</td>
+                        <td class="add">+$480</td>
+                        <td class="add">+$480</td>
+                    </tr>
+                    <tr class="item">
+                        <td class="name"><b>Lavar Alfombra</b><small>Lavado profundo de alfombras</small></td>
+                        <td class="add">+$340</td>
+                        <td class="add">+$420</td>
+                        <td class="add">+$420</td>
+                        <td class="add">+$670</td>
+                    </tr>
+                    <tr class="item">
+                        <td class="name"><b>Lavar Asientos</b><small>Lavado profundo de asientos</small></td>
+                        <td class="add">+$340</td>
+                        <td class="add">+$420</td>
+                        <td class="add">+$420</td>
+                        <td class="add">+$670</td>
+                    </tr>
+                    <tr class="item">
+                        <td class="name"><b>Crema de Asientos</b><small>Nutre y protege la piel</small></td>
+                        <td class="add">+$360</td>
+                        <td class="add">+$420</td>
+                        <td class="add">+$480</td>
+                        <td class="add">+$480</td>
+                    </tr>
+
+                    <tr class="band"><td colspan="5">3 · O llévate el paquete <span class="hint">— ya trae el lavado general incluido</span></td></tr>
+                    <tr class="item pack">
+                        <td class="name"><b>Lavado + Cera</b><small>Lavado general + cera</small></td>
+                        <td class="price">$570</td>
+                        <td class="price">$670</td>
+                        <td class="price">$860</td>
+                        <td class="price">$860</td>
+                    </tr>
+                    <tr class="item pack">
+                        <td class="name"><b>Paquete Completo</b><small>Lavado general + alfombra + asientos</small></td>
+                        <td class="price">$890</td>
+                        <td class="price">$1,090</td>
+                        <td class="price">$1,220</td>
+                        <td class="price">$1,720</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="flat">
+                <h3>Otros servicios — mismo precio para cualquier vehículo</h3>
+                <div class="pills">
+                    <div class="pill">Lavado de Motor <b>$420</b></div>
+                    <div class="pill">Lavado de Chasis <b>$420</b></div>
+                    <div class="pill">Limpieza de Focos <b>$360</b></div>
+                    <div class="pill">Boleada <b>$60</b></div>
+                    <div class="pill">Brillo Armor-All <b>$40</b></div>
+                    <div class="pill">Aspirado de Cajuela <b>$40</b></div>
+                    <div class="pill">Aroma <b>$30</b></div>
+                </div>
+                <div class="zone">
+                    <span class="z-title">Limpieza por zona $210 c/u</span>
+                    <span class="z-list">
+                        <span>Cinturones</span><span>Cajuela</span><span>Cielo</span><span>Plásticos</span><span>Silla de bebé</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="footer">
+                <div class="group"><span class="lbl">Razer</span><span>Chico $670</span><span>Grande $840</span></div>
+                <div class="group"><span class="lbl">Traila</span><span>Chica $210</span><span>Grande $320</span><span>Cerrada $420</span></div>
+            </div>
+
+            <div class="disclaimer">* Precios no incluyen IVA. Los precios pueden variar según el estado del vehículo.</div>
+
+        </div>
+    </div>
+</body>
+
+</html>
