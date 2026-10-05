@@ -404,6 +404,14 @@
         // Igual que formatCurrency pero sin los centavos cuando el monto es cerrado
         // (los totales de ticket siempre lo son). Si llegara a traer centavos se
         // muestran, para no redondear dinero en pantalla.
+        // Gastos de caja: `amount` es la parte en MXN y `amountUsd` la parte en dólares.
+        const formatExpenseAmount = (e) => {
+            const usd = e.amountUsd || 0;
+            if (!usd) return formatCurrency(e.amount || 0);
+            if (!e.amount) return `$${usd.toFixed(2)} USD`;
+            return `${formatCurrency(e.amount)} + $${usd.toFixed(2)} USD`;
+        };
+
         const formatCurrencyShort = (amount) => {
             const n = Number(amount) || 0;
             if (!Number.isInteger(n)) return formatCurrency(n);
@@ -503,6 +511,8 @@
             const expensesLavamex = approvedExpenses.filter(e => !e.gastoAjeno).reduce((a, b) => a + (b.amount || 0), 0);
             const expensesAjenas = approvedExpenses.filter(e => e.gastoAjeno).reduce((a, b) => a + (b.amount || 0), 0);
             const approvedExpensesTotal = expensesLavamex + expensesAjenas;
+            const expensesUsd = approvedExpenses.filter(e => !e.gastoAjeno).reduce((a, b) => a + (b.amountUsd || 0), 0);
+            const expensesAjenasUsd = approvedExpenses.filter(e => e.gastoAjeno).reduce((a, b) => a + (b.amountUsd || 0), 0);
             const openingCash = getOpeningCash(startDateObj);
             const initMxn = openingCash.mxn;
             const initUsd = openingCash.usd;
@@ -519,10 +529,12 @@
                 cashUsd: netUsdFlow,
                 expenses: expensesLavamex,
                 expensesAjenas: expensesAjenas,
+                expensesUsd,
+                expensesAjenasUsd,
                 initialMxn: initMxn,
                 initialUsd: initUsd,
                 cashNetMxn: (netMxnFlow + initMxn + cashInsMxn) - approvedExpensesTotal - dropsMxn,
-                cashNetUsd: netUsdFlow + initUsd + cashInsUsd - dropsUsd,
+                cashNetUsd: netUsdFlow + initUsd + cashInsUsd - expensesUsd - expensesAjenasUsd - dropsUsd,
                 dropsMxn,
                 dropsUsd,
                 cashInsMxn,
@@ -1119,7 +1131,7 @@ Firma: __________________
                     ['FONDO INICIAL (SISTEMA)', formatCurrency(totals.initialMxn), `$${totals.initialUsd.toFixed(2)}`],
                     ['+ VENTAS (EFECTIVO)', formatCurrency(totals.cashMxn), `$${totals.cashUsd.toFixed(2)}`],
                     ['+ INGRESOS EXTRA', formatCurrency(totals.cashInsMxn), `$${totals.cashInsUsd.toFixed(2)}`],
-                    ['- GASTOS', `(${formatCurrency(totals.expenses)})`, `$0.00`],
+                    ['- GASTOS', `(${formatCurrency(totals.expenses + totals.expensesAjenas)})`, `($${(totals.expensesUsd + totals.expensesAjenasUsd).toFixed(2)})`],
                     ['- ENVÍOS (RETIROS)', `(${formatCurrency(totals.dropsMxn)})`, `($${totals.dropsUsd.toFixed(2)})`],
                     ['= TOTAL EN CAJA (DEBE HABER)', formatCurrency(totals.cashNetMxn), `$${totals.cashNetUsd.toFixed(2)}`]
                 ];
@@ -1177,9 +1189,9 @@ Firma: __________________
                     const expenseBody = expenses.map(e => [
                         e.description,
                         e.status,
-                        formatCurrency(e.amount)
+                        formatExpenseAmount(e)
                     ]);
-                    expenseBody.push(['TOTAL GASTOS', '', formatCurrency(totals.expenses)]);
+                    expenseBody.push(['TOTAL GASTOS', '', formatExpenseAmount({ amount: totals.expenses + totals.expensesAjenas, amountUsd: totals.expensesUsd + totals.expensesAjenasUsd })]);
 
                     autoTable(doc, {
                         startY: currentY + 2,
@@ -1809,9 +1821,9 @@ Firma: __________________
                 employee: employee, amount: parseFloat(amount), description: description, status: 'PENDING', timestamp: serverTimestamp()
             }));
 
-            const addExpense = (desc, amount, gastoAjeno = false, category = 'OTROS') => handleDbAction(async () => {
+            const addExpense = (desc, amountMxn, amountUsd, gastoAjeno = false, category = 'OTROS') => handleDbAction(async () => {
                 await addDoc(collection(db, "expenses"), {
-                    description: desc, amount: parseFloat(amount), status: 'PENDING', createdBy: role, gastoAjeno: gastoAjeno, category: category, timestamp: serverTimestamp()
+                    description: desc, amount: parseFloat(amountMxn) || 0, amountUsd: parseFloat(amountUsd) || 0, rate: exRate, status: 'PENDING', createdBy: role, gastoAjeno: gastoAjeno, category: category, timestamp: serverTimestamp()
                 });
                 alert("Gasto registrado, pendiente de aprobación.");
             });
@@ -2797,6 +2809,7 @@ Firma: __________________
             const [avanceAmt, setAvanceAmt] = useState('');
             const [expDesc, setExpDesc] = useState('');
             const [expAmt, setExpAmt] = useState('');
+            const [expAmtUsd, setExpAmtUsd] = useState('');
             const [expAjeno, setExpAjeno] = useState(false);
             const [expCat, setExpCat] = useState('OTROS');
 
@@ -2837,7 +2850,10 @@ Firma: __________________
                 setShowAttendance(false);
             };
 
-            const handleAddExpense = () => { if (!expDesc || !expAmt) return; addExpense(expDesc, expAmt, expAjeno, expCat); setExpDesc(''); setExpAmt(''); setExpAjeno(false); setExpCat('OTROS'); setShowExpense(false); };
+            const handleAddExpense = () => {
+                if (!expDesc) return alert("Ingrese el concepto.");
+                if (!(parseFloat(expAmt) > 0) && !(parseFloat(expAmtUsd) > 0)) return alert("Ingrese un monto válido.");
+                addExpense(expDesc, expAmt, expAmtUsd, expAjeno, expCat); setExpDesc(''); setExpAmt(''); setExpAmtUsd(''); setExpAjeno(false); setExpCat('OTROS'); setShowExpense(false); };
 
             const handleAddSnack = () => {
                 if (snackEmp) {
@@ -2958,8 +2974,9 @@ Firma: __________________
 
                 const allToday = history.concat(tickets).filter(t => t.status === 'PAID' && getLocalDateStr(t.paidAt || t.timestamp) === todayStr);
 
-                const expensesToday = expenses.filter(e => e.status === 'APPROVED' && getLocalDateStr(e.timestamp) === todayStr)
-                    .reduce((a, b) => a + (b.amount || 0), 0);
+                const approvedExpensesToday = expenses.filter(e => e.status === 'APPROVED' && getLocalDateStr(e.timestamp) === todayStr);
+                const expensesToday = approvedExpensesToday.reduce((a, b) => a + (b.amount || 0), 0);
+                const expensesTodayUsd = approvedExpensesToday.reduce((a, b) => a + (b.amountUsd || 0), 0);
 
                 const dropsToday = cashDrops.filter(d => getLocalDateStr(d.timestamp) === todayStr);
                 const dropsTodayMxn = dropsToday.reduce((a, b) => a + (b.amountMxn || 0), 0);
@@ -2987,6 +3004,7 @@ Firma: __________________
                 });
 
                 expectedMxn -= expensesToday;
+                expectedUsd -= expensesTodayUsd;
                 expectedMxn -= dropsTodayMxn;
                 expectedUsd -= dropsTodayUsd;
                 expectedMxn += cashInsTodayMxn;
@@ -3491,7 +3509,20 @@ Firma: __________________
                             <Modal title="Registrar Gasto" icon={TrendingDown} onClose={() => { setShowExpense(false); setExpAjeno(false); }} footer={<div className="flex gap-3"><Button onClick={() => { setShowExpense(false); setExpAjeno(false); }} variant="secondary" className="flex-1">Cancelar</Button><Button onClick={handleAddExpense} variant="danger" className="flex-1">Registrar</Button></div>}>
                                 <div className="space-y-3">
                                     <div><label className="block text-sm font-bold text-gray-600 mb-1">Concepto</label><input value={expDesc} onChange={e => setExpDesc(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Ej. Jabón" /></div>
-                                    <div><label className="block text-sm font-bold text-gray-600 mb-1">Monto ($)</label><input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="0.00" /></div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Monto (MXN)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold text-red-700" placeholder="0.00" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-600 mb-1">Monto (USD)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-400 font-bold">$</span>
+                                            <input type="number" value={expAmtUsd} onChange={e => setExpAmtUsd(e.target.value)} className="w-full border p-3 pl-8 rounded-lg text-lg font-bold text-green-700" placeholder="0.00" />
+                                        </div>
+                                    </div>
                                     <div>
                                         <label className="block text-sm font-bold text-gray-600 mb-1">Categoría</label>
                                         <select value={expCat} onChange={e => setExpCat(e.target.value)} className="w-full border p-3 rounded-lg bg-white">
@@ -3766,6 +3797,7 @@ Firma: __________________
             const [editingExpenseId, setEditingExpenseId] = useState(null);
             const [editExpDesc, setEditExpDesc] = useState('');
             const [editExpAmt, setEditExpAmt] = useState('');
+            const [editExpAmtUsd, setEditExpAmtUsd] = useState('');
             const [localData, setLocalData] = useState(null);
             const [isFetching, setIsFetching] = useState(false);
             const [historialData, setHistorialData] = useState(null);
@@ -3935,7 +3967,7 @@ Firma: __________________
                 PdfService.generateCorte(data);
             };
 
-            const saveEditedExpense = () => { if (editingExpenseId) { updateExpense(editingExpenseId, { description: editExpDesc, amount: parseFloat(editExpAmt) || 0 }); setEditingExpenseId(null); } };
+            const saveEditedExpense = () => { if (editingExpenseId) { updateExpense(editingExpenseId, { description: editExpDesc, amount: parseFloat(editExpAmt) || 0, amountUsd: parseFloat(editExpAmtUsd) || 0 }); setEditingExpenseId(null); } };
 
             const overnightDescuadre = (() => {
                 const todayStr = getLocalDateStr();
@@ -4074,12 +4106,12 @@ Firma: __________________
                         <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
                             <span>Gastos</span>
                             <div className="flex gap-4 text-sm font-bold">
-                                <span className="text-red-500">Lavamex: {formatCurrency(corteTotals.expenses)}</span>
-                                {corteTotals.expensesAjenas > 0 && <span className="text-purple-600">Ajenos: {formatCurrency(corteTotals.expensesAjenas)}</span>}
+                                <span className="text-red-500">Lavamex: {formatExpenseAmount({ amount: corteTotals.expenses, amountUsd: corteTotals.expensesUsd })}</span>
+                                {(corteTotals.expensesAjenas > 0 || corteTotals.expensesAjenasUsd > 0) && <span className="text-purple-600">Ajenos: {formatExpenseAmount({ amount: corteTotals.expensesAjenas, amountUsd: corteTotals.expensesAjenasUsd })}</span>}
                             </div>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left"><thead className="bg-gray-50 text-gray-500"><tr><th className="p-3">Concepto</th><th className="p-3">Monto</th><th className="p-3">Estado</th><th className="p-3 text-right">Acción</th></tr></thead><tbody>{corteExpenses.map(e => <tr key={e.id} className={`border-t hover:bg-gray-50 ${e.gastoAjeno ? 'bg-purple-50/40' : ''}`}><td className="p-3"><div className="flex items-center gap-2">{editingExpenseId === e.id ? <input value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} className="border p-1 rounded w-full" /> : e.description}{e.gastoAjeno && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded shrink-0">AJENO</span>}</div></td><td className="p-3 font-bold text-red-600">{editingExpenseId === e.id ? <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} className="border p-1 rounded w-24" /> : `-${formatCurrency(e.amount)}`}</td><td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${e.status === 'APPROVED' ? 'bg-green-100 text-green-700' : (e.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`}>{e.status}</span></td><td className="p-3 text-right">{editingExpenseId === e.id ? <div className="flex justify-end gap-2"><button onClick={saveEditedExpense} className="bg-blue-100 text-blue-700 p-1 rounded hover:bg-blue-200"><Save size={16} /></button><button onClick={() => setEditingExpenseId(null)} className="bg-gray-100 text-gray-700 p-1 rounded hover:bg-gray-200"><X size={16} /></button></div> : <div className="flex justify-end gap-2 items-center">{e.status === 'APPROVED' && <button onClick={() => { setEditingExpenseId(e.id); setEditExpDesc(e.description); setEditExpAmt(e.amount); }} className="text-gray-400 hover:text-blue-500"><Pencil size={14} /></button>}{e.status === 'PENDING' && <><button onClick={() => resolveExpense(e.id, 'APPROVED')} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><Check size={16} /></button><button onClick={() => resolveExpense(e.id, 'REJECTED')} className="bg-red-100 text-red-700 p-1 rounded hover:bg-red-200"><X size={16} /></button></>}</div>}</td></tr>)}</tbody></table>
+                            <table className="w-full text-sm text-left"><thead className="bg-gray-50 text-gray-500"><tr><th className="p-3">Concepto</th><th className="p-3">Monto</th><th className="p-3">Estado</th><th className="p-3 text-right">Acción</th></tr></thead><tbody>{corteExpenses.map(e => <tr key={e.id} className={`border-t hover:bg-gray-50 ${e.gastoAjeno ? 'bg-purple-50/40' : ''}`}><td className="p-3"><div className="flex items-center gap-2">{editingExpenseId === e.id ? <input value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} className="border p-1 rounded w-full" /> : e.description}{e.gastoAjeno && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded shrink-0">AJENO</span>}</div></td><td className="p-3 font-bold text-red-600">{editingExpenseId === e.id ? <div className="flex flex-col gap-1"><input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} className="border p-1 rounded w-24" placeholder="MXN" /><input type="number" value={editExpAmtUsd} onChange={ev => setEditExpAmtUsd(ev.target.value)} className="border p-1 rounded w-24" placeholder="USD" /></div> : `-${formatExpenseAmount(e)}`}</td><td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${e.status === 'APPROVED' ? 'bg-green-100 text-green-700' : (e.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`}>{e.status}</span></td><td className="p-3 text-right">{editingExpenseId === e.id ? <div className="flex justify-end gap-2"><button onClick={saveEditedExpense} className="bg-blue-100 text-blue-700 p-1 rounded hover:bg-blue-200"><Save size={16} /></button><button onClick={() => setEditingExpenseId(null)} className="bg-gray-100 text-gray-700 p-1 rounded hover:bg-gray-200"><X size={16} /></button></div> : <div className="flex justify-end gap-2 items-center">{e.status === 'APPROVED' && <button onClick={() => { setEditingExpenseId(e.id); setEditExpDesc(e.description); setEditExpAmt(e.amount); setEditExpAmtUsd(e.amountUsd || ''); }} className="text-gray-400 hover:text-blue-500"><Pencil size={14} /></button>}{e.status === 'PENDING' && <><button onClick={() => resolveExpense(e.id, 'APPROVED')} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><Check size={16} /></button><button onClick={() => resolveExpense(e.id, 'REJECTED')} className="bg-red-100 text-red-700 p-1 rounded hover:bg-red-200"><X size={16} /></button></>}</div>}</td></tr>)}</tbody></table>
                         </div>
                     </div>
 
@@ -5334,7 +5366,7 @@ Firma: __________________
                                         title = <span className="font-bold text-gray-800">{item.description}{item.gastoAjeno && <span className="ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded">AJENO</span>}</span>;
                                         requester = `por ${item.createdBy}`;
                                         reason = null;
-                                        valueNode = <span className="font-black text-red-600">{formatCurrency(item.amount)}</span>;
+                                        valueNode = <span className="font-black text-red-600">{formatExpenseAmount(item)}</span>;
                                         actionsNode = (
                                             <div className="flex gap-1.5 shrink-0">
                                                 <button onClick={() => resolveExpense(item.id, 'APPROVED')} className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1"><Check size={12} /> Aprobar</button>

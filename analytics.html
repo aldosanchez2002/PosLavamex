@@ -367,7 +367,12 @@
                         const [tSnap, eSnap, beSnap, ccSnap, empSnap, attSnap, dedSnap] = await Promise.all([ticketsPromise, expensesPromise, bizExpPromise, cashCountsPromise, empPromise, attendancePromise, deductionsPromise]);
 
                         setTickets(tSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })).filter(t => t.status === 'PAID' || t.status === 'ARCHIVED'));
-                        setExpenses(eSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })).filter(e => e.status === 'APPROVED'));
+                        // Gastos de caja pueden traer una parte en USD: se convierte a MXN con el tipo de cambio guardado en el gasto.
+                        setExpenses(eSnap.docs.map(d => {
+                            const data = d.data();
+                            const amount = (data.amount || 0) + (data.amountUsd || 0) * (data.rate || 18.10);
+                            return { id: d.id, ...data, amount, date: data.timestamp?.toDate() || new Date() };
+                        }).filter(e => e.status === 'APPROVED'));
                         setBizExpenses(beSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })));
                         setCashCounts(ccSnap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() || new Date() })));
                         setEmployees(empSnap.docs.map(d => ({ id: d.id, ...d.data() })));
