@@ -1131,7 +1131,8 @@ Firma: __________________
                     ['FONDO INICIAL (SISTEMA)', formatCurrency(totals.initialMxn), `$${totals.initialUsd.toFixed(2)}`],
                     ['+ VENTAS (EFECTIVO)', formatCurrency(totals.cashMxn), `$${totals.cashUsd.toFixed(2)}`],
                     ['+ INGRESOS EXTRA', formatCurrency(totals.cashInsMxn), `$${totals.cashInsUsd.toFixed(2)}`],
-                    ['- GASTOS', `(${formatCurrency(totals.expenses + totals.expensesAjenas)})`, `($${(totals.expensesUsd + totals.expensesAjenasUsd).toFixed(2)})`],
+                    ['- GASTOS LAVAMEX', `(${formatCurrency(totals.expenses)})`, `($${totals.expensesUsd.toFixed(2)})`],
+                    ['- GASTOS AJENOS', `(${formatCurrency(totals.expensesAjenas)})`, `($${totals.expensesAjenasUsd.toFixed(2)})`],
                     ['- ENVÍOS (RETIROS)', `(${formatCurrency(totals.dropsMxn)})`, `($${totals.dropsUsd.toFixed(2)})`],
                     ['= TOTAL EN CAJA (DEBE HABER)', formatCurrency(totals.cashNetMxn), `$${totals.cashNetUsd.toFixed(2)}`]
                 ];
