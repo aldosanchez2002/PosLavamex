@@ -148,9 +148,6 @@
         const serviceFitsSize = (serviceId, sizeId) => servicesForSize(sizeId).some(s => s.id === serviceId);
 
         const DEFAULTS = {
-            PINS: {
-                ADMIN: 'Y292aW5ndG9uNTIx'
-            },
             EXCHANGE_RATE: 18.10,
             SNACK_PRICE: 30,
             PRICES: {
@@ -717,21 +714,15 @@
             return payroll;
         };
 
-        const isAdminPin = (input) => {
-            try { return btoa(input.toLowerCase().trim()) === DEFAULTS.PINS.ADMIN; }
-            catch (e) { return false; }
-        };
-
-        // Decide con qué rol entra una contraseña. Orden: un admin de pos_credentials, luego el
-        // PIN de admin del código (respaldo mientras se confirma que el admin de la BD funciona),
-        // luego cualquier otro usuario de la BD (caja → Caja; cualquier otro rol → Entrada).
+        // Decide con qué rol entra una contraseña, solo con los usuarios de pos_credentials.
+        // Un admin gana si comparte contraseña con otro usuario; caja → Caja; cualquier otro
+        // rol → Entrada. Si un admin se queda fuera, se corrige su doc en la consola de Firebase.
         const resolvePosLogin = (credentials, input) => {
             let encoded;
             try { encoded = btoa(String(input).toLowerCase().trim()); } catch (e) { return null; }
             const matches = (credentials || []).filter(c => c.enabled && c.password === encoded);
             const adminCred = matches.find(c => c.role === 'admin');
             if (adminCred) return { role: 'ADMIN', cred: adminCred };
-            if (isAdminPin(input)) return { role: 'ADMIN', cred: null };
             if (matches.length > 0) return { role: matches[0].role === 'caja' ? 'CASHIER' : 'GREETER', cred: matches[0] };
             return null;
         };
@@ -1473,6 +1464,7 @@ Firma: __________________
             const [view, setView] = useState(() => readSession()?.role === 'ADMIN' ? 'ADMIN' : 'GREETER');
             const [employees, setEmployees] = useState([]);
             const [posCredentials, setPosCredentials] = useState([]);
+            const [posCredentialsLoaded, setPosCredentialsLoaded] = useState(false);
             const [tickets, setTickets] = useState([]);
             const [history, setHistory] = useState([]);
             const [deductions, setDeductions] = useState([]);
@@ -1542,18 +1534,19 @@ Firma: __________________
             useEffect(() => {
                 const unsub = onSnapshot(collection(db, "pos_credentials"), (snap) => {
                     setPosCredentials(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                    // Sin conexión Firestore entrega una lista vacía "de caché": no cuenta como cargada.
+                    if (!snap.metadata.fromCache) setPosCredentialsLoaded(true);
                 });
                 return () => unsub();
             }, []);
 
             useEffect(() => {
                 const loadSettings = async () => {
-                    const [pricesSnap, commissionsSnap, extrasSnap, generalSnap, credSnap] = await Promise.all([
+                    const [pricesSnap, commissionsSnap, extrasSnap, generalSnap] = await Promise.all([
                         getDoc(doc(db, "settings", "prices")),
                         getDoc(doc(db, "settings", "commissions")),
                         getDocs(collection(db, "extras")),
-                        getDoc(doc(db, "settings", "general")),
-                        getDocs(collection(db, "pos_credentials"))
+                        getDoc(doc(db, "settings", "general"))
                     ]);
 
                     if (pricesSnap.exists()) setPrices(withDefaultRates(DEFAULTS.PRICES, pricesSnap.data()));
@@ -1593,16 +1586,6 @@ Firma: __________________
                             exchangeRate: DEFAULTS.EXCHANGE_RATE,
                             snackPrice: DEFAULTS.SNACK_PRICE
                         });
-                    }
-
-                    if (credSnap.empty) {
-                        const batch = writeBatch(db);
-                        [
-                            { nickname: 'Melvy', password: 'bWVsdnkxMDYx', role: 'entrada', enabled: true, lastAccessed: null, createdAt: serverTimestamp() },
-                            { nickname: 'Rito', password: 'NXJpdG83', role: 'entrada', enabled: true, lastAccessed: null, createdAt: serverTimestamp() },
-                            { nickname: 'Sergio', password: 'c2VyZ2lvOTE5MQ==', role: 'caja', enabled: true, lastAccessed: null, createdAt: serverTimestamp() },
-                        ].forEach(cred => batch.set(doc(collection(db, "pos_credentials")), cred));
-                        await batch.commit();
                     }
                 };
                 loadSettings();
@@ -1646,9 +1629,19 @@ Firma: __________________
                 }, { merge: true });
             });
 
+            // Devuelve true (entró), false (contraseña incorrecta) o 'ERROR' (no se pudo consultar).
             const validateAndLogin = async (input) => {
+                let credentials = posCredentials;
+                // Recién abierta la página la lista de usuarios puede no haber llegado: se pide directo.
+                if (!posCredentialsLoaded) {
+                    try {
+                        const snap = await getDocs(collection(db, "pos_credentials"));
+                        if (snap.metadata.fromCache) return 'ERROR';
+                        credentials = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    } catch (e) { console.error(e); return 'ERROR'; }
+                }
                 try {
-                    const result = resolvePosLogin(posCredentials, input);
+                    const result = resolvePosLogin(credentials, input);
                     if (result) {
                         login(result.role);
                         if (result.cred) updateDoc(doc(db, 'pos_credentials', result.cred.id), { lastAccessed: serverTimestamp() });
@@ -2254,6 +2247,7 @@ Firma: __________________
                 setLoading(true);
                 const ok = await validateAndLogin(pin);
                 setLoading(false);
+                if (ok === 'ERROR') { alert('No se pudo verificar el PIN. Revisa la conexión a internet e intenta de nuevo.'); return; }
                 if (!ok) { alert('PIN Incorrecto'); setPin(''); }
             };
             return (
