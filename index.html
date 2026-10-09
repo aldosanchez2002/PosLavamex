@@ -1582,7 +1582,9 @@ Firma: __________________
                         const dbItems = extrasSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
                         setExtrasList(mergeExtrasCatalog(DEFAULTS.EXTRAS, dbItems));
                     } else {
-                        DEFAULTS.EXTRAS.forEach(e => addDoc(collection(db, "extras"), e));
+                        // Con el id del extra como id de doc: si varias tablets abren con la colección
+                        // vacía, escriben el mismo doc en vez de sembrar un juego cada una.
+                        DEFAULTS.EXTRAS.forEach(e => setDoc(doc(db, "extras", e.id), e));
                     }
 
                     if (generalSnap.exists()) {
