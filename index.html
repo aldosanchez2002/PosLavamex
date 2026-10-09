@@ -182,6 +182,9 @@
                 { id: 'LIMP_FOCOS', label: 'Limpiar Focos', price: 340, commission: 120 },
                 { id: 'ASPIRADO_CAJUELA', label: 'Aspirar Cajuela', price: 40, commission: 14 },
                 { id: 'BOLEADA', label: 'Boleada', price: 60, commission: 0 },
+                // El pino no lleva comisión para lavadores (el ticket siempre lo guarda con 0); está
+                // en el catálogo para que su precio se edite en Precios.
+                { id: 'PINO', label: 'Pino', price: 35, commission: 0 },
                 { id: 'LIMP_ZONA', label: 'Limpiar Zona', price: 200, commission: 70 },
                 { id: 'CREMA_ASIENTOS', label: 'Crema Asientos',
                     prices: { AUTO: 340, SUV_CHICA: 400, PICKUP: 460, SUV_GDE: 460 },
@@ -351,6 +354,25 @@
             });
             return out;
         };
+
+        // Une el catálogo de extras del código con los docs de Firestore. Si hay más de un doc
+        // para el mismo extra, gana el que tiene el id del extra como id de doc (así se crean
+        // los nuevos desde Precios), para que un duplicado viejo no regrese un precio anterior.
+        const mergeExtrasCatalog = (defaults, dbItems) => defaults.map(def => {
+            const match = dbItems.find(item => item.docId === def.id) || dbItems.find(item => item.id === def.id);
+            // La BD manda en precio y comisión (se editan en Precios), pero el
+            // nombre del extra vive en el código: así un renombre del catálogo
+            // se aplica solo, sin tener que tocar cada doc de Firestore.
+            if (!match) return def;
+            const merged = { ...def, ...match, label: def.label };
+            // Igual que con los servicios: un tamaño que la BD todavía no tiene
+            // toma su tarifa de fábrica en lugar de quedarse sin precio.
+            if (isSizedExtra(def)) {
+                merged.prices = { ...def.prices, ...(match.prices || {}) };
+                merged.commissions = { ...def.commissions, ...(match.commissions || {}) };
+            }
+            return merged;
+        });
 
         // "Conectar cliente": cuando un cliente trae dos vehículos (p. ej. camioneta y Razer)
         // cada uno lleva su propio ticket —con su tamaño, servicio y lavadores— pero comparten
@@ -1558,22 +1580,7 @@ Firma: __________________
 
                     if (!extrasSnap.empty) {
                         const dbItems = extrasSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
-                        const cleanList = DEFAULTS.EXTRAS.map(def => {
-                            const match = dbItems.find(item => item.id === def.id);
-                            // La BD manda en precio y comisión (se editan en Precios), pero el
-                            // nombre del extra vive en el código: así un renombre del catálogo
-                            // se aplica solo, sin tener que tocar cada doc de Firestore.
-                            if (!match) return def;
-                            const merged = { ...def, ...match, label: def.label };
-                            // Igual que con los servicios: un tamaño que la BD todavía no tiene
-                            // toma su tarifa de fábrica en lugar de quedarse sin precio.
-                            if (isSizedExtra(def)) {
-                                merged.prices = { ...def.prices, ...(match.prices || {}) };
-                                merged.commissions = { ...def.commissions, ...(match.commissions || {}) };
-                            }
-                            return merged;
-                        });
-                        setExtrasList(cleanList);
+                        setExtrasList(mergeExtrasCatalog(DEFAULTS.EXTRAS, dbItems));
                     } else {
                         DEFAULTS.EXTRAS.forEach(e => addDoc(collection(db, "extras"), e));
                     }
@@ -4708,7 +4715,9 @@ Firma: __________________
                             id: e.id
                         });
                     } else {
-                        const newRef = doc(collection(db, "extras"));
+                        // Doc con el id del extra: guardar varias veces actualiza el mismo doc en
+                        // vez de crear duplicados.
+                        const newRef = e.id ? doc(db, "extras", e.id) : doc(collection(db, "extras"));
                         batch.set(newRef, {
                             id: e.id || `EXTRA_${Date.now()}`,
                             label: e.label,
@@ -4820,7 +4829,9 @@ Firma: __________________
                                             <input type="number" value={ex.price} onChange={(e) => updateLocalExtra(idx, 'price', e.target.value)} className="border p-2 rounded w-full text-center text-green-700 font-bold" />
                                         </td>
                                         <td className="p-2 border">
-                                            <input type="number" value={ex.commission} onChange={(e) => updateLocalExtra(idx, 'commission', e.target.value)} className="border p-2 rounded w-full text-center text-blue-600 font-bold" />
+                                            {ex.id === 'PINO'
+                                                ? <div className="text-center text-xs text-gray-400">Sin comisión</div>
+                                                : <input type="number" value={ex.commission} onChange={(e) => updateLocalExtra(idx, 'commission', e.target.value)} className="border p-2 rounded w-full text-center text-blue-600 font-bold" />}
                                         </td>
                                     </tr>
                                 ))}
