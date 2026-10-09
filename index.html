@@ -661,10 +661,11 @@
                         if (item.extras && item.extras.length > 0) {
                             item.extras.forEach(ex => {
                                 const dbExtra = currentExtras ? currentExtras.find(dbEx => dbEx.id === ex.id) : null;
-                                // Un extra con tarifa por tamaño no tiene una comisión única en el
-                                // catálogo: vale la que quedó guardada en el ticket, que es la del
-                                // tamaño con el que se cobró.
-                                const commissionValue = (dbExtra && !isSizedExtra(dbExtra)) ? (dbExtra.commission || 0) : (ex.commission || 0);
+                                // Vale la comisión que quedó guardada en el ticket (la misma que suma el
+                                // total), no la del catálogo de hoy: si se cambia una comisión en Precios,
+                                // el desglose seguiría cuadrando con lo que se paga. Solo tickets viejos
+                                // sin comisión guardada en el extra usan la del catálogo.
+                                const commissionValue = typeof ex.commission === 'number' ? ex.commission : ((dbExtra && !isSizedExtra(dbExtra)) ? (dbExtra.commission || 0) : 0);
                                 const share = Math.round((commissionValue / washerCount) * 100) / 100;
 
                                 if (!p.extrasData[ex.label]) p.extrasData[ex.label] = { count: 0, total: 0 };
