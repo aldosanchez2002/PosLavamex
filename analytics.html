@@ -39,7 +39,7 @@
             Droplets, Percent, Briefcase, Car, ChevronLeft, ChevronRight
         } from 'lucide-react';
         import { initializeApp } from 'firebase/app';
-        import { getFirestore, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+        import { getFirestore, collection, getDocs, query, where, orderBy, updateDoc, serverTimestamp } from 'firebase/firestore';
 
         const firebaseConfig = {
             apiKey: "AIzaSyByIvJpBZv32Zd22fxlYWL9etzBa66Q2rE",
@@ -395,9 +395,22 @@
                 return Array.from(years).sort((a, b) => b - a);
             }, [tickets]);
 
-            const handleLogin = (e) => {
+            // Entra un admin activo de pos_credentials (misma regla que el POS). La contraseña del
+            // código queda de respaldo mientras se confirma que el admin de la BD funciona.
+            const handleLogin = async (e) => {
                 e.preventDefault();
-                if (passwordInput === 'covington521') {
+                let ok = false;
+                try {
+                    const encoded = btoa(passwordInput.toLowerCase().trim());
+                    const snap = await getDocs(collection(db, "pos_credentials"));
+                    const adminDoc = snap.docs.find(d => { const c = d.data(); return c.enabled && c.role === 'admin' && c.password === encoded; });
+                    if (adminDoc) {
+                        ok = true;
+                        updateDoc(adminDoc.ref, { lastAccessed: serverTimestamp() }).catch(err => console.error(err));
+                    }
+                } catch (err) { console.error(err); }
+                if (!ok && passwordInput === 'covington521') ok = true;
+                if (ok) {
                     setIsAuthenticated(true);
                 } else {
                     alert('Contraseña incorrecta');

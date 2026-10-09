@@ -722,6 +722,26 @@
             catch (e) { return false; }
         };
 
+        // Decide con qué rol entra una contraseña. Orden: un admin de pos_credentials, luego el
+        // PIN de admin del código (respaldo mientras se confirma que el admin de la BD funciona),
+        // luego cualquier otro usuario de la BD (caja → Caja; cualquier otro rol → Entrada).
+        const resolvePosLogin = (credentials, input) => {
+            let encoded;
+            try { encoded = btoa(String(input).toLowerCase().trim()); } catch (e) { return null; }
+            const matches = (credentials || []).filter(c => c.enabled && c.password === encoded);
+            const adminCred = matches.find(c => c.role === 'admin');
+            if (adminCred) return { role: 'ADMIN', cred: adminCred };
+            if (isAdminPin(input)) return { role: 'ADMIN', cred: null };
+            if (matches.length > 0) return { role: matches[0].role === 'caja' ? 'CASHIER' : 'GREETER', cred: matches[0] };
+            return null;
+        };
+
+        // El último admin activo de pos_credentials no se puede desactivar ni cambiar de rol
+        // desde la app: sin él nadie podría volver a entrar como admin.
+        const isLastActiveAdmin = (credentials, cred) =>
+            cred.role === 'admin' && cred.enabled &&
+            (credentials || []).filter(c => c.role === 'admin' && c.enabled).length <= 1;
+
         const toggleSelection = (list, item, limit = null) => {
             const isObj = typeof item !== 'string';
             const exists = isObj ? list.some(x => x.id === item.id) : list.includes(item);
@@ -1628,12 +1648,10 @@ Firma: __________________
 
             const validateAndLogin = async (input) => {
                 try {
-                    if (isAdminPin(input)) { login('ADMIN'); return true; }
-                    const encoded = btoa(input.toLowerCase().trim());
-                    const match = posCredentials.find(c => c.enabled && c.password === encoded);
-                    if (match) {
-                        login(match.role === 'caja' ? 'CASHIER' : 'GREETER');
-                        updateDoc(doc(db, 'pos_credentials', match.id), { lastAccessed: serverTimestamp() });
+                    const result = resolvePosLogin(posCredentials, input);
+                    if (result) {
+                        login(result.role);
+                        if (result.cred) updateDoc(doc(db, 'pos_credentials', result.cred.id), { lastAccessed: serverTimestamp() });
                         return true;
                     }
                 } catch (e) { return false; }
@@ -4855,6 +4873,16 @@ Firma: __________________
 
             const resetCred = posCredentials.find(c => c.id === resetModal);
 
+            const LAST_ADMIN_MSG = "Es el único admin activo: no se puede desactivar ni cambiar de rol. Agrega otro admin primero.";
+            const changeRole = (cred, role) => {
+                if (role !== 'admin' && isLastActiveAdmin(posCredentials, cred)) return alert(LAST_ADMIN_MSG);
+                updatePosCredential(cred.id, { role });
+            };
+            const toggleEnabled = (cred) => {
+                if (isLastActiveAdmin(posCredentials, cred)) return alert(LAST_ADMIN_MSG);
+                updatePosCredential(cred.id, { enabled: !cred.enabled });
+            };
+
             return (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-2xl mx-auto">
                     <div className="flex justify-between items-center mb-4">
@@ -4875,6 +4903,7 @@ Firma: __________________
                                 <select value={newRole} onChange={e => setNewRole(e.target.value)} className="border p-2 rounded-lg text-sm bg-white font-medium">
                                     <option value="entrada">Entrada</option>
                                     <option value="caja">Caja</option>
+                                    <option value="admin">Admin</option>
                                 </select>
                             </div>
                             <div className="relative">
@@ -4920,14 +4949,15 @@ Firma: __________________
                                             </div>
                                         </td>
                                         <td className="p-3">
-                                            <select value={cred.role} onChange={e => updatePosCredential(cred.id, { role: e.target.value })}
+                                            <select value={cred.role} onChange={e => changeRole(cred, e.target.value)}
                                                 className="border p-1.5 rounded-lg text-xs bg-white font-bold text-gray-700">
                                                 <option value="entrada">Entrada</option>
                                                 <option value="caja">Caja</option>
+                                                <option value="admin">Admin</option>
                                             </select>
                                         </td>
                                         <td className="p-3">
-                                            <button onClick={() => updatePosCredential(cred.id, { enabled: !cred.enabled })}
+                                            <button onClick={() => toggleEnabled(cred)}
                                                 className={`text-xs font-bold px-2.5 py-1 rounded-full transition-colors ${cred.enabled ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
                                                 {cred.enabled ? 'Activo' : 'Inactivo'}
                                             </button>
