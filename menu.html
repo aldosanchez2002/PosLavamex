@@ -385,20 +385,20 @@
                             <span class="service-title">LAVADO GENERAL</span>
                             <span class="service-desc">Exterior, Limpieza Interior, Brillo</span>
                         </td>
-                        <td>$200</td>
-                        <td>$240</td>
-                        <td>$360</td>
-                        <td>$360</td>
+                        <td data-price="GENERAL.AUTO">$200</td>
+                        <td data-price="GENERAL.SUV_CHICA">$240</td>
+                        <td data-price="GENERAL.PICKUP">$360</td>
+                        <td data-price="GENERAL.SUV_GDE">$360</td>
                     </tr>
                     <tr>
                         <td>
                             <span class="service-title">LAVADO + CERA</span>
                             <span class="service-desc">Lavado General + Cera</span>
                         </td>
-                        <td>$540</td>
-                        <td>$640</td>
-                        <td>$820</td>
-                        <td>$820</td>
+                        <td data-price="WAX.AUTO">$540</td>
+                        <td data-price="WAX.SUV_CHICA">$640</td>
+                        <td data-price="WAX.PICKUP">$820</td>
+                        <td data-price="WAX.SUV_GDE">$820</td>
                     </tr>
                     <tr>
                         <td>
@@ -406,10 +406,10 @@
                             <span class="service-desc" style="font-size: 1.2vmin;">Lavado General + Alfombra +
                                 Asientos</span>
                         </td>
-                        <td>$840</td>
-                        <td>$1,040</td>
-                        <td>$1,160</td>
-                        <td>$1,640</td>
+                        <td data-price="COMPLETE.AUTO">$840</td>
+                        <td data-price="COMPLETE.SUV_CHICA">$1,040</td>
+                        <td data-price="COMPLETE.PICKUP">$1,160</td>
+                        <td data-price="COMPLETE.SUV_GDE">$1,640</td>
                     </tr>
                 </tbody>
             </table>
@@ -419,19 +419,19 @@
                 <h2 class="services-header">SERVICIOS</h2>
 
                 <div class="services-grid">
-                    <div class="service-pill">LAVADO DE MOTOR: $400</div>
-                    <div class="service-pill">LAVADO DE CHASIS: $400</div>
-                    <div class="service-pill">LIMPIEZA DE FOCOS: $340</div>
-                    <div class="service-pill">BOLEADA: $60</div>
-                    <div class="service-pill">BRILLO EXTRA: $40</div>
-                    <div class="service-pill">ASPIRADO CAJUELA: $40</div>
-                    <div class="service-pill">AROMA: $20</div>
-                    <div class="service-pill">CREMA DE ASIENTOS: $300</div>
+                    <div class="service-pill">LAVADO DE MOTOR: <span data-extra="MOTOR">$400</span></div>
+                    <div class="service-pill">LAVADO DE CHASIS: <span data-extra="CHASIS">$400</span></div>
+                    <div class="service-pill">LIMPIEZA DE FOCOS: <span data-extra="LIMP_FOCOS">$340</span></div>
+                    <div class="service-pill">BOLEADA: <span data-extra="BOLEADA">$60</span></div>
+                    <div class="service-pill">BRILLO EXTRA: <span data-extra="ARMORALL">$40</span></div>
+                    <div class="service-pill">ASPIRADO CAJUELA: <span data-extra="ASPIRADO_CAJUELA">$40</span></div>
+                    <div class="service-pill">AROMA: <span data-extra="AROMA">$20</span></div>
+                    <div class="service-pill">CREMA DE ASIENTOS: <span data-extra="CREMA_ASIENTOS">$300</span></div>
                 </div>
 
                 <div class="blue-info-strip">
                     <div class="strip-item strip-title">
-                        LIMPIEZA POR ZONA $200 c/u
+                        LIMPIEZA POR ZONA <span data-extra="LIMP_ZONA">$200</span> c/u
                     </div>
                     <div class="strip-item">
                         <div class="zone-list">
@@ -449,8 +449,8 @@
             <div class="footer-strip">
                 <div class="footer-left">VEHÍCULOS RECREATIVOS</div>
                 <div class="footer-right">
-                    <span>RAZER CHICO: $640</span>
-                    <span>RAZER GRANDE: $800</span>
+                    <span>RAZER CHICO: <span data-price="RAZER_CHICO.RZR">$640</span></span>
+                    <span>RAZER GRANDE: <span data-price="RAZER_GRANDE.RZR">$800</span></span>
                 </div>
             </div>
 
@@ -460,6 +460,64 @@
         </div>
     </div>
 
+    <!-- Precios en vivo: lee (solo lectura) los mismos precios que usa el POS y los pinta
+         sobre los de arriba. Si no hay conexión se quedan los escritos en el HTML. Se actualiza
+         sola cuando alguien guarda en Admin → Precios, sin recargar la tablet. -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, doc, collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const db = getFirestore(initializeApp({
+            apiKey: "AIzaSyByIvJpBZv32Zd22fxlYWL9etzBa66Q2rE",
+            authDomain: "poslavamex.firebaseapp.com",
+            projectId: "poslavamex",
+            storageBucket: "poslavamex.firebasestorage.app",
+            messagingSenderId: "883264129",
+            appId: "1:883264129:web:39a352e2ade3888b4f1b80"
+        }));
+
+        // Extras cobrados por tamaño: tarifa de fábrica por tamaño, igual que DEFAULTS.EXTRAS en
+        // index.html (debe coincidir). El POS completa con estos los tamaños que la BD no tiene.
+        const SIZED_EXTRA_DEFAULTS = {
+            CREMA_ASIENTOS: { AUTO: 340, SUV_CHICA: 400, PICKUP: 460, SUV_GDE: 460 },
+        };
+
+        const money = (n) => '$' + Number(n).toLocaleString('es-MX', { maximumFractionDigits: 2 });
+        // Solo se reemplaza con un número válido; si falta en la BD se queda el del HTML.
+        const paint = (el, text) => { if (text) el.textContent = text; };
+
+        onSnapshot(doc(db, 'settings', 'prices'), (snap) => {
+            const prices = snap.data() || {};
+            document.querySelectorAll('[data-price]').forEach(el => {
+                const [svc, size] = el.dataset.price.split('.');
+                const n = prices[svc]?.[size];
+                paint(el, n > 0 ? money(n) : null);
+            });
+        }, (err) => console.error(err));
+
+        onSnapshot(collection(db, 'extras'), (snap) => {
+            // Igual que el POS: si hubiera dos docs del mismo extra, gana el que usa el id del
+            // extra como id de doc; si no, el primero.
+            const byId = {};
+            snap.docs.forEach(d => {
+                const e = d.data();
+                if (!e.id) return;
+                if (!byId[e.id] || d.id === e.id) byId[e.id] = e;
+            });
+            document.querySelectorAll('[data-extra]').forEach(el => {
+                const id = el.dataset.extra;
+                const e = byId[id];
+                // Extras cobrados por tamaño: se anuncia el menor precio (el de la BD manda por
+                // tamaño; los que falten toman la tarifa de fábrica, como en el POS).
+                if (SIZED_EXTRA_DEFAULTS[id]) {
+                    const vals = Object.values({ ...SIZED_EXTRA_DEFAULTS[id], ...(e?.prices || {}) }).filter(v => v > 0);
+                    paint(el, vals.length ? 'desde ' + money(Math.min(...vals)) : null);
+                } else if (e) {
+                    paint(el, e.price > 0 ? money(e.price) : null);
+                }
+            });
+        }, (err) => console.error(err));
+    </script>
 </body>
 
 </html>
