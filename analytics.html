@@ -55,6 +55,8 @@
 
         // --- Helpers ---
         const formatCurrency = (val) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val);
+        // Para las tarjetas de resumen: redondeado al peso, sin centavos.
+        const formatPesos = (val) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(val || 0));
         const formatInt = (val) => new Intl.NumberFormat('es-MX').format(Math.round(val));
         const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ef4444'];
         const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -925,35 +927,35 @@
                         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
                             <KPICard
                                 title="Ingreso Bruto"
-                                value={formatCurrency(processed.totalRevenue)}
+                                value={formatPesos(processed.totalRevenue)}
                                 subtext={`${formatInt(processed.ticketCount)} vehículos en ${processed.daysInRange} días`}
                                 icon={DollarSign}
                                 color="blue"
                             />
                             <KPICard
                                 title="Nómina"
-                                value={formatCurrency(processed.totalLabor)}
+                                value={formatPesos(processed.totalLabor)}
                                 subtext={`${processed.totalLaborPct.toFixed(1)}% de Ingreso`}
                                 icon={Users}
                                 color="orange"
                             />
                             <KPICard
                                 title="Gastos Operativos"
-                                value={formatCurrency(processed.operatingExpenses)}
+                                value={formatPesos(processed.operatingExpenses)}
                                 subtext={`${processed.operatingExpensesPct.toFixed(1)}% de Ingreso`}
                                 icon={ArrowDownRight}
                                 color="red"
                             />
                             <KPICard
                                 title="Gastos Extraordinarios"
-                                value={formatCurrency(processed.extraordinaryTotal)}
+                                value={formatPesos(processed.extraordinaryTotal)}
                                 subtext={`${processed.extraordinaryPct.toFixed(1)}% de Ingreso`}
                                 icon={ShieldAlert}
                                 color="pink"
                             />
                             <KPICard
                                 title="Utilidad Neta Operativa"
-                                value={formatCurrency(processed.netProfit)}
+                                value={formatPesos(processed.netProfit)}
                                 subtext={`${processed.profitMarginPct.toFixed(1)}% de Ingreso`}
                                 icon={Wallet}
                                 color={processed.netProfit > 0 ? "green" : "red"}
@@ -978,14 +980,14 @@
                             />
                             <KPICard
                                 title="Promedio Diario"
-                                value={formatCurrency(processed.avgDailyRevenue)}
+                                value={formatPesos(processed.avgDailyRevenue)}
                                 subtext="Ingreso por día"
                                 icon={Calendar}
                                 color="blue"
                             />
                             <KPICard
                                 title="Promedio Mensual"
-                                value={formatCurrency(processed.avgMonthlyRevenue)}
+                                value={formatPesos(processed.avgMonthlyRevenue)}
                                 subtext="Proyección a 30.4 días"
                                 icon={Calendar}
                                 color="indigo"
