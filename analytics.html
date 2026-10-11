@@ -729,13 +729,17 @@
                 });
                 const chartHourly = hourlyBuckets.slice(6, 19);
 
-                // --- 5b. Tiempo de entrada a cobro (ticket creado → cobrado) ---
-                // Más de 4 h casi siempre es un cobro tardío (el auto ya se fue), no el servicio:
-                // se cuenta aparte y no entra a la mediana.
-                const MAX_WAIT_MIN = 240, LATE_WAIT_MIN = 150;
+                // --- 5b. Tiempo de entrada a cobro y ganancia por hora ---
+                // Tiempo = de que se crea el ticket a que se cobra (incluye espera y recogida, así que
+                // es tiempo de reloj, no de trabajo). Más de 4 h casi siempre es un cobro tardío: se
+                // cuenta aparte. "Queda" = precio − comisión del ticket.
+                const MAX_WAIT_MIN = 240, LATE_WAIT_MIN = 150, MIN_GROUP = 5;
+                const SMALL_EXTRAS = new Set(['QA_PINO', 'QA_BOLEADA', 'PINO', 'BOLEADA', 'AROMA', 'ARMORALL', 'ASPIRADO_CAJUELA']);
+                const SIZE_LABEL = { AUTO: 'Auto', SUV_CHICA: 'SUV Chica', PICKUP: 'Pick-Up', SUV_GDE: 'SUV Grande' };
                 const quant = (a, q) => { if (!a.length) return 0; const srt = [...a].sort((x, y) => x - y); return srt[Math.min(srt.length - 1, Math.floor(srt.length * q))]; };
                 const waits = [], waitGroups = {}, waitHour = Array.from({ length: 24 }, () => []);
                 let waitOutliers = 0;
+                const addTo = (key, row) => (waitGroups[key] = waitGroups[key] || []).push(row);
                 fTickets.forEach(t => {
                     if (!t.service || t.paymentDetails?.method === 'CORTESIA') return;
                     const paid = t.paidAt?.toDate ? t.paidAt.toDate() : null;
@@ -745,11 +749,26 @@
                     if (m > MAX_WAIT_MIN) { waitOutliers++; return; }
                     waits.push(m);
                     waitHour[getJuarezHour(t.date)].push(m);
-                    (waitGroups[t.service.label || t.service.id] = waitGroups[t.service.label || t.service.id] || []).push(m);
-                    if ((t.extras || []).some(e => e.id === 'MOTOR' || e.id === 'CHASIS')) (waitGroups['Con motor o chasis'] = waitGroups['Con motor o chasis'] || []).push(m);
+                    const row = { m, keep: (t.price || 0) - (t.commission || 0), washers: (t.washers || []).length || 1 };
+                    const big = (t.extras || []).map(e => e.id).filter(id => !SMALL_EXTRAS.has(id));
+                    const size = SIZE_LABEL[t.size?.id];
+                    if (t.service.id === 'GENERAL' && size && big.length === 0) addTo(`Lavado General · ${size}`, row);
+                    else if (t.service.id === 'GENERAL' && size && big.every(id => id === 'MOTOR' || id === 'CHASIS')) addTo(`General + motor/chasis · ${size}`, row);
+                    else if (t.service.id !== 'GENERAL') addTo(t.service.label || t.service.id, row);
                 });
+                const summarize = (label, a) => {
+                    const median = quant(a.map(r => r.m), .5), keep = a.reduce((s, r) => s + r.keep, 0) / a.length, washers = a.reduce((s, r) => s + r.washers, 0) / a.length;
+                    return { label, count: a.length, median, p25: quant(a.map(r => r.m), .25), keep, washers, perHour: median ? keep / (median / 60) : 0, perWasherHour: median ? keep / (median / 60) / washers : 0 };
+                };
+                const waitByService = Object.entries(waitGroups).filter(([, a]) => a.length >= MIN_GROUP).map(([label, a]) => summarize(label, a)).sort((a, b) => b.perHour - a.perHour);
+                // Lo que agrega motor/chasis sobre un General del mismo tamaño: minutos extra y lo que queda extra.
+                const motorUplift = Object.values(SIZE_LABEL).map(size => {
+                    const base = waitGroups[`Lavado General · ${size}`], up = waitGroups[`General + motor/chasis · ${size}`];
+                    if (!base || !up || base.length < MIN_GROUP || up.length < MIN_GROUP) return null;
+                    const b0 = summarize('', base), u0 = summarize('', up), extraMin = u0.median - b0.median, extraKeep = u0.keep - b0.keep;
+                    return { size, count: up.length, extraMin, extraKeep, perExtraHour: extraMin > 0 ? extraKeep / (extraMin / 60) : null };
+                }).filter(Boolean);
                 const waitStats = { count: waits.length, median: quant(waits, .5), p90: quant(waits, .9), latePct: waits.length ? waits.filter(m => m >= LATE_WAIT_MIN).length / waits.length * 100 : 0, outliers: waitOutliers };
-                const waitByService = Object.entries(waitGroups).map(([label, a]) => ({ label, count: a.length, median: quant(a, .5), p90: quant(a, .9) })).sort((a, b) => b.count - a.count);
                 const chartWaitHourly = waitHour.map((a, h) => ({ hour: fmtHour(h), median: Math.round(quant(a, .5)), tickets: a.length })).slice(6, 19);
 
                 // --- 6. Day-of-Week Pattern ---
@@ -818,7 +837,7 @@
                     chartFinancials, chartExpenses, chartEmpRevenue,
                     chartRevenueVsStaff, chartCommPerDay,
                     chartHourly, chartDOW, chartDailyTrends, topGastos,
-                    waitStats, waitByService, chartWaitHourly
+                    waitStats, waitByService, motorUplift, chartWaitHourly
                 };
 
             }, [tickets, expenses, bizExpenses, cashCounts, employees, attendance, deductions, dateFilterType, selectedMonth, selectedYear, startDate, endDate]);
@@ -1534,25 +1553,37 @@
                             <KPICard title="Más de 2.5 h" value={`${processed.waitStats.latePct.toFixed(1)}%`} subtext="de los tickets" icon={Clock} color="red" />
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto">
-                                <h3 className="font-bold text-slate-700 mb-4">Por servicio</h3>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto lg:col-span-2">
+                                <h3 className="font-bold text-slate-700 mb-1">Ganancia por hora, por servicio</h3>
+                                <p className="text-xs text-slate-400 mb-4">Queda = precio − comisión. $/h = lo que queda ÷ tiempo típico del ticket. $/h por lavador lo divide entre los lavadores asignados. P25 es el tiempo de los tickets rápidos, lo más cercano al tiempo sin espera.</p>
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
-                                        <tr><th className="p-3">Servicio</th><th className="p-3 text-right">Tickets</th><th className="p-3 text-right">Mediana</th><th className="p-3 text-right">P90</th></tr>
+                                        <tr><th className="p-3">Servicio</th><th className="p-3 text-right">Tickets</th><th className="p-3 text-right">Tiempo típico</th><th className="p-3 text-right">P25</th><th className="p-3 text-right">Queda</th><th className="p-3 text-right">$/h</th><th className="p-3 text-right">$/h por lavador</th></tr>
                                     </thead>
                                     <tbody>
                                         {processed.waitByService.length === 0 ? (
-                                            <tr><td colSpan="4" className="p-4 text-center text-slate-400">Sin datos en este periodo.</td></tr>
+                                            <tr><td colSpan="7" className="p-4 text-center text-slate-400">Sin datos en este periodo.</td></tr>
                                         ) : processed.waitByService.map(w => (
                                             <tr key={w.label} className="border-b last:border-0">
                                                 <td className="p-3 font-medium text-slate-800">{w.label}</td>
                                                 <td className="p-3 text-right text-slate-600">{formatInt(w.count)}</td>
                                                 <td className="p-3 text-right font-bold text-slate-800">{fmtMin(w.median)}</td>
-                                                <td className="p-3 text-right text-slate-600">{fmtMin(w.p90)}</td>
+                                                <td className="p-3 text-right text-slate-600">{fmtMin(w.p25)}</td>
+                                                <td className="p-3 text-right text-slate-600">{formatPesos(w.keep)}</td>
+                                                <td className="p-3 text-right font-bold text-emerald-700">{formatPesos(w.perHour)}</td>
+                                                <td className="p-3 text-right text-slate-600">{formatPesos(w.perWasherHour)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
+                                {processed.motorUplift.length > 0 && (
+                                    <div className="mt-4 text-sm text-slate-700">
+                                        <h4 className="font-bold mb-1">Lo que agrega motor/chasis a un General</h4>
+                                        <ul className="space-y-1">{processed.motorUplift.map(u => (
+                                            <li key={u.size}><b>{u.size}</b> ({formatInt(u.count)} tickets): +{fmtMin(Math.max(0, u.extraMin))}, +{formatPesos(u.extraKeep)} que queda{u.perExtraHour ? <> → <b className="text-emerald-700">{formatPesos(u.perExtraHour)}</b> por hora extra</> : ' (sin tiempo extra medible)'}</li>
+                                        ))}</ul>
+                                    </div>
+                                )}
                             </div>
                             <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
                                 <h3 className="font-bold text-slate-700 mb-4">Tiempo típico por hora de entrada</h3>
