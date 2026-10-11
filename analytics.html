@@ -54,6 +54,7 @@
         const db = getFirestore(app);
 
         // --- Helpers ---
+        const fmtMin = (m) => { const r = Math.round(m || 0); return r < 60 ? `${r} min` : `${Math.floor(r / 60)} h ${String(r % 60).padStart(2, '0')}`; };
         const formatCurrency = (val) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val);
         // Para las tarjetas de resumen: redondeado al peso, sin centavos.
         const formatPesos = (val) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(val || 0));
@@ -728,6 +729,29 @@
                 });
                 const chartHourly = hourlyBuckets.slice(6, 19);
 
+                // --- 5b. Tiempo de entrada a cobro (ticket creado → cobrado) ---
+                // Más de 4 h casi siempre es un cobro tardío (el auto ya se fue), no el servicio:
+                // se cuenta aparte y no entra a la mediana.
+                const MAX_WAIT_MIN = 240, LATE_WAIT_MIN = 150;
+                const quant = (a, q) => { if (!a.length) return 0; const srt = [...a].sort((x, y) => x - y); return srt[Math.min(srt.length - 1, Math.floor(srt.length * q))]; };
+                const waits = [], waitGroups = {}, waitHour = Array.from({ length: 24 }, () => []);
+                let waitOutliers = 0;
+                fTickets.forEach(t => {
+                    if (!t.service || t.paymentDetails?.method === 'CORTESIA') return;
+                    const paid = t.paidAt?.toDate ? t.paidAt.toDate() : null;
+                    if (!paid) return;
+                    const m = (paid - t.date) / 60000;
+                    if (m < 0) return;
+                    if (m > MAX_WAIT_MIN) { waitOutliers++; return; }
+                    waits.push(m);
+                    waitHour[getJuarezHour(t.date)].push(m);
+                    (waitGroups[t.service.label || t.service.id] = waitGroups[t.service.label || t.service.id] || []).push(m);
+                    if ((t.extras || []).some(e => e.id === 'MOTOR' || e.id === 'CHASIS')) (waitGroups['Con motor o chasis'] = waitGroups['Con motor o chasis'] || []).push(m);
+                });
+                const waitStats = { count: waits.length, median: quant(waits, .5), p90: quant(waits, .9), latePct: waits.length ? waits.filter(m => m >= LATE_WAIT_MIN).length / waits.length * 100 : 0, outliers: waitOutliers };
+                const waitByService = Object.entries(waitGroups).map(([label, a]) => ({ label, count: a.length, median: quant(a, .5), p90: quant(a, .9) })).sort((a, b) => b.count - a.count);
+                const chartWaitHourly = waitHour.map((a, h) => ({ hour: fmtHour(h), median: Math.round(quant(a, .5)), tickets: a.length })).slice(6, 19);
+
                 // --- 6. Day-of-Week Pattern ---
                 const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                 const dowBuckets = Array.from({ length: 7 }, (_, i) => ({ day: dayNames[i], tickets: 0, revenue: 0 }));
@@ -793,7 +817,8 @@
                     armorAllPerWash, totalArmorAllCost, salariedCount,
                     chartFinancials, chartExpenses, chartEmpRevenue,
                     chartRevenueVsStaff, chartCommPerDay,
-                    chartHourly, chartDOW, chartDailyTrends, topGastos
+                    chartHourly, chartDOW, chartDailyTrends, topGastos,
+                    waitStats, waitByService, chartWaitHourly
                 };
 
             }, [tickets, expenses, bizExpenses, cashCounts, employees, attendance, deductions, dateFilterType, selectedMonth, selectedYear, startDate, endDate]);
@@ -1501,6 +1526,48 @@
 
                     {/* SECTION 3: SCHEDULING */}
                     <div>
+                        <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Clock size={20} /> Tiempo de entrada a cobro</h2>
+                        <p className="text-xs text-slate-400 mb-4">De que se crea el ticket en Entrada a que se cobra en Caja: incluye la espera, el lavado y la recogida. No cuenta cortesías ni {formatInt(processed.waitStats.outliers)} tickets de más de 4 h (cobros tardíos).</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <KPICard title="Tiempo típico (mediana)" value={fmtMin(processed.waitStats.median)} subtext={`${formatInt(processed.waitStats.count)} tickets`} icon={Clock} color="blue" />
+                            <KPICard title="1 de cada 10 tarda más de" value={fmtMin(processed.waitStats.p90)} subtext="percentil 90" icon={Clock} color="orange" />
+                            <KPICard title="Más de 2.5 h" value={`${processed.waitStats.latePct.toFixed(1)}%`} subtext="de los tickets" icon={Clock} color="red" />
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto">
+                                <h3 className="font-bold text-slate-700 mb-4">Por servicio</h3>
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
+                                        <tr><th className="p-3">Servicio</th><th className="p-3 text-right">Tickets</th><th className="p-3 text-right">Mediana</th><th className="p-3 text-right">P90</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {processed.waitByService.length === 0 ? (
+                                            <tr><td colSpan="4" className="p-4 text-center text-slate-400">Sin datos en este periodo.</td></tr>
+                                        ) : processed.waitByService.map(w => (
+                                            <tr key={w.label} className="border-b last:border-0">
+                                                <td className="p-3 font-medium text-slate-800">{w.label}</td>
+                                                <td className="p-3 text-right text-slate-600">{formatInt(w.count)}</td>
+                                                <td className="p-3 text-right font-bold text-slate-800">{fmtMin(w.median)}</td>
+                                                <td className="p-3 text-right text-slate-600">{fmtMin(w.p90)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
+                                <h3 className="font-bold text-slate-700 mb-4">Tiempo típico por hora de entrada</h3>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={processed.chartWaitHourly}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="hour" style={{ fontSize: '11px' }} />
+                                        <YAxis allowDecimals={false} style={{ fontSize: '10px' }} tickFormatter={(v) => `${v}m`} />
+                                        <Tooltip formatter={(v) => [`${v} min`, 'Mediana']} />
+                                        <Bar dataKey="median" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Mediana" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
                         <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 mt-8"><Clock size={20} /> Día y Hora</h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="bg-white p-6 rounded-xl shadow-sm border h-80">
