@@ -3672,7 +3672,42 @@ Firma: __________________
                 fetchDeleted();
             }, [historyDate, role, db]);
 
-            const allPaid = history.concat(tickets.filter(t => t.status === 'PAID'));
+            // En memoria solo están los tickets pagados de hoy: para otra fecha se piden a la base
+            const isToday = targetDateStr === getLocalDateStr();
+            const [pastData, setPastData] = useState(null);
+            const [isFetchingPast, setIsFetchingPast] = useState(false);
+            const [pastError, setPastError] = useState(false);
+            const [reloadKey, setReloadKey] = useState(0);
+
+            useEffect(() => {
+                if (isToday) { setPastData(null); setPastError(false); return; }
+                let cancelled = false;
+                setIsFetchingPast(true);
+                setPastError(false);
+                setPastData(null);
+                const start = new Date(historyDate + 'T00:00:00');
+                const end = new Date(historyDate + 'T23:59:59.999');
+                Promise.all([
+                    getDocs(query(collection(db, "tickets"), where("status", "==", "PAID"), where("paidAt", ">=", start), where("paidAt", "<=", end), orderBy("paidAt", "desc"))),
+                    getDocs(query(collection(db, "deductions"), where("timestamp", ">=", start), where("timestamp", "<=", end), orderBy("timestamp", "desc"))),
+                ]).then(([ticketsSnap, deducsSnap]) => {
+                    if (cancelled) return;
+                    // Sin conexión, getDocs regresa una lista vacía del caché en vez de fallar
+                    if (ticketsSnap.metadata.fromCache && ticketsSnap.empty) { setPastError(true); return; }
+                    setPastData({
+                        tickets: ticketsSnap.docs.map(d => ({ id: d.id, ...d.data(), timestamp: d.data().timestamp?.toDate() || new Date(), paidAt: d.data().paidAt?.toDate() || null })),
+                        deductions: deducsSnap.docs.map(d => ({ id: d.id, ...d.data(), timestamp: d.data().timestamp?.toDate() || new Date() })),
+                    });
+                }).catch(e => {
+                    console.error("Error fetching history:", e);
+                    if (!cancelled) setPastError(true);
+                }).finally(() => {
+                    if (!cancelled) setIsFetchingPast(false);
+                });
+                return () => { cancelled = true; };
+            }, [historyDate, isToday, db, reloadKey]);
+
+            const allPaid = isToday ? history.concat(tickets.filter(t => t.status === 'PAID')) : (pastData?.tickets || []);
 
             const targetTickets = allPaid.filter(t => {
                 const tDate = t.paidAt ? getLocalDateStr(t.paidAt) : getLocalDateStr(t.timestamp);
@@ -3680,9 +3715,8 @@ Firma: __________________
             });
 
             const totalSum = targetTickets.filter(t => t.paymentDetails?.method !== 'CORTESIA').reduce((acc, t) => acc + (t.price || 0), 0);
-            const targetDeductions = deductions.filter(d => d.amount > 0 && getLocalDateStr(d.timestamp) === targetDateStr);
-
-            const isToday = targetDateStr === getLocalDateStr();
+            const targetDeductions = (isToday ? deductions : (pastData?.deductions || [])).filter(d => d.amount > 0 && getLocalDateStr(d.timestamp) === targetDateStr);
+            const pastPending = !isToday && (isFetchingPast || pastError || !pastData);
             const dateLabel = isToday ? '(Hoy)' : `(${targetDateStr})`;
 
             return (
@@ -3745,6 +3779,18 @@ Firma: __________________
                         </div>
                     )}
 
+                    {pastPending ? (
+                        pastError ? (
+                            <div className="bg-red-50 text-red-700 p-6 rounded-xl shadow-sm border border-red-200 text-center font-medium flex flex-col items-center gap-3">
+                                <span>No se pudieron cargar los tickets del {targetDateStr}. Revisa la conexión.</span>
+                                <button onClick={() => setReloadKey(k => k + 1)} className="px-4 py-2 rounded-lg bg-red-600 text-white font-bold hover:bg-red-700">Reintentar</button>
+                            </div>
+                        ) : (
+                            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 text-center text-gray-500 font-medium flex items-center justify-center gap-2">
+                                <Loader2 className="animate-spin" size={20} /> Cargando tickets del {targetDateStr}...
+                            </div>
+                        )
+                    ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
                             <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
@@ -3806,6 +3852,7 @@ Firma: __________________
                             </div>
                         </div>
                     </div>
+                    )}
                 </div>
             );
         };
