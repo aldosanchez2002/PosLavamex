@@ -3637,19 +3637,27 @@ Firma: __________________
 
         const HistoryView = () => {
             const { history, tickets, deductions, role, db } = useContext(AppContext);
+            const [historyMode, setHistoryMode] = useState('DAY');
             const [historyDate, setHistoryDate] = useState(getLocalDateStr());
+            const [rangeStart, setRangeStart] = useState(() => getDefaultPayPeriod().start);
+            const [rangeEnd, setRangeEnd] = useState(() => getDefaultPayPeriod().end);
             const [deletedTickets, setDeletedTickets] = useState([]);
             const [isFetchingDeleted, setIsFetchingDeleted] = useState(false);
 
-            const targetDateStr = historyDate;
+            // Día = rango de un solo día
+            const isRange = historyMode === 'RANGE';
+            const fromStr = isRange ? (rangeStart <= rangeEnd ? rangeStart : rangeEnd) : historyDate;
+            const toStr = isRange ? (rangeStart <= rangeEnd ? rangeEnd : rangeStart) : historyDate;
+            const inRange = (d) => { const s = getLocalDateStr(d); return s >= fromStr && s <= toStr; };
 
             useEffect(() => {
                 if (role !== 'ADMIN') return;
+                let cancelled = false;
                 const fetchDeleted = async () => {
                     setIsFetchingDeleted(true);
                     try {
-                        const start = new Date(historyDate + 'T00:00:00');
-                        const end = new Date(historyDate + 'T23:59:59.999');
+                        const start = new Date(fromStr + 'T00:00:00');
+                        const end = new Date(toStr + 'T23:59:59.999');
                         const snap = await getDocs(query(
                             collection(db, "tickets"),
                             where("status", "==", "CANCELLED"),
@@ -3662,18 +3670,19 @@ Firma: __________________
                             deletedAt: d.data().deletedAt?.toDate() || null
                         }));
                         filtered.sort((a, b) => b.timestamp - a.timestamp);
-                        setDeletedTickets(filtered);
+                        if (!cancelled) setDeletedTickets(filtered);
                     } catch (e) {
                         console.error("Error fetching deleted tickets:", e);
                     } finally {
-                        setIsFetchingDeleted(false);
+                        if (!cancelled) setIsFetchingDeleted(false);
                     }
                 };
                 fetchDeleted();
-            }, [historyDate, role, db]);
+                return () => { cancelled = true; };
+            }, [fromStr, toStr, role, db]);
 
-            // En memoria solo están los tickets pagados de hoy: para otra fecha se piden a la base
-            const isToday = targetDateStr === getLocalDateStr();
+            // En memoria solo están los tickets pagados de hoy: para otra fecha o un rango se piden a la base
+            const isToday = !isRange && historyDate === getLocalDateStr();
             const [pastData, setPastData] = useState(null);
             const [isFetchingPast, setIsFetchingPast] = useState(false);
             const [pastError, setPastError] = useState(false);
@@ -3685,8 +3694,8 @@ Firma: __________________
                 setIsFetchingPast(true);
                 setPastError(false);
                 setPastData(null);
-                const start = new Date(historyDate + 'T00:00:00');
-                const end = new Date(historyDate + 'T23:59:59.999');
+                const start = new Date(fromStr + 'T00:00:00');
+                const end = new Date(toStr + 'T23:59:59.999');
                 Promise.all([
                     getDocs(query(collection(db, "tickets"), where("status", "==", "PAID"), where("paidAt", ">=", start), where("paidAt", "<=", end), orderBy("paidAt", "desc"))),
                     getDocs(query(collection(db, "deductions"), where("timestamp", ">=", start), where("timestamp", "<=", end), orderBy("timestamp", "desc"))),
@@ -3705,26 +3714,35 @@ Firma: __________________
                     if (!cancelled) setIsFetchingPast(false);
                 });
                 return () => { cancelled = true; };
-            }, [historyDate, isToday, db, reloadKey]);
+            }, [fromStr, toStr, isToday, db, reloadKey]);
 
             const allPaid = isToday ? history.concat(tickets.filter(t => t.status === 'PAID')) : (pastData?.tickets || []);
 
-            const targetTickets = allPaid.filter(t => {
-                const tDate = t.paidAt ? getLocalDateStr(t.paidAt) : getLocalDateStr(t.timestamp);
-                return tDate === targetDateStr;
-            });
+            const targetTickets = allPaid.filter(t => inRange(t.paidAt || t.timestamp))
+                .sort((a, b) => (b.paidAt || b.timestamp) - (a.paidAt || a.timestamp));
 
             const totalSum = targetTickets.filter(t => t.paymentDetails?.method !== 'CORTESIA').reduce((acc, t) => acc + (t.price || 0), 0);
-            const targetDeductions = (isToday ? deductions : (pastData?.deductions || [])).filter(d => d.amount > 0 && getLocalDateStr(d.timestamp) === targetDateStr);
+            const targetDeductions = (isToday ? deductions : (pastData?.deductions || [])).filter(d => d.amount > 0 && inRange(d.timestamp));
             const pastPending = !isToday && (isFetchingPast || pastError || !pastData);
-            const dateLabel = isToday ? '(Hoy)' : `(${targetDateStr})`;
+            const multiDay = fromStr !== toStr;
+            const dateLabel = isToday ? '(Hoy)' : multiDay ? `(${fromStr} al ${toStr})` : `(${fromStr})`;
+            const periodText = multiDay ? `del ${fromStr} al ${toStr}` : `del ${fromStr}`;
+            const shortDate = (d) => d instanceof Date ? d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '';
 
             return (
                 <div className="p-4 h-full overflow-auto flex flex-col gap-4">
                     {role === 'ADMIN' && (
-                        <div className="bg-white p-3 rounded-xl shadow border border-gray-200 flex justify-between items-center shrink-0">
+                        <div className="bg-white p-3 rounded-xl shadow border border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
                             <span className="font-bold text-gray-700 flex items-center gap-2"><History className="w-5 h-5 text-blue-600" /> Fecha del Historial:</span>
-                            <CustomDateInput type="date" value={historyDate} onChange={setHistoryDate} />
+                            <div className="flex flex-wrap items-center justify-center gap-2">
+                                <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+                                    <button onClick={() => setHistoryMode('DAY')} className={`px-3 py-1 rounded-md text-sm font-bold ${historyMode === 'DAY' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Día</button>
+                                    <button onClick={() => setHistoryMode('RANGE')} className={`px-3 py-1 rounded-md text-sm font-bold ${historyMode === 'RANGE' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Rango</button>
+                                </div>
+                                {historyMode === 'DAY'
+                                    ? <CustomDateInput type="date" value={historyDate} onChange={setHistoryDate} />
+                                    : <DateRangeSelector start={rangeStart} end={rangeEnd} onRangeChange={(s, e) => { setRangeStart(s); setRangeEnd(e); }} />}
+                            </div>
                         </div>
                     )}
 
@@ -3744,6 +3762,7 @@ Firma: __________________
                                             <thead className="bg-red-50 font-bold text-red-800 sticky top-0 shadow-sm z-10">
                                                 <tr>
                                                     <th className="p-3">ID</th>
+                                                    {multiDay && <th className="p-3">Fecha</th>}
                                                     <th className="p-3">Hora Creado</th>
                                                     <th className="p-3">Hora Eliminado</th>
                                                     <th className="p-3">Descripción</th>
@@ -3756,6 +3775,7 @@ Firma: __________________
                                                 {deletedTickets.map(t => (
                                                     <tr key={t.id} className="border-t hover:bg-red-50 transition-colors bg-red-50/30">
                                                         <td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td>
+                                                        {multiDay && <td className="p-3 whitespace-nowrap text-gray-500">{shortDate(t.timestamp)}</td>}
                                                         <td className="p-3 text-gray-500">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td>
                                                         <td className="p-3 text-red-600 font-bold">{t.deletedAt instanceof Date ? t.deletedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/D'}</td>
                                                         <td className="p-3 font-bold text-gray-700 uppercase">{t.vehicleDesc || '-'}</td>
@@ -3773,7 +3793,7 @@ Firma: __________________
                                 </div>
                             ) : (
                                 <div className="bg-gray-50 text-gray-500 p-4 rounded-xl shadow-sm border border-gray-200 text-center font-medium flex items-center justify-center gap-2">
-                                    <Trash2 className="w-4 h-4 opacity-50" /> 0 tickets eliminados para esta fecha.
+                                    <Trash2 className="w-4 h-4 opacity-50" /> 0 tickets eliminados {multiDay ? 'en este rango' : 'para esta fecha'}.
                                 </div>
                             )}
                         </div>
@@ -3782,19 +3802,19 @@ Firma: __________________
                     {pastPending ? (
                         pastError ? (
                             <div className="bg-red-50 text-red-700 p-6 rounded-xl shadow-sm border border-red-200 text-center font-medium flex flex-col items-center gap-3">
-                                <span>No se pudieron cargar los tickets del {targetDateStr}. Revisa la conexión.</span>
+                                <span>No se pudieron cargar los tickets {periodText}. Revisa la conexión.</span>
                                 <button onClick={() => setReloadKey(k => k + 1)} className="px-4 py-2 rounded-lg bg-red-600 text-white font-bold hover:bg-red-700">Reintentar</button>
                             </div>
                         ) : (
                             <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 text-center text-gray-500 font-medium flex items-center justify-center gap-2">
-                                <Loader2 className="animate-spin" size={20} /> Cargando tickets del {targetDateStr}...
+                                <Loader2 className="animate-spin" size={20} /> Cargando tickets {periodText}...
                             </div>
                         )
                     ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div className="bg-white rounded-xl shadow overflow-hidden h-fit border border-gray-200">
                             <div className="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
-                                <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" /> Tickets Pagados {dateLabel}</div>
+                                <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" /> Tickets Pagados {dateLabel}{multiDay && ` · ${targetTickets.length}`}</div>
                                 <span className="text-green-700 font-black">{formatCurrency(totalSum)}</span>
                             </div>
                             <div className="overflow-auto max-h-[60vh] md:max-h-[80vh]">
@@ -3802,6 +3822,7 @@ Firma: __________________
                                     <thead className="bg-gray-50 font-bold text-gray-700 sticky top-0 shadow-sm z-10">
                                         <tr>
                                             <th className="p-3">ID</th>
+                                            {multiDay && <th className="p-3">Fecha</th>}
                                             <th className="p-3">Hora</th>
                                             <th className="p-3">Descripción</th>
                                             <th className="p-3">Servicio</th>
@@ -3812,6 +3833,7 @@ Firma: __________________
                                         {targetTickets.map(t => (
                                             <tr key={t.id} className="border-t hover:bg-gray-50">
                                                 <td className="p-3 font-mono text-xs">#{t.id.slice(-4).toUpperCase()}</td>
+                                                {multiDay && <td className="p-3 whitespace-nowrap text-gray-600">{shortDate(t.paidAt || t.timestamp)}</td>}
                                                 <td className="p-3">{t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</td>
                                                 <td className="p-3 font-bold text-gray-700 uppercase">{t.vehicleDesc || '-'}</td>
                                                 <td className="p-3">
@@ -3827,7 +3849,7 @@ Firma: __________________
                                             </tr>
                                         ))}
                                         {targetTickets.length === 0 && (
-                                            <tr><td colSpan="5" className="p-4 text-center text-gray-400">No hay tickets registrados en esta fecha.</td></tr>
+                                            <tr><td colSpan={multiDay ? 6 : 5} className="p-4 text-center text-gray-400">No hay tickets registrados {multiDay ? 'en este rango' : 'en esta fecha'}.</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -3845,7 +3867,7 @@ Firma: __________________
                                     <tbody>
                                         {targetDeductions.map(d => <tr key={d.id} className="border-t hover:bg-orange-50"><td className="p-3">{d.timestamp instanceof Date ? d.timestamp.toLocaleDateString() : '...'}</td><td className="p-3 font-bold">{d.employee}</td><td className="p-3 text-gray-600 italic">{d.description || 'Snack'}</td><td className="p-3 font-bold text-red-500 text-right">-{formatCurrency(d.amount)}</td></tr>)}
                                         {targetDeductions.length === 0 && (
-                                            <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay deducciones registradas en esta fecha.</td></tr>
+                                            <tr><td colSpan="4" className="p-4 text-center text-gray-400">No hay deducciones registradas {multiDay ? 'en este rango' : 'en esta fecha'}.</td></tr>
                                         )}
                                     </tbody>
                                 </table>
